@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # 1. PostgreSQL Database Container for User & App Data
+  # ----------------------------------------------------
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: engineering-suite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: platform_db
+      POSTGRES_USER: platform_admin
+      POSTGRES_PASSWORD: platform_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_admin -d platform_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
+  # 2. DocCraft Studio & Operations Web Application
+  # ----------------------------------------------------
+  web-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devdoc-studio-app
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
+      - NODE_ENV=production
+
+  # ----------------------------------------------------
+  # 3. VS Code + Cline (Claude Agent) QA Sandbox VM
+  # ----------------------------------------------------
+  vscode-cline:
+    build:
+      context: .
+      dockerfile: Dockerfile.vscode-cline
+    container_name: devdoc-vscode-cline
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-""}
+      - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
+    volumes:
+      - ./workspace-qa:/home/coder/project
+
+volumes:
+  pgdata:
+    driver: local

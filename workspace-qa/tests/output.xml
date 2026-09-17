@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.5 on linux)" generated="2026-09-07T12:22:44.020938" rpa="false" schemaversion="5">
+<suite id="s1" name="Rtc Timing Tests" source="/home/coder/project/tests/rtc_timing_tests.robot">
+<test id="s1-t1" name="TC_RTC_001_Clock_Drift_Verification" line="13">
+<kw name="Given BMC System Is Operational">
+<kw name="Log" owner="BuiltIn">
+<msg time="2026-09-07T12:22:44.154632" level="INFO">Checking BMC operational status at 192.168.1.100</msg>
+<arg>Checking BMC operational status at ${ip}</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2026-09-07T12:22:44.154519" elapsed="0.000145"/>
+</kw>
+<arg>${BMC_IP}</arg>
+<status status="PASS" start="2026-09-07T12:22:44.154269" elapsed="0.000433"/>
+</kw>
+<kw name="When Apply Stress Load For 60 Minutes">
+<kw name="Log" owner="BuiltIn">
+<msg time="2026-09-07T12:22:44.154910" level="INFO">Applying stress burn-in load</msg>
+<arg>Applying stress burn-in load</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2026-09-07T12:22:44.154846" elapsed="0.000079"/>
+</kw>
+<status status="PASS" start="2026-09-07T12:22:44.154774" elapsed="0.000169"/>
+</kw>
+<kw name="Then Verify RTC Drift Is Less Than">
+<kw name="Log" owner="BuiltIn">
+<msg time="2026-09-07T12:22:44.155138" level="INFO">Verifying RTC drift is within 50ms</msg>
+<arg>Verifying RTC drift is within ${max_drift}${unit}</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2026-09-07T12:22:44.155066" elapsed="0.000085"/>
+</kw>
+<arg>50</arg>
+<arg>ms</arg>
+<status status="PASS" start="2026-09-07T12:22:44.154995" elapsed="0.000172"/>
+</kw>
+<doc>Ensures RTC drift does not exceed 50ms over 1-hour burn-in.</doc>
+<tag>Firmware</tag>
+<tag>P1</tag>
+<tag>RTC</tag>
+<status status="PASS" start="2026-09-07T12:22:44.153983" elapsed="0.001224"/>
+</test>
+<test id="s1-t2" name="TC_RTC_002_Rest_API_RTC_Endpoint_Validation" line="20">
+<kw name="Log" owner="BuiltIn">
+<msg time="2026-09-07T12:22:44.155451" level="INFO">Validating RTC endpoint...</msg>
+<arg>Validating RTC endpoint...</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2026-09-07T12:22:44.155397" elapsed="0.000067"/>
+</kw>
+<doc>Validates GET /api/v1/system/rtc returns HTTP 200 with valid ISO timestamp.</doc>
+<tag>P2</tag>
+<tag>REST_API</tag>
+<status status="PASS" start="2026-09-07T12:22:44.155279" elapsed="0.000221"/>
+</test>
+<doc>Verification Suite for Firmware RTC Timing (LD_001_firmware_Bovine_v4)</doc>
+<status status="PASS" start="2026-09-07T12:22:44.021437" elapsed="0.134189"/>
+</suite>
+<statistics>
+<total>
+<stat pass="2" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="1" fail="0" skip="0">Firmware</stat>
+<stat pass="1" fail="0" skip="0">P1</stat>
+<stat pass="1" fail="0" skip="0">P2</stat>
+<stat pass="1" fail="0" skip="0">REST_API</stat>
+<stat pass="1" fail="0" skip="0">RTC</stat>
+</tag>
+<suite>
+<stat name="Rtc Timing Tests" id="s1" pass="2" fail="0" skip="0">Rtc Timing Tests</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
