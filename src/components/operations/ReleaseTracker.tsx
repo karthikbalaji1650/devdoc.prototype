@@ -35,15 +35,15 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
   return (
     <div className="space-y-6 text-left">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+            <span className="text-xs font-semibold px-2.5 py-0.5 bg-[rgba(140,123,255,0.15)] text-[var(--purple)] border border-[var(--purple)]">
               Option 2
             </span>
-            <h2 className="text-xl font-bold text-slate-900">Software Release Tracking & Document Release Master</h2>
+            <h2 className="text-xl font-bold text-[var(--text)]">Software Release Tracking & Document Release Master</h2>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[var(--text-dim)] mt-1">
             Fetch real-time sprint stories and bug fixes from JIRA, and map them to verified DocCraft Technical Analysis & Test Reports.
           </p>
         </div>
@@ -52,7 +52,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           type="button"
           onClick={handleSyncJira}
           disabled={isSyncing}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--signal-gradient)] hover:opacity-90 text-[#07111d] text-xs font-semibold transition-colors disabled:opacity-50 self-start sm:self-auto"
         >
           <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
           <span>{isSyncing ? 'Fetching from JIRA...' : syncSuccess ? 'JIRA Synced!' : 'Sync JIRA Release'}</span>
@@ -60,14 +60,14 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
       </div>
 
       {/* Version Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] pb-2">
         <button
           type="button"
           onClick={() => setSelectedVersion('v13.03.01')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
             selectedVersion === 'v13.03.01'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs'
+              ? 'bg-[var(--signal-gradient)] text-[#07111d]'
+              : 'text-[var(--text-dim)] hover:text-[var(--success)] bg-transparent border border-[var(--border)]'
           }`}
         >
           Release v13.03.01 (GA Approved)
@@ -78,8 +78,8 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           onClick={() => setSelectedVersion('v13.04.00')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
             selectedVersion === 'v13.04.00'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs'
+              ? 'bg-[var(--signal-gradient)] text-[#07111d]'
+              : 'text-[var(--text-dim)] hover:text-[var(--success)] bg-transparent border border-[var(--border)]'
           }`}
         >
           Release v13.04.00 (In Planning)
@@ -87,23 +87,23 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
       </div>
 
       {/* Release Overview Banner */}
-      <div className="bg-gradient-to-r from-purple-50/80 via-white to-indigo-50/50 border border-purple-200 rounded-2xl p-5 space-y-4 shadow-xs">
+      <div className="bg-[var(--panel)] border border-[var(--purple)] p-5 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] font-mono text-purple-700 font-semibold uppercase">
+            <div className="text-[11px] font-mono text-[var(--purple)] font-semibold uppercase">
               Target Release: {activeRelease.targetReleaseDate}
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mt-0.5">{activeRelease.releaseVersion}</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Sign-off Owner: <strong className="text-slate-800">{activeRelease.signoffOwner}</strong>
+            <h3 className="text-lg font-bold text-[var(--text)] mt-0.5">{activeRelease.releaseVersion}</h3>
+            <p className="text-xs text-[var(--text-dim)] mt-0.5">
+              Sign-off Owner: <strong className="text-[var(--text)]">{activeRelease.signoffOwner}</strong>
             </p>
           </div>
 
           {/* Release Gate Badge */}
-          <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-3 bg-[var(--panel-alt)] p-3 border border-[var(--border)]">
             <div className="text-right">
-              <span className="text-[10px] text-slate-500 uppercase font-semibold block">Quality Gate Verdict</span>
-              <span className="text-sm font-extrabold text-emerald-600 font-mono">
+              <span className="text-[10px] text-[var(--text-dim)] uppercase font-semibold block">Quality Gate Verdict</span>
+              <span className="text-sm font-extrabold text-[var(--success)] font-mono">
                 {activeRelease.releaseGateVerdict === 'GO' ? '🟢 GO FOR RELEASE' : '🟡 PENDING QA SIGN-OFF'}
               </span>
             </div>
@@ -111,29 +111,29 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
         </div>
 
         {/* Progress Metrics Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-slate-200 text-xs">
-          <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs">
-            <span className="text-[10px] text-slate-500">JIRA Issues Synced</span>
-            <div className="text-sm font-bold text-slate-900 font-mono">{versionIssues.length} Tickets</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[var(--border)] text-xs">
+          <div className="bg-[var(--panel-alt)] p-2.5 border-t-[3px] border-[var(--blue)]">
+            <span className="text-[10px] text-[var(--text-dim)]">JIRA Issues Synced</span>
+            <div className="text-sm font-bold text-[var(--text)] font-mono">{versionIssues.length} Tickets</div>
           </div>
 
-          <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs">
-            <span className="text-[10px] text-slate-500">Story Points Burndown</span>
-            <div className="text-sm font-bold text-purple-700 font-mono">
+          <div className="bg-[var(--panel-alt)] p-2.5 border-t-[3px] border-[var(--purple)]">
+            <span className="text-[10px] text-[var(--text-dim)]">Story Points Burndown</span>
+            <div className="text-sm font-bold text-[var(--purple)] font-mono">
               {activeRelease.completedStoryPoints} / {activeRelease.totalStoryPoints} Pts
             </div>
           </div>
 
-          <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs">
-            <span className="text-[10px] text-slate-500">Release Readiness</span>
-            <div className="text-sm font-bold text-emerald-700 font-mono">
+          <div className="bg-[var(--panel-alt)] p-2.5 border-t-[3px] border-[var(--success)]">
+            <span className="text-[10px] text-[var(--text-dim)]">Release Readiness</span>
+            <div className="text-sm font-bold text-[var(--success)] font-mono">
               {Math.round((activeRelease.completedStoryPoints / activeRelease.totalStoryPoints) * 100)}% Complete
             </div>
           </div>
 
-          <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs">
-            <span className="text-[10px] text-slate-500">Documentation Status</span>
-            <div className="text-sm font-bold text-blue-700 font-mono">100% Certified</div>
+          <div className="bg-[var(--panel-alt)] p-2.5 border-t-[3px] border-[var(--pink)]">
+            <span className="text-[10px] text-[var(--text-dim)]">Documentation Status</span>
+            <div className="text-sm font-bold text-[var(--blue)] font-mono">100% Certified</div>
           </div>
         </div>
       </div>
@@ -142,17 +142,17 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-600" />
-          <h3 className="text-sm font-bold text-slate-900">Document Release Master Registry</h3>
+          <h3 className="text-sm font-bold text-[var(--text)]">Document Release Master Registry</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {/* Technical Analysis Doc Link */}
-          <div className="bg-white border border-slate-200 hover:border-blue-300 rounded-xl p-4 flex items-center justify-between group transition-colors shadow-xs">
+          <div className="bg-[var(--panel)] border border-[var(--border)] hover:border-[var(--blue)] p-4 flex items-center justify-between group transition-colors">
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-bold text-blue-700 px-2 py-0.5 rounded bg-blue-50 border border-blue-200">
                 Technical Analysis Document
               </span>
-              <div className="font-semibold text-slate-800 group-hover:text-slate-900 transition-colors">
+              <div className="font-semibold text-[var(--text)] transition-colors">
                 {activeRelease.technicalAnalysisDocTitle}
               </div>
               <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
@@ -171,12 +171,12 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           </div>
 
           {/* Test Report Doc Link */}
-          <div className="bg-white border border-slate-200 hover:border-emerald-300 rounded-xl p-4 flex items-center justify-between group transition-colors shadow-xs">
+          <div className="bg-[var(--panel)] border border-[var(--border)] hover:border-[var(--success)] p-4 flex items-center justify-between group transition-colors">
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-bold text-emerald-700 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">
                 Test Execution & Certification Report
               </span>
-              <div className="font-semibold text-slate-800 group-hover:text-slate-900 transition-colors">
+              <div className="font-semibold text-[var(--text)] transition-colors">
                 {activeRelease.testReportDocTitle}
               </div>
               <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
@@ -201,14 +201,14 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-purple-600" />
-            <h3 className="text-sm font-bold text-slate-900">JIRA Sprint Tickets for {selectedVersion}</h3>
+            <h3 className="text-sm font-bold text-[var(--text)]">JIRA Sprint Tickets for {selectedVersion}</h3>
           </div>
           <span className="text-xs text-slate-500 font-mono">Live JIRA Cloud Sync</span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-          <table className="w-full text-xs text-left text-slate-700">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+        <div className="bg-[var(--panel)] border border-[var(--border)] overflow-hidden">
+          <table className="w-full text-xs text-left text-[var(--text-dim)]">
+            <thead className="bg-[var(--panel-alt)] text-[var(--text-dim)] uppercase text-[10px] tracking-wider border-b border-[var(--border)]">
               <tr>
                 <th className="py-3 px-4">Key</th>
                 <th className="py-3 px-4">Type</th>
@@ -219,9 +219,9 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
                 <th className="py-3 px-4">Linked Document</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-soft)]">
               {versionIssues.map((issue) => (
-                <tr key={issue.key} className="hover:bg-slate-50 transition-colors">
+                <tr key={issue.key} className="hover:bg-[var(--panel-alt)] transition-colors">
                   <td className="py-3 px-4 font-mono font-bold text-blue-700">
                     {issue.key}
                   </td>
@@ -234,7 +234,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
                       {issue.issueType}
                     </span>
                   </td>
-                  <td className="py-3 px-4 font-medium text-slate-800">
+                  <td className="py-3 px-4 font-medium text-[var(--text)]">
                     {issue.summary}
                   </td>
                   <td className="py-3 px-4">
@@ -247,10 +247,10 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
                       {issue.status}
                     </span>
                   </td>
-                  <td className="py-3 px-4 font-mono text-purple-700 font-bold">
+                  <td className="py-3 px-4 font-mono text-[var(--purple)] font-bold">
                     {issue.storyPoints} pts
                   </td>
-                  <td className="py-3 px-4 text-slate-800">
+                  <td className="py-3 px-4 text-[var(--text)]">
                     {issue.assignee}
                   </td>
                   <td className="py-3 px-4 text-slate-500 italic text-[11px]">
