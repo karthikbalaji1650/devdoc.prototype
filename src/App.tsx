@@ -424,7 +424,7 @@ export const App: React.FC = () => {
 
   // 6. Render DocCraft Studio (Document Automation Workspace)
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
       {/* ── Shared App Sidebar ── */}
       <AppSidebar
         user={currentUser}
@@ -434,10 +434,10 @@ export const App: React.FC = () => {
       />
 
       {/* ── DocCraft content column ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--bg)]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-semibold animate-fade-in border border-blue-400/40">
+        <div className="fixed bottom-6 right-6 z-50 bg-[var(--panel-alt)] text-[var(--text)] px-4 py-2.5 flex items-center gap-2 text-xs font-semibold animate-fade-in border border-[var(--success)]">
           <CheckCircle className="w-4 h-4" />
           <span>{toastMessage}</span>
         </div>
@@ -511,30 +511,30 @@ export const App: React.FC = () => {
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Section Form Editor Column */}
           {showEditor && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-57px)] border-r border-slate-200 bg-white overflow-hidden">
+            <div className="flex-1 flex flex-col h-[calc(100vh-57px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
               {/* Editor Sub-Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--panel-alt)] border-b border-[var(--border)] text-xs">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     title={sidebarOpen ? 'Collapse Outline' : 'Expand Outline'}
-                    className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors"
+                    className="p-1 text-[var(--text-dim)] hover:text-[var(--success)] hover:bg-[var(--panel)] transition-colors"
                   >
                     {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                   </button>
-                  <span className="font-semibold text-slate-900">
+                  <span className="font-semibold text-[var(--text)]">
                     {activeSectionId === 'metadata' ? 'Document Properties' : activeSection?.title || 'Section Editor'}
                   </span>
                 </div>
 
                 {/* View Split Switcher on Mobile/Tablet */}
-                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
                   <button
                     type="button"
                     onClick={() => setActiveTab('split')}
-                    className={`px-2 py-1 text-[11px] font-medium rounded ${
-                      activeTab === 'split' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    className={`px-2 py-1 text-[11px] font-medium ${
+                      activeTab === 'split' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Split
@@ -542,8 +542,8 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActiveTab('editor-only')}
-                    className={`px-2 py-1 text-[11px] font-medium rounded ${
-                      activeTab === 'editor-only' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    className={`px-2 py-1 text-[11px] font-medium ${
+                      activeTab === 'editor-only' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Editor
@@ -551,8 +551,8 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActiveTab('preview-only')}
-                    className={`px-2 py-1 text-[11px] font-medium rounded ${
-                      activeTab === 'preview-only' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                    className={`px-2 py-1 text-[11px] font-medium ${
+                      activeTab === 'preview-only' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Preview
@@ -581,7 +581,7 @@ export const App: React.FC = () => {
                     isLast={activeSectionIndex === document.sections.length - 1}
                   />
                 ) : (
-                  <div className="p-8 text-center text-slate-500">
+                  <div className="p-8 text-center text-[var(--text-dim)]">
                     <p className="text-sm">Select a section from the outline to begin editing.</p>
                   </div>
                 )}
