@@ -103,7 +103,7 @@ function ToggleRow({ label, desc, defaultChecked }: { label: string; desc: strin
 
 function InfoBanner({ text }: { text: string }) {
   return (
-    <div className="flex items-start gap-2.5 text-[11px] text-slate-600 bg-blue-50/60 p-3.5 rounded-xl border border-blue-100">
+    <div className="flex items-start gap-2.5 text-[11px] text-blue-700 bg-blue-50 p-3.5 rounded-xl border border-blue-200">
       <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
       <span>{text}</span>
     </div>
@@ -232,13 +232,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                     ] as { id: AiProvider; name: string; desc: string }[]).map((prov) => (
                       <button key={prov.id} type="button"
                         onClick={() => setAiConfig(prev => ({ ...prev, provider: prov.id }))}
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                        className={`relative p-3 rounded-xl border text-left transition-all ${
                           aiConfig.provider === prov.id
-                            ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-xs'
+                            ? 'bg-[var(--panel-alt)] border-[var(--success)] shadow-[0_0_0_1px_var(--success)]'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
                         }`}>
-                        <div className="text-xs font-bold text-slate-900">{prov.name}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{prov.desc}</div>
+                        {aiConfig.provider === prov.id && (
+                          <Check className="w-3.5 h-3.5 text-[var(--success)] absolute top-2.5 right-2.5" />
+                        )}
+                        <div className={`text-xs font-bold pr-4 ${aiConfig.provider === prov.id ? 'text-[var(--success)]' : 'text-slate-900'}`}>{prov.name}</div>
+                        <div className={`text-[10px] mt-0.5 ${aiConfig.provider === prov.id ? 'text-[var(--text-dim)]' : 'text-slate-500'}`}>{prov.desc}</div>
                       </button>
                     ))}
                   </div>

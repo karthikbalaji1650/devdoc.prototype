@@ -69,14 +69,17 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
                   key={prov.id}
                   type="button"
                   onClick={() => setConfig(prev => ({ ...prev, provider: prov.id as AiProvider }))}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                  className={`relative p-2.5 rounded-xl border text-left transition-all ${
                     config.provider === prov.id
-                      ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-xs'
+                      ? 'bg-[var(--panel-alt)] border-[var(--success)] shadow-[0_0_0_1px_var(--success)]'
                       : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
                   }`}
                 >
-                  <div className="font-semibold text-xs text-slate-900">{prov.name}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{prov.desc}</div>
+                  {config.provider === prov.id && (
+                    <Check className="w-3.5 h-3.5 text-[var(--success)] absolute top-2 right-2" />
+                  )}
+                  <div className={`font-semibold text-xs pr-4 ${config.provider === prov.id ? 'text-[var(--success)]' : 'text-slate-900'}`}>{prov.name}</div>
+                  <div className={`text-[10px] mt-0.5 ${config.provider === prov.id ? 'text-[var(--text-dim)]' : 'text-slate-500'}`}>{prov.desc}</div>
                 </button>
               ))}
             </div>
