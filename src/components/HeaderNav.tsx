@@ -174,7 +174,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-[var(--panel)] border-b border-[var(--border)] px-4 py-2.5 flex items-center justify-between">
+    <header className="sticky top-0 z-50 h-16 bg-[var(--panel)] border-b border-[var(--border)] px-4 flex items-center justify-between">
       {/* Brand, App Switcher & Template Selector */}
       <div className="flex items-center gap-3">
         

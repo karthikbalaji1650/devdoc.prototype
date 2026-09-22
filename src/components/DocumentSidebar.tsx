@@ -18,6 +18,8 @@ import {
 
 interface DocumentSidebarProps {
   sections: DocSection[];
+  width: number;
+  onResize: (width: number) => void;
   activeSectionId: string | 'metadata';
   onSelectSection: (id: string | 'metadata') => void;
   onAddSection: (level: 1 | 2 | 3, type: SectionType, title?: string) => void;
@@ -26,6 +28,8 @@ interface DocumentSidebarProps {
 
 export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   sections,
+  width,
+  onResize,
   activeSectionId,
   onSelectSection,
   onAddSection,
@@ -35,6 +39,25 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = width;
+
+    const handleResizeMove = (moveEvent: PointerEvent) => {
+      const nextWidth = Math.min(480, Math.max(240, startWidth + moveEvent.clientX - startX));
+      onResize(nextWidth);
+    };
+
+    const handleResizeEnd = () => {
+      window.removeEventListener('pointermove', handleResizeMove);
+      window.removeEventListener('pointerup', handleResizeEnd);
+    };
+
+    window.addEventListener('pointermove', handleResizeMove);
+    window.addEventListener('pointerup', handleResizeEnd, { once: true });
+  };
 
   const filteredSections = sections.filter(s => 
     s.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -52,7 +75,17 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   };
 
   return (
-    <aside className="w-80 bg-[#0f0f0f] border-r border-[#242424] flex flex-col h-[calc(100vh-57px)] sticky top-[57px] select-none">
+    <aside className="relative shrink-0 bg-[#0f0f0f] border-r border-[#242424] flex flex-col h-[calc(100vh-64px)] sticky top-16 select-none" style={{ width }}>
+      <div
+        role="separator"
+        aria-label="Resize document outline"
+        aria-orientation="vertical"
+        aria-valuemin={240}
+        aria-valuemax={480}
+        aria-valuenow={width}
+        onPointerDown={handleResizeStart}
+        className="absolute -right-1 top-0 z-20 h-full w-2 cursor-col-resize bg-transparent hover:bg-[#3ec7ff] active:bg-[#2bffb0]"
+      />
       <div className="p-3 border-b border-[#242424] space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] font-bold text-[#ededed] uppercase tracking-[0.12em] font-mono">

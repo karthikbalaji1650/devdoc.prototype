@@ -13,6 +13,7 @@ export interface UserProfile {
   role: UserRole;
   avatarBg: string;
   initials: string;
+  avatarUrl?: string;
 }
 
 export interface UserSession {

@@ -82,19 +82,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
       <AppSidebar user={user} activeView="dashboard" onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between px-7 py-4 border-b border-[#242424] bg-[#0d0d0d] shrink-0">
+        <header className="h-24 flex items-center justify-between px-7 border-b border-[#242424] bg-[#0d0d0d] shrink-0">
           <div>
             <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Dashboard overview</div>
             <h1 className="text-xl font-bold text-[#ededed] mt-1">{getGreeting()}, {user.name.split(' ')[0]}</h1>
           </div>
 
           <div className="flex items-center gap-3">
-            <button type="button" className="relative border border-[#242424] bg-[#111111] p-2 text-[#8a8a8a] hover:text-[#ededed]" title="Notifications">
+            <button type="button" className="ui-button ui-button-icon relative" title="Notifications">
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#4ade80]" />
             </button>
             <div className="border-l border-[#242424] h-6 ml-1" />
-            <div className="flex items-center gap-3 px-2 py-1.5 border border-[#242424] bg-[#111111]">
+            <div className="ui-panel flex items-center gap-3 px-2 py-1.5">
               <div className="w-8 h-8 border border-[#242424] bg-[#131313] flex items-center justify-center text-[10px] font-bold text-[#ededed] font-mono uppercase">
                 {user.initials}
               </div>
@@ -103,7 +103,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                 <div className="text-[9px] text-[#8a8a8a] uppercase tracking-[0.12em] font-mono">{user.title}</div>
               </div>
             </div>
-            <button type="button" onClick={onLogout} className="flex items-center gap-2 border border-[#242424] bg-[#111111] px-3 py-2 text-[10px] font-medium text-[#f87171] uppercase tracking-[0.12em] font-mono">
+            <button type="button" onClick={onLogout} className="ui-button ui-button-danger">
               <LogOut className="w-3.5 h-3.5" />
               Logout
             </button>
@@ -111,8 +111,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
         </header>
 
         <main className="flex-1 overflow-y-auto p-7 bg-[#0a0a0a]">
-          <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.7fr] border border-[#242424] bg-[#0f0f0f]">
-            <section className="border-r border-[#242424] p-6">
+          <div className="border border-[#242424] bg-[#0f0f0f]">
+            <section className="p-6">
               <div className="border-b border-[#242424] pb-5 mb-5">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">System overview</div>
                 <div className="text-[28px] font-bold text-[#ededed] leading-none">Engineering workspace</div>

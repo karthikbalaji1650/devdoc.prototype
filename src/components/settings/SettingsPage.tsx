@@ -15,6 +15,7 @@ import {
   Save,
   ChevronRight,
   Info,
+  Upload,
 } from 'lucide-react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
@@ -31,6 +32,7 @@ interface SettingsPageProps {
   user: UserProfile;
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
+  onUpdateAvatar: (avatarUrl?: string) => void;
 }
 
 /* ─── Section tab definition ─── */
@@ -54,27 +56,27 @@ const ROLE_LABELS: Record<string, string> = {
 /* ─── Small reusable sub-components ─── */
 function SectionHeader({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
   return (
-    <div className="flex items-center gap-3 pb-2 border-b border-slate-200">
-      <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
-        <Icon className="w-4 h-4 text-blue-600" />
+    <div className="flex items-center gap-3 pb-3 border-b border-[#28395a]">
+      <div className="w-9 h-9 border border-[#28395a] bg-[#16223a] flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4 text-[#3ec7ff]" />
       </div>
       <div>
-        <h2 className="text-base font-extrabold text-slate-900 leading-tight">{title}</h2>
-        <p className="text-[11px] text-slate-500">{desc}</p>
+        <h2 className="text-base font-bold text-[#eef3ff] leading-tight">{title}</h2>
+        <p className="text-[11px] text-[#96a8c9]">{desc}</p>
       </div>
     </div>
   );
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-bold text-slate-800">{children}</p>;
+  return <p className="ui-label">{children}</p>;
 }
 
 function FieldRow({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-        <Icon className="w-3.5 h-3.5 text-blue-600" />
+      <label className="ui-label flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5 text-[#3ec7ff]" />
         {label}
       </label>
       {children}
@@ -103,18 +105,37 @@ function ToggleRow({ label, desc, defaultChecked }: { label: string; desc: strin
 
 function InfoBanner({ text }: { text: string }) {
   return (
-    <div className="flex items-start gap-2.5 text-[11px] text-blue-700 bg-blue-50 p-3.5 rounded-xl border border-blue-200">
-      <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+    <div className="ui-panel flex items-start gap-2.5 p-3.5 text-[11px] font-semibold text-[#eef3ff]">
+      <Info className="w-4 h-4 text-[#3ec7ff] shrink-0 mt-0.5" />
       <span>{text}</span>
     </div>
   );
 }
 
 /* ─── Main Component ─── */
-export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, onLogout }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, onLogout, onUpdateAvatar }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [aiConfig, setAiConfig] = useState<AiConfig>(getStoredAiConfig());
   const [aiSaved, setAiSaved] = useState(false);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Profile images must be smaller than 10 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => onUpdateAvatar(reader.result as string);
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
 
   const handleSaveAi = () => {
     saveStoredAiConfig(aiConfig);
@@ -161,10 +182,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
               const active = activeTab === tab.id;
               return (
                 <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group ${
-                    active ? 'bg-blue-50 border border-blue-200 text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all group border ${
+                    active ? 'bg-[#16223a] border-[#3ec7ff] text-[#eef3ff] font-bold' : 'text-[#96a8c9] hover:text-[#eef3ff] hover:bg-[#16223a] border-transparent'
                   }`}>
-                  <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-blue-600' : 'group-hover:text-blue-600 text-slate-400'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#3ec7ff]' : 'group-hover:text-[#3ec7ff] text-[#96a8c9]'}`} />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate">{tab.label}</div>
                     <div className="text-[10px] text-slate-400 truncate">{tab.desc}</div>
@@ -184,16 +205,33 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             {activeTab === 'profile' && (
               <section className="space-y-6">
                 <SectionHeader icon={User} title="Profile" desc="Your account information from the active session." />
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 flex items-center gap-5 shadow-xs">
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${user.avatarBg} flex items-center justify-center text-xl font-black text-white shadow-md shrink-0`}>
-                    {user.initials}
-                  </div>
-                  <div>
+                <div className="ui-panel p-6 flex items-center gap-5">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={`${user.name} profile`} className="w-16 h-16 rounded-2xl object-cover shadow-md shrink-0" />
+                  ) : (
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-tr ${user.avatarBg} flex items-center justify-center text-xl font-black text-white shadow-md shrink-0`}>
+                      {user.initials}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <div className="text-lg font-extrabold text-slate-900 leading-tight">{user.name}</div>
                     <div className="text-sm text-slate-500 mt-0.5">{user.email}</div>
                     <div className="mt-2 inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
                       {ROLE_LABELS[user.role] ?? user.role}
                     </div>
+                  </div>
+                  <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleAvatarUpload} className="hidden" />
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <button type="button" onClick={() => avatarInputRef.current?.click()} className="ui-button">
+                      <Upload className="w-3.5 h-3.5" />
+                      {user.avatarUrl ? 'Change image' : 'Import image'}
+                    </button>
+                    {user.avatarUrl && (
+                      <button type="button" onClick={() => onUpdateAvatar(undefined)} className="ui-button ui-button-danger">
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove image
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-xs">
@@ -232,16 +270,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                     ] as { id: AiProvider; name: string; desc: string }[]).map((prov) => (
                       <button key={prov.id} type="button"
                         onClick={() => setAiConfig(prev => ({ ...prev, provider: prov.id }))}
-                        className={`relative p-3 rounded-xl border text-left transition-all ${
+                        className={`p-3 rounded-xl border text-left transition-all ${
                           aiConfig.provider === prov.id
-                            ? 'bg-[var(--panel-alt)] border-[var(--success)] shadow-[0_0_0_1px_var(--success)]'
+                            ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-xs'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
                         }`}>
-                        {aiConfig.provider === prov.id && (
-                          <Check className="w-3.5 h-3.5 text-[var(--success)] absolute top-2.5 right-2.5" />
-                        )}
-                        <div className={`text-xs font-bold pr-4 ${aiConfig.provider === prov.id ? 'text-[var(--success)]' : 'text-slate-900'}`}>{prov.name}</div>
-                        <div className={`text-[10px] mt-0.5 ${aiConfig.provider === prov.id ? 'text-[var(--text-dim)]' : 'text-slate-500'}`}>{prov.desc}</div>
+                        <div className="text-xs font-bold text-slate-900">{prov.name}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{prov.desc}</div>
                       </button>
                     ))}
                   </div>

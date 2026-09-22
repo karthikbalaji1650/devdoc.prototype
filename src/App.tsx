@@ -74,6 +74,7 @@ export const App: React.FC = () => {
   const [activeSectionId, setActiveSectionId] = useState<string | 'metadata'>('metadata');
   const [viewMode, setViewMode] = useState<'paginated' | 'continuous'>('paginated');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [documentSidebarWidth, setDocumentSidebarWidth] = useState(320);
   const [activeTab, setActiveTab] = useState<'split' | 'editor-only' | 'preview-only'>('split');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -106,6 +107,16 @@ export const App: React.FC = () => {
     setCurrentUser(null);
     setCurrentApp('login');
     showToast('Logged out successfully.');
+  };
+
+  const handleUpdateAvatar = (avatarUrl?: string) => {
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, avatarUrl };
+    setCurrentUser(updatedUser);
+    const session = getStoredSession();
+    if (session) {
+      loginWithProfile(updatedUser);
+    }
   };
 
   const handleLaunchApp = (app: AppView, opsTab?: OperationsTab) => {
@@ -407,6 +418,7 @@ export const App: React.FC = () => {
         user={currentUser}
         onNavigate={handleLaunchApp}
         onLogout={handleLogout}
+        onUpdateAvatar={handleUpdateAvatar}
       />
     );
   }
@@ -428,6 +440,7 @@ export const App: React.FC = () => {
       {/* ── Shared App Sidebar ── */}
       <AppSidebar
         user={currentUser}
+        compact
         activeView="doccraft"
         onNavigate={handleLaunchApp}
         onLogout={handleLogout}
@@ -500,6 +513,8 @@ export const App: React.FC = () => {
         {sidebarOpen && (
           <DocumentSidebar
             sections={document.sections}
+            width={documentSidebarWidth}
+            onResize={setDocumentSidebarWidth}
             activeSectionId={activeSectionId}
             onSelectSection={setActiveSectionId}
             onAddSection={handleAddSection}
@@ -511,7 +526,7 @@ export const App: React.FC = () => {
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Section Form Editor Column */}
           {showEditor && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-57px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
+            <div className="flex-1 flex flex-col h-[calc(100vh-64px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
               {/* Editor Sub-Header */}
               <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--panel-alt)] border-b border-[var(--border)] text-xs">
                 <div className="flex items-center gap-2">
