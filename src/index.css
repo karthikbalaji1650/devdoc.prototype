@@ -147,6 +147,56 @@
   color: var(--text);
 }
 
+.ui-label {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ui-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 8px 12px;
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.ui-button:hover {
+  background: var(--panel);
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+.ui-button-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.ui-button-danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--bg);
+}
+
 /* Keep legacy utility-heavy screens on the same control-room tokens. */
 .bg-white, .bg-slate-50, .bg-slate-100 { background-color: var(--panel) !important; }
 .bg-slate-200 { background-color: var(--panel-alt) !important; }
