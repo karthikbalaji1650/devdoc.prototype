@@ -53,56 +53,47 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
   ];
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-fade-in space-y-4 p-5">
-      {/* Top Header: Title, Level, Reorder, Delete */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+    <div className="bg-[#0f0f0f] border border-[#242424] overflow-hidden animate-fade-in space-y-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#242424]">
         <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-          {/* Level Badge */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <div className="flex items-center bg-[#111111] p-1 border border-[#242424]">
             <button
               type="button"
               onClick={() => onUpdate({ level: 1 })}
-              className={`px-2 py-0.5 text-xs font-bold rounded ${
-                section.level === 1 ? 'bg-blue-600 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`px-2 py-0.5 text-xs font-bold ${section.level === 1 ? 'bg-[#4ade80] text-[#0a0a0a]' : 'text-[#8a8a8a] hover:text-[#ededed]'}`}
             >
               H1
             </button>
             <button
               type="button"
               onClick={() => onUpdate({ level: 2 })}
-              className={`px-2 py-0.5 text-xs font-bold rounded ${
-                section.level === 2 ? 'bg-blue-600 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`px-2 py-0.5 text-xs font-bold ${section.level === 2 ? 'bg-[#4ade80] text-[#0a0a0a]' : 'text-[#8a8a8a] hover:text-[#ededed]'}`}
             >
               H2
             </button>
             <button
               type="button"
               onClick={() => onUpdate({ level: 3 })}
-              className={`px-2 py-0.5 text-xs font-bold rounded ${
-                section.level === 3 ? 'bg-blue-600 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`px-2 py-0.5 text-xs font-bold ${section.level === 3 ? 'bg-[#4ade80] text-[#0a0a0a]' : 'text-[#8a8a8a] hover:text-[#ededed]'}`}
             >
               H3
             </button>
           </div>
 
-          {/* Section Title Input */}
           <div className="flex-1 relative flex items-center">
             <input
               type="text"
               value={section.title}
               onChange={(e) => onUpdate({ title: e.target.value })}
               placeholder="Section Heading Title..."
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-blue-500 pr-8 shadow-xs"
+              className="w-full bg-[#111111] border border-[#242424] px-3 py-1.5 text-sm font-semibold text-[#ededed] focus:outline-none focus:border-[#4ade80] pr-8"
             />
             {onTriggerAi && section.title && (
               <button
                 type="button"
                 onClick={() => onTriggerAi(section.title, (newTitle) => onUpdate({ title: newTitle }))}
                 title="AI Polish Title"
-                className="absolute right-2 text-purple-600 hover:text-purple-700 p-0.5 rounded transition-colors"
+                className="absolute right-2 text-[#a78bfa] hover:text-[#c8b5ff] p-0.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
               </button>
@@ -110,14 +101,13 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
           </div>
         </div>
 
-        {/* Section Management Toolbar */}
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onMoveUp}
             disabled={isFirst}
             title="Move Section Up"
-            className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 transition-colors"
+            className="p-1.5 border border-[#242424] bg-[#111111] text-[#8a8a8a] disabled:opacity-40 hover:text-[#ededed] transition-colors"
           >
             <ChevronUp className="w-4 h-4" />
           </button>
@@ -126,7 +116,7 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
             onClick={onMoveDown}
             disabled={isLast}
             title="Move Section Down"
-            className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 transition-colors"
+            className="p-1.5 border border-[#242424] bg-[#111111] text-[#8a8a8a] disabled:opacity-40 hover:text-[#ededed] transition-colors"
           >
             <ChevronDown className="w-4 h-4" />
           </button>
@@ -134,7 +124,7 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
             type="button"
             onClick={onDuplicate}
             title="Duplicate Section"
-            className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-200 transition-colors"
+            className="p-1.5 border border-[#242424] bg-[#111111] text-[#8a8a8a] hover:text-[#ededed] transition-colors"
           >
             <Copy className="w-4 h-4" />
           </button>
@@ -142,16 +132,15 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
             type="button"
             onClick={onDelete}
             title="Delete Section"
-            className="p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 transition-colors"
+            className="p-1.5 border border-[#7d2d2d] bg-[#1a1111] text-[#f87171] hover:bg-[#201414] transition-colors"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Content Type Selector */}
-      <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-        <span className="text-[11px] font-semibold text-slate-500 px-2">Type:</span>
+      <div className="flex flex-wrap items-center gap-1.5 bg-[#111111] p-1.5 border border-[#242424]">
+        <span className="text-[11px] font-semibold text-[#8a8a8a] px-2 font-mono uppercase tracking-[0.12em]">Type:</span>
         {sectionTypes.map((st) => {
           const Icon = st.icon;
           const isActive = section.type === st.id;
@@ -160,10 +149,10 @@ export const SectionEditorContainer: React.FC<SectionEditorContainerProps> = ({
               key={st.id}
               type="button"
               onClick={() => onUpdate({ type: st.id })}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-all ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  ? 'bg-[#4ade80] text-[#0a0a0a]'
+                  : 'text-[#8a8a8a] hover:text-[#ededed] hover:bg-[#181818]'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

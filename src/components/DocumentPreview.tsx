@@ -23,51 +23,32 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const handleZoomReset = () => setZoom(100);
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-slate-100/90 overflow-hidden select-text">
-      {/* Preview Controls Bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-600">
+    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#0a0a0a] overflow-hidden select-text">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#0d0d0d] border-b border-[#242424] text-xs text-[#8a8a8a]">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-900">Live Document Canvas</span>
-          <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono border border-blue-200">
+          <span className="font-semibold text-[#ededed]">Live Document Canvas</span>
+          <span className="text-[11px] px-2 py-0.5 border border-[#242424] bg-[#111111] text-[#4ade80] font-mono uppercase tracking-[0.12em]">
             {metadata.docNumber || 'DOC-01'}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-xs">
-            <button
-              type="button"
-              onClick={handleZoomOut}
-              title="Zoom Out"
-              className="p-1 hover:text-slate-900 transition-colors"
-            >
+          <div className="flex items-center gap-1 bg-[#111111] px-2 py-1 border border-[#242424]">
+            <button type="button" onClick={handleZoomOut} title="Zoom Out" className="p-1 text-[#8a8a8a] hover:text-[#ededed]">
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="text-xs font-mono text-slate-800 w-10 text-center">
-              {zoom}%
-            </span>
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              title="Zoom In"
-              className="p-1 hover:text-slate-900 transition-colors"
-            >
+            <span className="text-xs font-mono text-[#ededed] w-10 text-center">{zoom}%</span>
+            <button type="button" onClick={handleZoomIn} title="Zoom In" className="p-1 text-[#8a8a8a] hover:text-[#ededed]">
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={handleZoomReset}
-              title="Reset Zoom"
-              className="p-1 hover:text-slate-900 transition-colors ml-1 border-l border-slate-200"
-            >
+            <button type="button" onClick={handleZoomReset} title="Reset Zoom" className="p-1 text-[#8a8a8a] hover:text-[#ededed] ml-1 border-l border-[#242424]">
               <Maximize2 className="w-3 h-3" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Document View Canvas */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex justify-center bg-slate-100/90">
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex justify-center bg-[#0a0a0a]">
         <div 
           style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
           className="transition-transform duration-150 ease-out"

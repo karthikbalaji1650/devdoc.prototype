@@ -716,7 +716,7 @@ const TestCasesView: React.FC<{
                 </div>
                 {!collapseAll && (
                   <div>
-                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 bg-slate-50/50">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 bg-slate-100">
                       <div className="col-span-1"></div><div className="col-span-1">ID</div>
                       <div className="col-span-4">Title</div><div className="col-span-1">Priority</div>
                       <div className="col-span-1">Est.</div><div className="col-span-2">Labels</div>
@@ -761,7 +761,7 @@ const TestCasesView: React.FC<{
                           </div>
 
                           {isExpanded && (
-                            <div className="px-4 pb-4 pt-2 bg-slate-50/70 border-t border-slate-200 space-y-3 text-xs">
+                            <div className="px-4 pb-4 pt-2 bg-slate-100 border-t border-slate-200 space-y-3 text-xs">
                               <div className="grid grid-cols-3 gap-3 py-2 border-b border-slate-200">
                                 {[{ label:'Type',value:tc.type},{label:'Priority',value:tc.priority},{label:'Estimate',value:tc.estimateMin?`${tc.estimateMin} min`:'N/A'},
                                   {label:'Automation Candidate',value:tc.automationCandidate?'Yes':'No'},{label:'References',value:(tc.references||[]).join(', ')||'None'},
@@ -940,7 +940,7 @@ const RunDetailView: React.FC<{
                     <span className="font-bold text-sm text-slate-800">{sec.title}</span>
                     <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center">{secResults.length}</span>
                   </div>
-                  <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 bg-slate-50/50">
+                  <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 bg-slate-100">
                     <div className="col-span-1">ID</div><div className="col-span-5">Title</div>
                     <div className="col-span-2">Labels</div><div className="col-span-2">Assigned</div><div className="col-span-2">Status</div>
                   </div>
@@ -1505,7 +1505,7 @@ TC_RTC_004_Drift_Under_Thermal_Throttling
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-50/50">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center shadow-xs">
               <RefreshCw className="w-4 h-4 text-white" />

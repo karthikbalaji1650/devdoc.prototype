@@ -149,7 +149,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           {/* Technical Analysis Doc Link */}
           <div className="bg-[var(--panel)] border border-[var(--border)] hover:border-[var(--blue)] p-4 flex items-center justify-between group transition-colors">
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-blue-700 px-2 py-0.5 rounded bg-blue-50 border border-blue-200">
+              <span className="inline-block text-[10px] uppercase font-bold text-blue-700 px-2.5 py-1 leading-normal rounded bg-blue-50 border border-blue-200 mb-1">
                 Technical Analysis Document
               </span>
               <div className="font-semibold text-[var(--text)] transition-colors">
@@ -173,7 +173,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           {/* Test Report Doc Link */}
           <div className="bg-[var(--panel)] border border-[var(--border)] hover:border-[var(--success)] p-4 flex items-center justify-between group transition-colors">
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-emerald-700 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">
+              <span className="inline-block text-[10px] uppercase font-bold text-emerald-700 px-2.5 py-1 leading-normal rounded bg-emerald-50 border border-emerald-200 mb-1">
                 Test Execution & Certification Report
               </span>
               <div className="font-semibold text-[var(--text)] transition-colors">

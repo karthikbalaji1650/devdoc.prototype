@@ -52,49 +52,45 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   };
 
   return (
-    <aside className="w-80 bg-white border-r border-slate-200 flex flex-col h-[calc(100vh-57px)] sticky top-[57px] shadow-xs select-none">
-      {/* Sidebar Header */}
-      <div className="p-3 border-b border-slate-200 space-y-2.5">
+    <aside className="w-80 bg-[#0f0f0f] border-r border-[#242424] flex flex-col h-[calc(100vh-57px)] sticky top-[57px] select-none">
+      <div className="p-3 border-b border-[#242424] space-y-2.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-            <ListTree className="w-4 h-4 text-blue-600" />
+          <div className="flex items-center gap-2 text-[10px] font-bold text-[#ededed] uppercase tracking-[0.12em] font-mono">
+            <ListTree className="w-4 h-4 text-[#4ade80]" />
             <span>Document Outline</span>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono border border-slate-200">
+          <span className="text-[9px] px-2 py-0.5 border border-[#242424] bg-[#111111] text-[#8a8a8a] font-mono uppercase tracking-[0.1em]">
             {sections.length} Sections
           </span>
         </div>
 
-        {/* Search / Filter Input */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-[#8a8a8a] absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter sections..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-2 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+            className="w-full bg-[#111111] border border-[#242424] pl-8 pr-2 py-1.5 text-xs text-[#ededed] placeholder-[#4a4a4a] focus:outline-none focus:border-[#4ade80]"
           />
         </div>
       </div>
 
-      {/* Navigation Tree */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Document Overview / Metadata Option */}
         <button
           type="button"
           onClick={() => onSelectSection('metadata')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all ${
+          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-left transition-all border ${
             activeSectionId === 'metadata'
-              ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+              ? 'bg-[#131313] text-[#ededed] border-l-2 border-l-[#4ade80] border-[#242424]'
+              : 'text-[#8a8a8a] hover:bg-[#131313] hover:text-[#ededed] border-transparent'
           }`}
         >
-          <Sliders className="w-4 h-4 text-blue-600" />
+          <Sliders className="w-4 h-4 text-[#4ade80]" />
           <span className="flex-1">Document Header & Metadata</span>
         </button>
 
-        <div className="pt-2 pb-1 px-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="pt-2 pb-1 px-2 text-[10px] font-bold text-[#8a8a8a] uppercase tracking-[0.12em] font-mono">
           Sections & Headings
         </div>
 
@@ -132,45 +128,39 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                 setDropTargetId(null);
               }}
               onClick={() => onSelectSection(sec.id)}
-              className={`w-full flex items-center gap-2 py-1.5 px-2.5 rounded-lg text-xs text-left transition-all ${indent} ${
+              className={`w-full flex items-center gap-2 py-1.5 px-2.5 text-xs text-left transition-all border ${indent} ${
                 isActive
-                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-              } ${dropTargetId === sec.id ? 'border-t-2 border-blue-500' : ''} ${draggedSectionId === sec.id ? 'opacity-40' : ''}`}
+                  ? 'bg-[#131313] text-[#ededed] border-l-2 border-l-[#4ade80] border-[#242424]'
+                  : 'text-[#8a8a8a] hover:bg-[#131313] hover:text-[#ededed] border-transparent'
+              } ${dropTargetId === sec.id ? 'border-t-2 border-[#4ade80]' : ''} ${draggedSectionId === sec.id ? 'opacity-40' : ''}`}
             >
-              <GripVertical className="w-3.5 h-3.5 flex-shrink-0 text-slate-400 cursor-grab" />
-              <span className={`text-[10px] font-mono opacity-80 ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+              <GripVertical className="w-3.5 h-3.5 flex-shrink-0 text-[#8a8a8a] cursor-grab" />
+              <span className={`text-[10px] font-mono opacity-80 ${isActive ? 'text-[#ededed]' : 'text-[#8a8a8a]'}`}>
                 {sec.level === 1 ? 'H1' : sec.level === 2 ? 'H2' : 'H3'}
               </span>
-              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-blue-600'}`} />
-              <span className="flex-1 truncate">
-                {sec.title || `Untitled Section ${idx + 1}`}
-              </span>
-              {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-100 flex-shrink-0" />}
+              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-[#4ade80]' : 'text-[#8a8a8a]'}`} />
+              <span className="flex-1 truncate">{sec.title || `Untitled Section ${idx + 1}`}</span>
+              {isActive && <ChevronRight className="w-3.5 h-3.5 text-[#4ade80] flex-shrink-0" />}
             </button>
           );
         })}
       </div>
 
-      {/* Bottom Add Section Button */}
-      <div className="p-3 border-t border-slate-200 relative">
+      <div className="p-3 border-t border-[#242424] relative">
         <button
           type="button"
           onClick={() => setAddMenuOpen(!addMenuOpen)}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all shadow-xs"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-[#242424] bg-[#111111] text-[#ededed] text-xs font-semibold transition-all font-mono uppercase tracking-[0.12em]"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 text-[#4ade80]" />
           <span>Insert New Section</span>
         </button>
 
         {addMenuOpen && (
           <>
-            <div 
-              className="fixed inset-0 z-30" 
-              onClick={() => setAddMenuOpen(false)} 
-            />
-            <div className="absolute bottom-16 left-3 right-3 rounded-xl glass-dropdown z-40 p-2 animate-fade-in space-y-1">
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
+            <div className="fixed inset-0 z-30" onClick={() => setAddMenuOpen(false)} />
+            <div className="absolute bottom-16 left-3 right-3 bg-[#111111] border border-[#242424] z-40 p-2 animate-fade-in space-y-1">
+              <div className="text-[10px] font-bold text-[#8a8a8a] uppercase tracking-[0.12em] font-mono px-2 py-1">
                 Choose Section Type
               </div>
               <button
@@ -179,9 +169,9 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                   onAddSection(1, 'richText', 'New Major Section');
                   setAddMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg text-left font-medium"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#ededed] hover:bg-[#131313] text-left font-medium"
               >
-                <Hash className="w-3.5 h-3.5 text-blue-600" />
+                <Hash className="w-3.5 h-3.5 text-[#4ade80]" />
                 <span>Heading 1 (Major Section)</span>
               </button>
               <button
@@ -190,9 +180,9 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                   onAddSection(2, 'richText', 'New Subsection');
                   setAddMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg text-left font-medium"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#ededed] hover:bg-[#131313] text-left font-medium"
               >
-                <Hash className="w-3.5 h-3.5 text-indigo-600" />
+                <Hash className="w-3.5 h-3.5 text-[#a78bfa]" />
                 <span>Heading 2 (Subsection)</span>
               </button>
               <button
@@ -201,9 +191,9 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                   onAddSection(1, 'table', 'Data & Environment Table');
                   setAddMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg text-left font-medium"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#ededed] hover:bg-[#131313] text-left font-medium"
               >
-                <Table className="w-3.5 h-3.5 text-emerald-600" />
+                <Table className="w-3.5 h-3.5 text-[#4ade80]" />
                 <span>Data Table</span>
               </button>
               <button
@@ -212,9 +202,9 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                   onAddSection(2, 'codeDiff', 'Code Changes');
                   setAddMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg text-left font-medium"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#ededed] hover:bg-[#131313] text-left font-medium"
               >
-                <Code className="w-3.5 h-3.5 text-purple-600" />
+                <Code className="w-3.5 h-3.5 text-[#a78bfa]" />
                 <span>Code Block & Diff</span>
               </button>
               <button
