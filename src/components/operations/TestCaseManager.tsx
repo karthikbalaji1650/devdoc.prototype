@@ -700,6 +700,9 @@ const TestCasesView: React.FC<{
             </span>
           </span>
         </label>
+        <button onClick={() => setShowAddCase(true)} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold ml-auto shadow-xs">
+          <Plus className="w-3 h-3" /> Add Case
+        </button>
       </div>
       {/* Suite tabs */}
       <div className="flex gap-1 mb-3 flex-wrap">
