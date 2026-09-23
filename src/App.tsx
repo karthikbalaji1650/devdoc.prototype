@@ -19,6 +19,8 @@ import { OperationsLayout } from './components/operations/OperationsLayout';
 import { AppSidebar } from './components/AppSidebar';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { DataManagementPage } from './components/data/DataManagementPage';
+import { DocumentsListPage } from './components/documents/DocumentsListPage';
+import { listDocuments, getDocument, saveDocument, generateDocumentId } from './services/documentsStoreService';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { parseDocxFile } from './exporters/docxImporter';
@@ -72,6 +74,8 @@ export const App: React.FC = () => {
     return getDefaultDocument();
   });
 
+  // null = showing the documents list; a real id = editing that document
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | 'metadata'>('metadata');
   const [viewMode, setViewMode] = useState<'paginated' | 'continuous'>('paginated');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -85,14 +89,56 @@ export const App: React.FC = () => {
   const [aiInitialText, setAiInitialText] = useState('');
   const [aiApplyCallback, setAiApplyCallback] = useState<((newText: string) => void) | null>(null);
 
-  // Auto-save to localStorage
+  // Auto-save the active document into the multi-document store.
+  // (Legacy single-doc key is kept in sync too, only so an older build
+  // reverting mid-session wouldn't see a blank slate; documentsStoreService
+  // migrates it in on first read.)
   useEffect(() => {
+    if (!activeDocumentId) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-  }, [document]);
+    saveDocument(document);
+  }, [document, activeDocumentId]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Opens an existing document (from the list, an import, etc.) or
+  // registers a brand-new one, and switches the editor onto it.
+  const openDocumentInEditor = (doc: DocumentModel) => {
+    const id = doc.metadata.id || generateDocumentId();
+    const docWithId: DocumentModel = { ...doc, metadata: { ...doc.metadata, id } };
+    saveDocument(docWithId);
+    setDocument(docWithId);
+    setActiveSectionId('metadata');
+    setActiveDocumentId(id);
+  };
+
+  const handleOpenDocument = (id: string) => {
+    const doc = getDocument(id);
+    if (!doc) {
+      showToast('Could not find that document.');
+      return;
+    }
+    setDocument(doc);
+    setActiveSectionId('metadata');
+    setActiveDocumentId(id);
+  };
+
+  const handleCreateDocument = () => {
+    const tmpl = TEMPLATE_REGISTRY[0];
+    const newDoc = tmpl.getBlankDoc();
+    newDoc.metadata.id = generateDocumentId();
+    newDoc.metadata.author = currentUser?.name || 'Unknown';
+    newDoc.metadata.status = 'DRAFT';
+    newDoc.metadata.date = new Date().toISOString().split('T')[0];
+    openDocumentInEditor(newDoc);
+    showToast(`Created "${newDoc.metadata.title || 'New Document'}"`);
+  };
+
+  const handleBackToDocumentsList = () => {
+    setActiveDocumentId(null);
   };
 
   // Auth Handlers
@@ -122,6 +168,11 @@ export const App: React.FC = () => {
 
   const handleLaunchApp = (app: AppView, opsTab?: OperationsTab) => {
     setCurrentApp(app);
+    if (app === 'doccraft') {
+      // "Document Editor" in the sidebar is a launcher, not "resume last
+      // doc" - always land on the documents list.
+      setActiveDocumentId(null);
+    }
     if (opsTab) {
       setActiveOpsTab(opsTab);
     }
@@ -190,8 +241,7 @@ export const App: React.FC = () => {
       ]
     };
 
-    setDocument(rcaDoc);
-    setActiveSectionId('metadata');
+    openDocumentInEditor(rcaDoc);
     setCurrentApp('doccraft');
     showToast(`Generated RCA Document for ${incident.id}!`);
   };
@@ -306,6 +356,10 @@ export const App: React.FC = () => {
   const handleLoadTemplate = (templateId: string, isBlank: boolean = false) => {
     const tmpl = TEMPLATE_REGISTRY.find(t => t.id === templateId) || TEMPLATE_REGISTRY[0];
     const newDoc = isBlank ? tmpl.getBlankDoc() : tmpl.getSampleDoc();
+    // Switching templates mid-edit replaces content, not the document's identity.
+    if (activeDocumentId) {
+      newDoc.metadata.id = activeDocumentId;
+    }
     setDocument(newDoc);
     setActiveSectionId('metadata');
     showToast(`Loaded ${tmpl.name}${isBlank ? ' (Blank)' : ''}`);
@@ -328,8 +382,7 @@ export const App: React.FC = () => {
       const text = await file.text();
       const imported = JSON.parse(text);
       if (imported.metadata && imported.sections) {
-        setDocument(imported);
-        setActiveSectionId('metadata');
+        openDocumentInEditor(imported);
         showToast('Draft project loaded successfully');
       } else {
         alert('Invalid document project JSON format');
@@ -345,8 +398,7 @@ export const App: React.FC = () => {
     try {
       showToast('Parsing uploaded Word template...');
       const importedDoc = await parseDocxFile(file);
-      setDocument(importedDoc);
-      setActiveSectionId('metadata');
+      openDocumentInEditor(importedDoc);
       showToast(`Imported ${importedDoc.sections.length} sections from DOCX!`);
     } catch (e) {
       console.error('Failed to parse docx', e);
@@ -445,7 +497,25 @@ export const App: React.FC = () => {
     );
   }
 
-  // 6. Render DocCraft Studio (Document Automation Workspace)
+  // 6. Render Documents List (landing point before opening a document)
+  if (!activeDocumentId) {
+    const inProgressDocs = listDocuments().filter(
+      (d) => d.metadata.status === 'DRAFT' || d.metadata.status === 'IN_REVIEW'
+    );
+    return (
+      <DocumentsListPage
+        user={currentUser}
+        documents={inProgressDocs}
+        scopeLabel="Documents currently in progress"
+        onOpen={handleOpenDocument}
+        onCreate={handleCreateDocument}
+        onNavigate={handleLaunchApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // 7. Render DocCraft Studio (Document Automation Workspace)
   return (
     <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
       {/* ── Shared App Sidebar ── */}
@@ -502,7 +572,7 @@ export const App: React.FC = () => {
         viewMode={viewMode}
         onToggleViewMode={setViewMode}
         onOpenAiSettings={() => setAiSettingsOpen(true)}
-        onBackToHub={() => setCurrentApp('dashboard')}
+        onBackToHub={handleBackToDocumentsList}
         onLaunchOperations={() => setCurrentApp('operations')}
         onLogout={handleLogout}
       />

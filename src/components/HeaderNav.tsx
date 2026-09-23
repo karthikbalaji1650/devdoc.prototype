@@ -6,10 +6,11 @@ import {
   Upload, 
   FolderDown, 
   FolderUp, 
-  Sparkles, 
-  RotateCcw, 
-  Check, 
+  Sparkles,
+  RotateCcw,
+  Check,
   ChevronDown,
+  ChevronLeft,
   Layers,
   FileCode2,
   CheckCircle2,
@@ -56,6 +57,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onImportJson,
   onReset,
   onOpenAiSettings,
+  onBackToHub,
   onLaunchOperations,
   onLogout,
 }) => {
@@ -192,7 +194,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     <header className="sticky top-0 z-50 h-16 bg-[var(--panel)] border-b border-[var(--border)] px-4 flex items-center justify-between">
       {/* Brand, App Switcher & Template Selector */}
       <div className="flex items-center gap-3">
-        
+        {onBackToHub && (
+          <button
+            type="button"
+            onClick={onBackToHub}
+            title="Back to all documents"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-[var(--panel-alt)] transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">All Documents</span>
+          </button>
+        )}
+
         {/* Template Switcher Dropdown */}
         <div ref={exportDropdownRef} className="relative">
           <button
