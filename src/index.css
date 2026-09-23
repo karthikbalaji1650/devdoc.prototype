@@ -197,6 +197,12 @@
   color: var(--bg);
 }
 
+.ui-button-icon {
+  padding: 8px;
+  width: 32px;
+  height: 32px;
+}
+
 /* Keep legacy utility-heavy screens on the same control-room tokens. */
 .bg-white, .bg-slate-50, .bg-slate-100 { background-color: var(--panel) !important; }
 .bg-slate-200 { background-color: var(--panel-alt) !important; }

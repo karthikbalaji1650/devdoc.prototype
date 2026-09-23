@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
   Bell,
@@ -53,6 +53,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
     { id: 'settings', label: 'Settings', desc: 'Platform preferences & config', icon: CheckCircle2, iconColor: 'text-[#ededed]', bg: 'bg-[#111111]', app: 'settings' as AppView, opsTab: undefined as OperationsTab | undefined },
   ];
 
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notifOpen]);
+
   const reviewers = useMemo(() => getStoredReviewersLog(), []);
   const totalDocs = reviewers.length;
   const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
@@ -89,10 +103,50 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           </div>
 
           <div className="flex items-center gap-3">
-            <button type="button" className="ui-button ui-button-icon relative" title="Notifications">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#4ade80]" />
-            </button>
+            <div ref={notifRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setNotifOpen((o) => !o)}
+                className="ui-button ui-button-icon relative"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {recentActivity.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#4ade80]" />
+                )}
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 border border-[#242424] bg-[#111111] shadow-lg z-50">
+                  <div className="px-3 py-2.5 border-b border-[#242424] text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">
+                    Notifications
+                  </div>
+                  {recentActivity.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-[11px] text-[#8a8a8a] font-mono">
+                      No recent activity.
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto divide-y divide-[#242424]">
+                      {recentActivity.map((item) => {
+                        const ss = STATUS_STYLES[item.type];
+                        return (
+                          <div key={item.id} className="px-3 py-2.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-[10px] uppercase tracking-[0.1em] text-[#8a8a8a] font-mono truncate">{item.docNumber}</div>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.1em] font-mono shrink-0 ${ss.bg}`}>
+                                <span className={`w-1 h-1 rounded-full ${ss.dot}`} />
+                                {ss.label}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs font-medium text-[#ededed] truncate">{item.docTitle}</div>
+                            <div className="mt-1 text-[10px] text-[#8a8a8a] font-mono">{item.reviewer} · {item.date}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="border-l border-[#242424] h-6 ml-1" />
             <div className="ui-panel flex items-center gap-3 px-2 py-1.5">
               <div className="w-8 h-8 border border-[#242424] bg-[#131313] flex items-center justify-center text-[10px] font-bold text-[#ededed] font-mono uppercase">
