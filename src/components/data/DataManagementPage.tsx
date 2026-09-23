@@ -1,10 +1,11 @@
 import React from 'react';
-import { Database, Download, Trash2, FileText } from 'lucide-react';
+import { Database, Download, Trash2, FileText, ShieldCheck } from 'lucide-react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
 import { AppSidebar } from '../AppSidebar';
 import { getStoredReviewersLog } from '../../services/reviewersLogService';
 import { getDriveExportLog } from '../../services/googleDriveStatusService';
+import { getSessionAuditLog } from '../../services/sessionAuditService';
 
 interface DataManagementPageProps {
   user: UserProfile;
@@ -17,9 +18,22 @@ function bytesForKey(key: string): number {
   return val ? new Blob([val]).size : 0;
 }
 
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDuration(loginIso: string, logoutIso: string | null): string {
+  const end = logoutIso ? new Date(logoutIso).getTime() : Date.now();
+  const minutes = Math.max(0, Math.round((end - new Date(loginIso).getTime()) / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 export const DataManagementPage: React.FC<DataManagementPageProps> = ({ user, onNavigate, onLogout }) => {
   const reviewers = getStoredReviewersLog();
   const driveExports = getDriveExportLog();
+  const sessionLog = getSessionAuditLog();
 
   const storageKeys = Object.keys(localStorage);
   const totalBytes = storageKeys.reduce((sum, k) => sum + bytesForKey(k), 0);
@@ -121,6 +135,47 @@ export const DataManagementPage: React.FC<DataManagementPageProps> = ({ user, on
               ))}
               {reviewers.length === 0 && (
                 <div className="px-5 py-6 text-center text-xs text-slate-400">No records stored.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Session audit log (admin-only) */}
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">User session audit log ({sessionLog.length})</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                    <th className="text-left font-bold px-5 py-2">User</th>
+                    <th className="text-left font-bold px-3 py-2">Role</th>
+                    <th className="text-left font-bold px-3 py-2">Login</th>
+                    <th className="text-left font-bold px-3 py-2">Logout</th>
+                    <th className="text-left font-bold px-3 py-2">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sessionLog.map((s) => (
+                    <tr key={s.id}>
+                      <td className="px-5 py-2.5 font-semibold text-slate-800">{s.userName}</td>
+                      <td className="px-3 py-2.5 text-slate-500 capitalize">{s.role.replace('-', ' ')}</td>
+                      <td className="px-3 py-2.5 text-slate-500 font-mono">{formatTimestamp(s.loginTime)}</td>
+                      <td className="px-3 py-2.5 font-mono">
+                        {s.logoutTime ? (
+                          <span className="text-slate-500">{formatTimestamp(s.logoutTime)}</span>
+                        ) : (
+                          <span className="text-emerald-600 font-semibold">Active now</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500 font-mono">{formatDuration(s.loginTime, s.logoutTime)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {sessionLog.length === 0 && (
+                <div className="px-5 py-6 text-center text-xs text-slate-400">No session activity recorded yet.</div>
               )}
             </div>
           </div>

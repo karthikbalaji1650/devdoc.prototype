@@ -23,6 +23,7 @@ import { DocumentsListPage } from './components/documents/DocumentsListPage';
 import { listDocuments, getDocument, saveDocument, generateDocumentId } from './services/documentsStoreService';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
+import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { parseDocxFile } from './exporters/docxImporter';
 
 import { saveAs } from 'file-saver';
@@ -145,12 +146,14 @@ export const App: React.FC = () => {
   // Auth Handlers
   const handleLogin = (profile: UserProfile) => {
     loginWithProfile(profile);
+    recordLogin(profile.id, profile.name, profile.role);
     setCurrentUser(profile);
     setCurrentApp('dashboard');
     showToast(`Welcome, ${profile.name}!`);
   };
 
   const handleLogout = () => {
+    if (currentUser) recordLogout(currentUser.id);
     logout();
     setCurrentUser(null);
     setCurrentApp('login');
