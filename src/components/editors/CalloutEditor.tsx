@@ -30,12 +30,12 @@ export const CalloutEditor: React.FC<CalloutEditorProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => onChange({ ...callout, type: t.id as any })}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium border transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium border transition-all min-w-0 ${
                     isSelected ? t.color : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 shadow-xs'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{t.label}</span>
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{t.label}</span>
                 </button>
               );
             })}
