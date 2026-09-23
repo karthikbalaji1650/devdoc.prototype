@@ -42,7 +42,6 @@ const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; lab
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout }) => {
-
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
