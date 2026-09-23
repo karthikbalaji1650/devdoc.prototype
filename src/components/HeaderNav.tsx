@@ -16,7 +16,6 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   Bot,
-  LayoutGrid,
   LogOut,
   RefreshCw
 } from 'lucide-react';
@@ -25,7 +24,8 @@ import type { DocumentModel } from '../types/document';
 import type { UserProfile } from '../types/auth';
 import { TEMPLATE_REGISTRY } from '../templates';
 import { exportToDocx } from '../exporters/docxExporter';
-import { copyToGoogleDocsClipboard } from '../exporters/googleDocsExporter';
+import { exportToGoogleDoc } from '../exporters/googleDocsExport';
+import { GoogleAuthCancelledError } from '../services/googleAuthService';
 import { exportTestCasesToExcel } from '../exporters/excelExporter';
 import { exportDocToVsCodeSpecs } from '../services/workspaceFileService';
 
@@ -41,7 +41,6 @@ interface HeaderNavProps {
   viewMode: 'paginated' | 'continuous';
   onToggleViewMode: (mode: 'paginated' | 'continuous') => void;
   onOpenAiSettings: () => void;
-  onOpenAiRephrase: () => void;
   onBackToHub?: () => void;
   onLaunchOperations?: () => void;
   onLogout?: () => void;
@@ -56,8 +55,6 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onImportJson,
   onReset,
   onOpenAiSettings,
-  onOpenAiRephrase,
-  onBackToHub,
   onLaunchOperations,
   onLogout,
 }) => {
@@ -66,6 +63,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
+  const [isExportingGoogleDoc, setIsExportingGoogleDoc] = useState(false);
+  const [googleDocsError, setGoogleDocsError] = useState<string | null>(null);
   const templateName = TEMPLATE_REGISTRY.find(template => template.id === document.metadata.templateType)?.name
     || document.metadata.templateType.replace('-', ' ');
 
@@ -105,21 +104,31 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     }
   };
 
-  const handleGoogleDocsCopy = async () => {
+  const handleGoogleDocsExport = async () => {
+    setGoogleDocsError(null);
     try {
-      const success = await copyToGoogleDocsClipboard(document);
-      if (success) {
-        setCopiedSuccess(true);
-        confetti({
-          particleCount: 50,
-          spread: 40,
-          origin: { y: 0.1 }
-        });
-        setTimeout(() => setCopiedSuccess(false), 3000);
-      }
+      setIsExportingGoogleDoc(true);
+      const docUrl = await exportToGoogleDoc(document);
+      window.open(docUrl, '_blank', 'noopener,noreferrer');
+      setCopiedSuccess(true);
+      confetti({
+        particleCount: 50,
+        spread: 40,
+        origin: { y: 0.1 }
+      });
+      setTimeout(() => setCopiedSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to copy to Google Docs clipboard:', err);
+      if (err instanceof GoogleAuthCancelledError) {
+        // User closed the sign-in popup or denied access — not an error worth surfacing loudly.
+        console.info('Google Docs export cancelled by user.');
+      } else {
+        console.error('Failed to export to Google Docs:', err);
+        const message = err instanceof Error ? err.message : 'Failed to export to Google Docs.';
+        setGoogleDocsError(message);
+        setTimeout(() => setGoogleDocsError(null), 5000);
+      }
     } finally {
+      setIsExportingGoogleDoc(false);
       setExportDropdownOpen(false);
     }
   };
@@ -178,35 +187,6 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
       {/* Brand, App Switcher & Template Selector */}
       <div className="flex items-center gap-3">
         
-        {/* Back to Hub / App Launcher Button */}
-        {onBackToHub && (
-          <button
-            type="button"
-            onClick={onBackToHub}
-            title="Return to Portal Hub"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 border border-slate-200 transition-colors"
-          >
-            <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden sm:inline">Hub</span>
-          </button>
-        )}
-
-        <div className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="DevDoc Studio Logo" className="w-8 h-8 object-contain shrink-0 rounded-lg shadow-2xs" />
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm tracking-tight text-slate-900">
-                DocCraft Studio
-              </span>
-              <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                Port 5173
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="h-5 w-[1px] bg-slate-200 mx-1 hidden sm:block" />
-
         {/* Template Switcher Dropdown */}
         <div ref={exportDropdownRef} className="relative">
           <button
@@ -313,27 +293,27 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           className="hidden"
         />
 
-
-        {/* AI Assistant Quick Trigger */}
+        {/* Export to Google Docs button */}
         <button
-          onClick={onOpenAiRephrase}
-          title="Open AI Technical Rephraser & Writing Assistant"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-all shadow-xs"
+          onClick={handleGoogleDocsExport}
+          disabled={isExportingGoogleDoc}
+          title={googleDocsError || 'Create a Google Doc in your Drive from this document'}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs disabled:opacity-60"
         >
-          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-          <span className="hidden sm:inline">AI Rephrase</span>
-        </button>
-
-        {/* Copy for Google Docs button */}
-        <button
-          onClick={handleGoogleDocsCopy}
-          title="Copy formatted document directly to clipboard for instant pasting into Google Docs"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs"
-        >
-          {copiedSuccess ? (
+          {googleDocsError ? (
+            <>
+              <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+              <span className="hidden md:inline">Export failed</span>
+            </>
+          ) : isExportingGoogleDoc ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+              <span className="hidden md:inline">Exporting…</span>
+            </>
+          ) : copiedSuccess ? (
             <>
               <Check className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
-              <span>Copied!</span>
+              <span>Exported to Google Docs</span>
             </>
           ) : (
             <>
