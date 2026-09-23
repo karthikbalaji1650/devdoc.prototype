@@ -137,7 +137,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   key={sec.id}
                   id={sec.id}
                   onClick={() => onSelectSection?.(sec.id)}
-                  className="group cursor-pointer rounded-lg p-2 -mx-2 hover:bg-blue-50/50 transition-colors relative"
+                  className="group cursor-pointer rounded-lg p-2 -mx-2 hover:bg-[var(--panel-alt)] transition-colors relative"
                   title="Click to jump to editor for this section"
                 >
                   {/* Heading */}
@@ -228,7 +228,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                           {sec.codeSnippet.oldCode && (
                             <div>
                               <div className="text-[11px] font-bold text-rose-700 mb-1">[-] Original Code:</div>
-                              <pre className="doc-code bg-rose-50/50 border-rose-200 text-rose-950">
+                              <pre className="doc-code bg-[rgba(255,84,112,0.08)] border-[var(--danger)] text-[var(--text)]">
                                 {sec.codeSnippet.oldCode}
                               </pre>
                             </div>
@@ -236,7 +236,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                           {sec.codeSnippet.newCode && (
                             <div>
                               <div className="text-[11px] font-bold text-emerald-700 mb-1">[+] Fixed Code:</div>
-                              <pre className="doc-code bg-emerald-50/50 border-emerald-200 text-emerald-950">
+                              <pre className="doc-code bg-[rgba(43,255,176,0.08)] border-[var(--success)] text-[var(--text)]">
                                 {sec.codeSnippet.newCode}
                               </pre>
                             </div>
@@ -282,7 +282,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   {sec.type === 'testCases' && sec.testCases && (
                     <div className="space-y-4 my-3">
                       {sec.testCases.map((tc, tcIdx) => (
-                        <div key={tcIdx} className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/50 space-y-2 text-xs">
+                        <div key={tcIdx} className="border border-slate-200 rounded-lg p-3.5 bg-[var(--panel-alt)] space-y-2 text-xs">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-blue-900">{tc.id}:</span>
@@ -332,7 +332,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
                           {tc.evidenceImage && (
                             <figure className="mt-3 rounded-lg border border-blue-200 bg-white p-2">
-                              <figcaption className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+                              <figcaption className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--blue)]">
                                 Proof of Execution{tc.evidenceImageName ? `: ${tc.evidenceImageName}` : ''}
                               </figcaption>
                               <img
@@ -345,7 +345,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
                           {onUpdateTestCase && (
                             <label
-                              className="mt-3 flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-blue-300 bg-blue-50 px-2.5 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
+                              className="mt-3 flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-[var(--blue)] bg-[var(--panel)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--blue)] hover:bg-[var(--panel-alt)]"
                               onClick={(event) => event.stopPropagation()}
                             >
                               <span>{tc.evidenceImage ? 'Replace proof image' : 'Upload proof image'}</span>

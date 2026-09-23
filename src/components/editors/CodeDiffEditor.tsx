@@ -100,7 +100,7 @@ export const CodeDiffEditor: React.FC<CodeDiffEditorProps> = ({
               onChange={(e) => onChange({ ...codeSnippet, oldCode: e.target.value })}
               placeholder="// Paste original implementation here..."
               rows={10}
-              className="w-full p-3 bg-rose-50/50 border border-rose-200 rounded-lg text-xs font-mono text-rose-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 leading-relaxed resize-y"
+              className="w-full p-3 bg-[rgba(255,84,112,0.08)] border border-[var(--danger)] rounded-lg text-xs font-mono text-[var(--text)] placeholder-slate-400 focus:outline-none focus:border-rose-500 leading-relaxed resize-y"
             />
           </div>
 
@@ -115,7 +115,7 @@ export const CodeDiffEditor: React.FC<CodeDiffEditorProps> = ({
               onChange={(e) => onChange({ ...codeSnippet, newCode: e.target.value })}
               placeholder="// Paste proposed fix implementation here..."
               rows={10}
-              className="w-full p-3 bg-emerald-50/50 border border-emerald-200 rounded-lg text-xs font-mono text-emerald-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 leading-relaxed resize-y"
+              className="w-full p-3 bg-[rgba(43,255,176,0.08)] border border-[var(--success)] rounded-lg text-xs font-mono text-[var(--text)] placeholder-slate-400 focus:outline-none focus:border-emerald-500 leading-relaxed resize-y"
             />
           </div>
         </div>
