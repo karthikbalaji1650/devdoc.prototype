@@ -27,9 +27,10 @@ import { parseDocxFile } from './exporters/docxImporter';
 
 import { saveAs } from 'file-saver';
 import { 
-  PanelLeftClose, 
-  PanelLeftOpen, 
-  CheckCircle 
+  PanelLeftClose,
+  PanelLeftOpen,
+  CheckCircle,
+  ShieldAlert
 } from 'lucide-react';
 
 const STORAGE_KEY = 'devdoc_studio_current_doc_v1';
@@ -258,7 +259,14 @@ export const App: React.FC = () => {
   };
 
   // Section manipulation handlers
+  // Requirement #2/#4: a user may only edit documents they authored;
+  // admins may edit any document. Guarding here (not just visually)
+  // means the restriction holds regardless of which UI path is used.
+  const canEditActiveDocument = (): boolean =>
+    !!currentUser && (currentUser.role === 'admin' || document.metadata.author === currentUser.name);
+
   const handleUpdateMetadata = (updates: Partial<DocumentModel['metadata']>) => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => ({
       ...prev,
       metadata: { ...prev.metadata, ...updates }
@@ -266,6 +274,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateSection = (id: string, updates: Partial<DocSection>) => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => ({
       ...prev,
       sections: prev.sections.map(s => (s.id === id ? { ...s, ...updates } : s))
@@ -273,6 +282,7 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteSection = (id: string) => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => {
       const newSections = prev.sections.filter(s => s.id !== id);
       if (activeSectionId === id) {
@@ -284,6 +294,7 @@ export const App: React.FC = () => {
   };
 
   const handleDuplicateSection = (id: string) => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => {
       const index = prev.sections.findIndex(s => s.id === id);
       if (index === -1) return prev;
@@ -302,6 +313,7 @@ export const App: React.FC = () => {
   };
 
   const handleMoveSection = (id: string, direction: 'up' | 'down') => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => {
       const index = prev.sections.findIndex(s => s.id === id);
       if (index === -1) return prev;
@@ -317,6 +329,7 @@ export const App: React.FC = () => {
   };
 
   const handleReorderSections = (draggedId: string, targetId: string) => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     setDocument(prev => {
       const draggedIndex = prev.sections.findIndex(section => section.id === draggedId);
       const targetIndex = prev.sections.findIndex(section => section.id === targetId);
@@ -330,6 +343,7 @@ export const App: React.FC = () => {
   };
 
   const handleAddSection = (level: 1 | 2 | 3, type: SectionType, title: string = 'New Section') => {
+    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     const newId = `sec-${Date.now()}`;
     const newSection: DocSection = {
       id: newId,
@@ -354,6 +368,7 @@ export const App: React.FC = () => {
 
   // Template Switching
   const handleLoadTemplate = (templateId: string, isBlank: boolean = false) => {
+    if (activeDocumentId && !canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     const tmpl = TEMPLATE_REGISTRY.find(t => t.id === templateId) || TEMPLATE_REGISTRY[0];
     const newDoc = isBlank ? tmpl.getBlankDoc() : tmpl.getSampleDoc();
     // Switching templates mid-edit replaces content, not the document's identity.
@@ -650,8 +665,15 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
+              {!canEditActiveDocument() && (
+                <div className="px-4 py-2 bg-[#2a220b] border-b border-[var(--amber)] text-[11px] text-[var(--amber)] font-semibold flex items-center gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                  Read-only — authored by {document.metadata.author || 'another user'}. You can only edit documents you authored.
+                </div>
+              )}
+
               {/* Editor Body Area */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+              <div className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 ${!canEditActiveDocument() ? 'pointer-events-none opacity-70 select-none' : ''}`}>
                 {activeSectionId === 'metadata' ? (
                   <MetadataEditor
                     metadata={document.metadata}
