@@ -155,7 +155,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 border border-[var(--success)] bg-[var(--signal-gradient)] text-[#07111d] text-[10px] font-semibold flex items-center justify-center gap-2 font-mono uppercase tracking-[0.12em] disabled:opacity-50"
+                className="w-full py-2.5 border border-[var(--success)] bg-[image:var(--signal-gradient)] text-[#07111d] text-[10px] font-semibold flex items-center justify-center gap-2 font-mono uppercase tracking-[0.12em] disabled:opacity-50"
               >
                 <span>{isLoading ? 'Authenticating...' : 'Sign In to Platform'}</span>
                 <ArrowRight className="w-4 h-4" />

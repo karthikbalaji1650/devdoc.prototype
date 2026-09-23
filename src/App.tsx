@@ -491,17 +491,6 @@ export const App: React.FC = () => {
         viewMode={viewMode}
         onToggleViewMode={setViewMode}
         onOpenAiSettings={() => setAiSettingsOpen(true)}
-        onOpenAiRephrase={() => {
-          if (activeSectionId === 'metadata') {
-            handleTriggerAi(document.metadata.title, (newT) => handleUpdateMetadata({ title: newT }));
-          } else if (activeSection?.content) {
-            handleTriggerAi(activeSection.content, (newC) => handleUpdateSection(activeSection.id, { content: newC }));
-          } else if (activeSection) {
-            handleTriggerAi(activeSection.title, (newT) => handleUpdateSection(activeSection.id, { title: newT }));
-          } else {
-            handleTriggerAi('Technical issue investigation and firmware upgrade validation analysis.');
-          }
-        }}
         onBackToHub={() => setCurrentApp('dashboard')}
         onLaunchOperations={() => setCurrentApp('operations')}
         onLogout={handleLogout}
@@ -549,7 +538,7 @@ export const App: React.FC = () => {
                     type="button"
                     onClick={() => setActiveTab('split')}
                     className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'split' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                      activeTab === 'split' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Split
@@ -558,7 +547,7 @@ export const App: React.FC = () => {
                     type="button"
                     onClick={() => setActiveTab('editor-only')}
                     className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'editor-only' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                      activeTab === 'editor-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Editor
@@ -567,7 +556,7 @@ export const App: React.FC = () => {
                     type="button"
                     onClick={() => setActiveTab('preview-only')}
                     className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'preview-only' ? 'bg-[var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                      activeTab === 'preview-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
                     }`}
                   >
                     Preview

@@ -52,7 +52,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           type="button"
           onClick={handleSyncJira}
           disabled={isSyncing}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--signal-gradient)] hover:opacity-90 text-[#07111d] text-xs font-semibold transition-colors disabled:opacity-50 self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2 bg-[image:var(--signal-gradient)] hover:opacity-90 text-[#07111d] text-xs font-semibold transition-colors disabled:opacity-50 self-start sm:self-auto"
         >
           <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
           <span>{isSyncing ? 'Fetching from JIRA...' : syncSuccess ? 'JIRA Synced!' : 'Sync JIRA Release'}</span>
@@ -66,7 +66,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           onClick={() => setSelectedVersion('v13.03.01')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
             selectedVersion === 'v13.03.01'
-              ? 'bg-[var(--signal-gradient)] text-[#07111d]'
+              ? 'bg-[image:var(--signal-gradient)] text-[#07111d]'
               : 'text-[var(--text-dim)] hover:text-[var(--success)] bg-transparent border border-[var(--border)]'
           }`}
         >
@@ -78,7 +78,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
           onClick={() => setSelectedVersion('v13.04.00')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
             selectedVersion === 'v13.04.00'
-              ? 'bg-[var(--signal-gradient)] text-[#07111d]'
+              ? 'bg-[image:var(--signal-gradient)] text-[#07111d]'
               : 'text-[var(--text-dim)] hover:text-[var(--success)] bg-transparent border border-[var(--border)]'
           }`}
         >
