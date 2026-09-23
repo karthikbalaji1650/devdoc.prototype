@@ -499,14 +499,16 @@ export const App: React.FC = () => {
 
   // 6. Render Documents List (landing point before opening a document)
   if (!activeDocumentId) {
-    const inProgressDocs = listDocuments().filter(
-      (d) => d.metadata.status === 'DRAFT' || d.metadata.status === 'IN_REVIEW'
-    );
+    const isAdmin = currentUser.role === 'admin';
+    const allDocs = listDocuments();
+    const visibleDocs = isAdmin
+      ? allDocs
+      : allDocs.filter((d) => d.metadata.status === 'DRAFT' || d.metadata.status === 'IN_REVIEW');
     return (
       <DocumentsListPage
         user={currentUser}
-        documents={inProgressDocs}
-        scopeLabel="Documents currently in progress"
+        documents={visibleDocs}
+        scopeLabel={isAdmin ? 'All documents' : 'Documents currently in progress'}
         onOpen={handleOpenDocument}
         onCreate={handleCreateDocument}
         onNavigate={handleLaunchApp}
