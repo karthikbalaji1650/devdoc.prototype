@@ -512,7 +512,41 @@ export const App: React.FC = () => {
         )}
 
         {/* Workspace Central Split Layout */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* View Split Switcher — persistent across Split/Editor/Preview modes */}
+          <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
+            <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setActiveTab('split')}
+                className={`px-2 py-1 text-[11px] font-medium ${
+                  activeTab === 'split' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                }`}
+              >
+                Split
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('editor-only')}
+                className={`px-2 py-1 text-[11px] font-medium ${
+                  activeTab === 'editor-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                }`}
+              >
+                Editor
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('preview-only')}
+                className={`px-2 py-1 text-[11px] font-medium ${
+                  activeTab === 'preview-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
+                }`}
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Section Form Editor Column */}
           {showEditor && (
             <div className="flex-1 flex flex-col h-[calc(100vh-64px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
@@ -530,37 +564,6 @@ export const App: React.FC = () => {
                   <span className="font-semibold text-[var(--text)]">
                     {activeSectionId === 'metadata' ? 'Document Properties' : activeSection?.title || 'Section Editor'}
                   </span>
-                </div>
-
-                {/* View Split Switcher on Mobile/Tablet */}
-                <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('split')}
-                    className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'split' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                    }`}
-                  >
-                    Split
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('editor-only')}
-                    className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'editor-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                    }`}
-                  >
-                    Editor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview-only')}
-                    className={`px-2 py-1 text-[11px] font-medium ${
-                      activeTab === 'preview-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                    }`}
-                  >
-                    Preview
-                  </button>
                 </div>
               </div>
 
@@ -612,6 +615,7 @@ export const App: React.FC = () => {
               }}
             />
           )}
+          </div>
         </div>
       </div>
       </div>
