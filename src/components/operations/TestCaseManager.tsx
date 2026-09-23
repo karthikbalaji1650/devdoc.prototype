@@ -554,7 +554,7 @@ const AddCaseModal: React.FC<{
             </div>
           )}
           <div className="flex gap-3 pt-2">
-            <button onClick={handleSave} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold">
+            <button onClick={handleSave} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold btn-primary">
               <Check className="w-3.5 h-3.5" /> {initial?.id ? 'Save Changes' : 'Add Test Case'}
             </button>
             <button onClick={onClose} className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-sm font-semibold">
@@ -1108,7 +1108,7 @@ const TestRunsView: React.FC<{
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-green-400 font-mono outline-none resize-none"/>
               <div className="flex gap-3">
                 <button onClick={()=>{onProcessXml(inputXml);setShowXmlModal(false);}}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold">
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold btn-primary">
                   <Check className="w-3.5 h-3.5"/> Process & Save
                 </button>
                 <button onClick={()=>setShowXmlModal(false)} className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-sm">Cancel</button>

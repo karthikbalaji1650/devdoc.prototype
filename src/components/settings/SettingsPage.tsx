@@ -350,7 +350,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
 
                 <div className="flex justify-end">
                   <button type="button" onClick={handleSaveAi}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors">
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold shadow-xs btn-primary">
                     {aiSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                     {aiSaved ? 'Saved!' : 'Save AI Settings'}
                   </button>
