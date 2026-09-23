@@ -25,6 +25,7 @@ import {
   CheckCircle2, XCircle, MinusCircle, SkipForward, RefreshCw,
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
+  HelpCircle,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -587,11 +588,13 @@ const TestCasesView: React.FC<{
   const [showAddCase, setShowAddCase]       = useState(false);
   const [editingCase, setEditingCase]       = useState<TestCaseItem | null>(null);
   const [searchQ, setSearchQ]               = useState('');
+  const [showDeletedCases, setShowDeletedCases] = useState(false);
 
   const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const cases = (selectedSuite?.testCases || []).filter(tc =>
-    !searchQ || tc.title.toLowerCase().includes(searchQ.toLowerCase()) ||
-    tc.customId.toLowerCase().includes(searchQ.toLowerCase())
+    (showDeletedCases || !tc.isDeleted) &&
+    (!searchQ || tc.title.toLowerCase().includes(searchQ.toLowerCase()) ||
+      tc.customId.toLowerCase().includes(searchQ.toLowerCase()))
   );
   const totalCases    = suites.reduce((s, x) => s + (x.testCases?.length || 0), 0);
   const totalSections = suites.reduce((s, x) => s + (x.sections?.length || 0), 0);
@@ -599,8 +602,14 @@ const TestCasesView: React.FC<{
   const handleDeleteCase = (caseId: string) => {
     if (!selectedSuite) return;
     onUpdateSuites(suites.map(s => s.id === selectedSuite.id
-      ? { ...s, testCases: (s.testCases || []).filter(tc => tc.id !== caseId) } : s));
+      ? { ...s, testCases: (s.testCases || []).map(tc => tc.id === caseId ? { ...tc, isDeleted: true } : tc) } : s));
     onShowToast('🗑️ Test case deleted.');
+  };
+  const handleRestoreCase = (caseId: string) => {
+    if (!selectedSuite) return;
+    onUpdateSuites(suites.map(s => s.id === selectedSuite.id
+      ? { ...s, testCases: (s.testCases || []).map(tc => tc.id === caseId ? { ...tc, isDeleted: false } : tc) } : s));
+    onShowToast('✅ Test case restored.');
   };
   const handleSaveCase = (tc: TestCaseItem) => {
     if (!selectedSuite) return;
@@ -673,9 +682,24 @@ const TestCasesView: React.FC<{
           {collapseAll ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           {collapseAll ? 'Expand All' : 'Collapse All'}
         </button>
-        <button onClick={() => setShowAddCase(true)} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold ml-auto shadow-xs">
-          <Plus className="w-3 h-3" /> Add Case
-        </button>
+        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+          <span className={`relative inline-flex h-5 w-10 items-center rounded-full border transition-colors ${showDeletedCases ? 'bg-blue-600 border-blue-600' : 'bg-slate-200 border-slate-300'}`}>
+            <input
+              type="checkbox"
+              checked={showDeletedCases}
+              onChange={e => setShowDeletedCases(e.target.checked)}
+              className="sr-only"
+            />
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${showDeletedCases ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </span>
+          <span>Task Bin</span>
+          <span className="relative flex items-center group/taskbin">
+            <HelpCircle className="h-4 w-4 text-slate-500" aria-label="Show test cases marked as deleted" />
+            <span role="tooltip" className="pointer-events-none absolute right-0 top-6 z-20 w-56 rounded-md bg-slate-900 px-2.5 py-2 text-[11px] leading-4 text-white opacity-0 shadow-lg transition-opacity group-hover/taskbin:opacity-100">
+              Turn on Task Bin to display deleted test cases. Restore them from the list when needed.
+            </span>
+          </span>
+        </label>
       </div>
       {/* Suite tabs */}
       <div className="flex gap-1 mb-3 flex-wrap">
@@ -732,7 +756,7 @@ const TestCasesView: React.FC<{
                       const isExpanded = expandedCaseId === tc.id;
                       return (
                         <div key={tc.id} className="border-b border-slate-200 last:border-0">
-                          <div className="grid grid-cols-12 gap-2 px-3 py-2.5 hover:bg-slate-50 cursor-pointer items-center group"
+                          <div className={`grid grid-cols-12 gap-2 px-3 py-2.5 cursor-pointer items-center group ${tc.isDeleted ? 'bg-slate-100/70 opacity-70' : 'hover:bg-slate-50'}`}
                             onClick={() => setExpandedCaseId(isExpanded ? null : tc.id)}>
                             <div className="col-span-1">
                               <button onClick={e => { e.stopPropagation(); handleToggleFlag(tc.id); }}
@@ -741,7 +765,10 @@ const TestCasesView: React.FC<{
                               </button>
                             </div>
                             <div className="col-span-1 text-[11px] font-mono text-teal-700 font-semibold">{tc.customId}</div>
-                            <div className="col-span-4 text-xs text-blue-700 font-medium truncate">{tc.title}</div>
+                            <div className="col-span-4 flex items-center gap-1.5 text-xs text-blue-700 font-medium truncate">
+                              <span className="truncate">{tc.title}</span>
+                              {tc.isDeleted && <span className="shrink-0 text-[9px] text-rose-600 border border-rose-200 rounded px-1">Deleted</span>}
+                            </div>
                             <div className="col-span-1">
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[tc.priority]}`}>{tc.priority}</span>
                             </div>
@@ -754,9 +781,14 @@ const TestCasesView: React.FC<{
                             <div className="col-span-1 text-[11px] text-slate-500 truncate">{(tc.references || []).join(', ') || '—'}</div>
                             <div className="col-span-1 flex items-center justify-between">
                               <span className="text-[10px] text-slate-500">{tc.type === 'Automated' ? 'Auto' : 'Manual'}</span>
-                              <div className="flex opacity-0 group-hover:opacity-100 gap-0.5">
-                                <button onClick={e => { e.stopPropagation(); setEditingCase(tc); }} className="p-1 text-slate-400 hover:text-blue-600 rounded"><Edit3 className="w-3 h-3" /></button>
-                                <button onClick={e => { e.stopPropagation(); handleDeleteCase(tc.id); }} className="p-1 text-slate-400 hover:text-rose-600 rounded"><Trash2 className="w-3 h-3" /></button>
+                              <div className={`flex gap-0.5 ${tc.isDeleted ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+                                {tc.isDeleted && <button onClick={e => { e.stopPropagation(); handleRestoreCase(tc.id); }} className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100" title="Restore test case"><RefreshCw className="w-3 h-3" /> Restore</button>}
+                                {!tc.isDeleted && <button onClick={e => { e.stopPropagation(); setEditingCase(tc); }} className="p-1 text-slate-400 hover:text-blue-600 rounded"><Edit3 className="w-3 h-3" /></button>}
+                                {tc.isDeleted ? (
+                                  null
+                                ) : (
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteCase(tc.id); }} className="p-1 text-slate-400 hover:text-rose-600 rounded" title="Move to Task Bin"><Trash2 className="w-3 h-3" /></button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -799,19 +831,20 @@ const TestCasesView: React.FC<{
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
               {cases.map(tc=>(
                 <div key={tc.id} className="border-b border-slate-200 last:border-0">
-                  <div className="grid grid-cols-12 gap-2 px-3 py-2.5 hover:bg-slate-50 cursor-pointer items-center group" onClick={()=>setExpandedCaseId(expandedCaseId===tc.id?null:tc.id)}>
+                  <div className={`grid grid-cols-12 gap-2 px-3 py-2.5 cursor-pointer items-center group ${tc.isDeleted ? 'bg-slate-100/70 opacity-70' : 'hover:bg-slate-50'}`} onClick={()=>setExpandedCaseId(expandedCaseId===tc.id?null:tc.id)}>
                     <div className="col-span-1"><button onClick={e=>{e.stopPropagation();handleToggleFlag(tc.id);}} className={`p-0.5 rounded ${tc.isFlagged?'text-amber-500':'text-slate-400 hover:text-amber-500'}`}><Flag className="w-3 h-3"/></button></div>
                     <div className="col-span-1 text-[11px] font-mono text-teal-700 font-semibold">{tc.customId}</div>
-                    <div className="col-span-4 text-xs text-blue-700 font-medium truncate">{tc.title}</div>
+                    <div className="col-span-4 flex items-center gap-1.5 text-xs text-blue-700 font-medium truncate"><span className="truncate">{tc.title}</span>{tc.isDeleted && <span className="shrink-0 text-[9px] text-rose-600 border border-rose-200 rounded px-1">Deleted</span>}</div>
                     <div className="col-span-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[tc.priority]}`}>{tc.priority}</span></div>
                     <div className="col-span-1 text-[11px] text-slate-500">{tc.estimateMin?`${tc.estimateMin}m`:'—'}</div>
                     <div className="col-span-2 flex flex-wrap gap-1">{(tc.labels||[]).slice(0,2).map(l=><span key={l} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{l}</span>)}</div>
                     <div className="col-span-1 text-[11px] text-slate-500">{(tc.references||[]).join(', ')||'—'}</div>
                     <div className="col-span-1 flex justify-between items-center">
                       <span className="text-[10px] text-slate-500">{tc.type==='Automated'?'Auto':'Manual'}</span>
-                      <div className="flex opacity-0 group-hover:opacity-100 gap-0.5">
-                        <button onClick={e=>{e.stopPropagation();setEditingCase(tc);}} className="p-1 text-slate-400 hover:text-blue-600 rounded"><Edit3 className="w-3 h-3"/></button>
-                        <button onClick={e=>{e.stopPropagation();handleDeleteCase(tc.id);}} className="p-1 text-slate-400 hover:text-rose-600 rounded"><Trash2 className="w-3 h-3"/></button>
+                      <div className={`flex gap-0.5 ${tc.isDeleted ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+                        {tc.isDeleted && <button onClick={e=>{e.stopPropagation();handleRestoreCase(tc.id);}} className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100" title="Restore test case"><RefreshCw className="w-3 h-3"/> Restore</button>}
+                        {!tc.isDeleted && <button onClick={e=>{e.stopPropagation();setEditingCase(tc);}} className="p-1 text-slate-400 hover:text-blue-600 rounded"><Edit3 className="w-3 h-3"/></button>}
+                        {!tc.isDeleted && <button onClick={e=>{e.stopPropagation();handleDeleteCase(tc.id);}} className="p-1 text-slate-400 hover:text-rose-600 rounded" title="Move to Task Bin"><Trash2 className="w-3 h-3"/></button>}
                       </div>
                     </div>
                   </div>

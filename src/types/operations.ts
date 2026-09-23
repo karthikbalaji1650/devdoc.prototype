@@ -95,6 +95,7 @@ export interface TestCaseItem {
   automationCandidate?: boolean;
   robotCode?: string; // Executable Robot Framework syntax
   isFlagged?: boolean; // Flagged by user or AI for suite inclusion
+  isDeleted?: boolean;
   createdAt: string;
   status?: TestCaseStatus;
 }
