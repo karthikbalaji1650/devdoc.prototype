@@ -169,7 +169,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-200">
             {rows.map((row, rowIdx) => (
-              <tr key={rowIdx} className="hover:bg-slate-50">
+              <tr key={rowIdx} className="hover:bg-[var(--panel-alt)]">
                 <td className="p-2 text-center text-slate-400 font-mono text-[10px] bg-slate-50">
                   {rowIdx + 1}
                 </td>

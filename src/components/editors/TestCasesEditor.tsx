@@ -276,7 +276,7 @@ export const TestCasesEditor: React.FC<TestCasesEditorProps> = ({
               {filteredList.map((tc, idx) => {
                 const originalIndex = testCases.findIndex(t => t.id === tc.id && t.title === tc.title);
                 return (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <tr key={idx} className="hover:bg-[var(--panel-alt)] transition-colors">
                     {/* ID */}
                     <td className="p-2 align-top">
                       <input
@@ -552,7 +552,7 @@ export const TestCasesEditor: React.FC<TestCasesEditorProps> = ({
                 </div>
 
                 {/* Evidence image */}
-                <div className="border border-dashed border-blue-200 rounded-lg bg-blue-50/40 p-3">
+                <div className="border border-dashed border-blue-200 rounded-lg bg-[var(--panel-alt)] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div>
                       <label className="text-[11px] font-semibold text-slate-700">Proof of Execution</label>
