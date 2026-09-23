@@ -3,11 +3,8 @@ import {
   FileText,
   Bell,
   LogOut,
-  Eye,
   CheckCircle2,
   Clock,
-  Activity,
-  ArrowUpRight,
 } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
@@ -45,13 +42,6 @@ const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; lab
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout }) => {
-  const SMART_ACCESS = [
-    { id: 'doceditor', label: 'Document Editor', desc: 'Create & edit engineering docs', icon: FileText, iconColor: 'text-[#4ade80]', bg: 'bg-[#111111]', app: 'doccraft' as AppView, opsTab: undefined as OperationsTab | undefined },
-    { id: 'coder', label: 'Coder', desc: 'AI-powered code workspace', icon: Activity, iconColor: 'text-[#a78bfa]', bg: 'bg-[#111111]', app: 'coder' as AppView, opsTab: undefined as OperationsTab | undefined },
-    { id: 'testcases', label: 'Test Case Manager', desc: 'AI test suites & Robot Framework', icon: Eye, iconColor: 'text-[#4ade80]', bg: 'bg-[#111111]', app: 'operations' as AppView, opsTab: 'test-cases' as OperationsTab },
-    { id: 'release', label: 'Release Master', desc: 'JIRA sync & release gates', icon: ArrowUpRight, iconColor: 'text-[#fbbf24]', bg: 'bg-[#111111]', app: 'operations' as AppView, opsTab: 'releases' as OperationsTab },
-    { id: 'settings', label: 'Settings', desc: 'Platform preferences & config', icon: CheckCircle2, iconColor: 'text-[#ededed]', bg: 'bg-[#111111]', app: 'settings' as AppView, opsTab: undefined as OperationsTab | undefined },
-  ];
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -179,31 +169,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                     <div className={`text-3xl font-bold ${stat.valueColor} font-mono`}>{stat.value}</div>
                   </div>
                 ))}
-              </div>
-
-              <div className="mt-6 border border-[#242424] bg-[#111111]">
-                <div className="border-b border-[#242424] px-4 py-3 flex items-center justify-between">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono">Smart access</div>
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-[#4ade80] font-mono">Live</div>
-                </div>
-                <div className="grid grid-cols-2 xl:grid-cols-5 border-b border-[#242424] last:border-b-0">
-                  {SMART_ACCESS.map((card) => (
-                    <button
-                      key={card.id}
-                      type="button"
-                      onClick={() => onNavigate(card.app, card.opsTab)}
-                      className="flex flex-col items-start gap-3 p-4 border-r border-[#242424] last:border-r-0 text-left bg-[#111111] hover:bg-[#131313] transition-colors"
-                    >
-                      <div className={`w-10 h-10 border border-[#242424] ${card.bg} flex items-center justify-center`}>
-                        <card.icon className={`w-4 h-4 ${card.iconColor}`} />
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-[#ededed] font-mono leading-tight">{card.label}</div>
-                        <div className="text-[10px] text-[#8a8a8a] mt-2 leading-relaxed font-sans">{card.desc}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
               </div>
             </section>
 
