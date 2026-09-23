@@ -5,6 +5,7 @@ import {
   Code2,
   FlaskConical,
   GitBranch,
+  Database,
   Settings,
   LogOut,
   ChevronRight,
@@ -36,6 +37,13 @@ const NAV_ITEMS = [
     label: 'Document Editor',
     icon: FileText,
     app: 'doccraft' as AppView,
+    opsTab: undefined as OperationsTab | undefined,
+  },
+  {
+    id: 'data-management',
+    label: 'Data Management',
+    icon: Database,
+    app: 'data-management' as AppView,
     opsTab: undefined as OperationsTab | undefined,
   },
   {

@@ -26,6 +26,7 @@ import { TEMPLATE_REGISTRY } from '../templates';
 import { exportToDocx } from '../exporters/docxExporter';
 import { exportToGoogleDoc } from '../exporters/googleDocsExport';
 import { GoogleAuthCancelledError } from '../services/googleAuthService';
+import { recordDriveExport } from '../services/googleDriveStatusService';
 import { exportTestCasesToExcel } from '../exporters/excelExporter';
 import { exportDocToVsCodeSpecs } from '../services/workspaceFileService';
 
@@ -109,6 +110,11 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     try {
       setIsExportingGoogleDoc(true);
       const docUrl = await exportToGoogleDoc(document);
+      recordDriveExport({
+        docTitle: document.metadata.title || 'Untitled Document',
+        docNumber: document.metadata.docNumber || '',
+        driveUrl: docUrl,
+      });
       window.open(docUrl, '_blank', 'noopener,noreferrer');
       setCopiedSuccess(true);
       confetti({

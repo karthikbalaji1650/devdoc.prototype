@@ -5,6 +5,7 @@ export type AppView =
   | 'doccraft'
   | 'operations'
   | 'coder'
+  | 'data-management'
   | 'settings';
 
 export type OperationsTab = 

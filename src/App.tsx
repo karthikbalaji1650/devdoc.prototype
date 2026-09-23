@@ -18,6 +18,7 @@ import { LandingHub } from './components/hub/LandingHub';
 import { OperationsLayout } from './components/operations/OperationsLayout';
 import { AppSidebar } from './components/AppSidebar';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { DataManagementPage } from './components/data/DataManagementPage';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { parseDocxFile } from './exporters/docxImporter';
@@ -419,6 +420,16 @@ export const App: React.FC = () => {
         onNavigate={handleLaunchApp}
         onLogout={handleLogout}
         onUpdateAvatar={handleUpdateAvatar}
+      />
+    );
+  }
+
+  if (currentApp === 'data-management') {
+    return (
+      <DataManagementPage
+        user={currentUser}
+        onNavigate={handleLaunchApp}
+        onLogout={handleLogout}
       />
     );
   }

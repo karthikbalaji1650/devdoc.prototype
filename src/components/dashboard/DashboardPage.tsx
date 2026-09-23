@@ -5,10 +5,12 @@ import {
   LogOut,
   CheckCircle2,
   Clock,
+  UploadCloud,
 } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
 import { getStoredReviewersLog } from '../../services/reviewersLogService';
+import { getLatestDriveExport } from '../../services/googleDriveStatusService';
 import { AppSidebar } from '../AppSidebar';
 
 interface DashboardPageProps {
@@ -32,6 +34,17 @@ function getGreeting(): string {
   if (h < 12) return 'Good Morning';
   if (h < 17) return 'Good Afternoon';
   return 'Good Evening';
+}
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; label: string }> = {
@@ -60,6 +73,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const totalDocs = reviewers.length;
   const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
   const inReviewDocs = reviewers.filter(r => r.reviewStatus === 'IN_REVIEW').length;
+  const latestDriveExport = useMemo(() => getLatestDriveExport(), []);
 
   const STATS = [
     { label: 'total docs', value: totalDocs, icon: FileText, valueColor: 'text-[#ededed]' },
@@ -161,13 +175,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                 <div className="text-[28px] font-bold text-[#ededed] leading-none">Engineering workspace</div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 border border-[#242424] bg-[#111111]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[#242424] bg-[#111111]">
                 {STATS.map((stat) => (
                   <div key={stat.label} className="border-r border-[#242424] last:border-r-0 p-5">
                     <div className="text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">{stat.label}</div>
                     <div className={`text-3xl font-bold ${stat.valueColor} font-mono`}>{stat.value}</div>
                   </div>
                 ))}
+                <div className="p-5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">
+                    <UploadCloud className="w-3 h-3" /> google drive
+                  </div>
+                  {latestDriveExport ? (
+                    <>
+                      <div className="text-lg font-bold text-[#4ade80] font-mono leading-tight">Synced {formatRelativeTime(latestDriveExport.exportedAt)}</div>
+                      <div className="text-[10px] text-[#8a8a8a] mt-1 truncate">{latestDriveExport.docTitle}</div>
+                    </>
+                  ) : (
+                    <div className="text-lg font-bold text-[#8a8a8a] font-mono leading-tight">Not synced yet</div>
+                  )}
+                </div>
               </div>
             </section>
 
