@@ -42,6 +42,29 @@ services:
       - NODE_ENV=production
 
   # ----------------------------------------------------
+  # 2b. Dev server (hot reload) — opt-in via `--profile dev`,
+  #     so it never collides with web-app's port 5173 unless asked for.
+  #     Run with: docker compose --profile dev up web-app-dev
+  # ----------------------------------------------------
+  web-app-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: devdoc-studio-app-dev
+    ports:
+      - "5174:5173"
+    volumes:
+      - .:/app
+      # Anonymous volume so the container's own (Linux) node_modules
+      # aren't clobbered by the host's bind mount — the host's copy may
+      # have macOS/Windows-specific native binaries (esbuild, rollup,
+      # oxlint) that won't run inside the Linux container.
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+
+  # ----------------------------------------------------
   # 3. VS Code + Cline (Claude Agent) QA Sandbox VM
   # ----------------------------------------------------
   vscode-cline:
