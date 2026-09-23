@@ -45,6 +45,7 @@ const NAV_ITEMS = [
     icon: Database,
     app: 'data-management' as AppView,
     opsTab: undefined as OperationsTab | undefined,
+    adminOnly: true,
   },
   {
     id: 'coder',
@@ -122,7 +123,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         </div>
 
         <nav className={`${expanded ? 'px-2.5' : 'px-2'} pt-3 space-y-1`}>
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !('adminOnly' in item) || user.role === 'admin').map((item) => {
             const active = isActive(item, activeView, activeOpsTab);
             const Icon = item.icon;
             return (

@@ -492,6 +492,27 @@ export const App: React.FC = () => {
   }
 
   if (currentApp === 'data-management') {
+    // Requirement #8: database/data management is admin-only. The
+    // sidebar already hides this link for non-admins; this guard
+    // covers direct navigation too.
+    if (currentUser.role !== 'admin') {
+      return (
+        <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
+          <AppSidebar user={currentUser} activeView="dashboard" onNavigate={handleLaunchApp} onLogout={handleLogout} />
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <ShieldAlert className="w-8 h-8 text-[var(--amber)]" />
+            <p className="text-sm text-[var(--text-dim)]">Data Management is restricted to admins.</p>
+            <button
+              type="button"
+              onClick={() => handleLaunchApp('dashboard')}
+              className="text-xs font-semibold text-[var(--blue)] hover:underline"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <DataManagementPage
         user={currentUser}
