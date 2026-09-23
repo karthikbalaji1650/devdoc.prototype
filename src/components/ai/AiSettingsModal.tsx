@@ -180,7 +180,7 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
             </div>
           )}
 
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
             <span>API keys are stored strictly in your browser local storage and never sent to third-party servers.</span>
           </div>

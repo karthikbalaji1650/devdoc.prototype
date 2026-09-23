@@ -343,9 +343,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   </div>
                 )}
 
-                <div className="flex items-start gap-2.5 text-[11px] text-slate-600 bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
+                <div className="flex items-start gap-2.5 text-[11px] text-emerald-800 bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>API keys are stored exclusively in your browser's <span className="text-slate-900 font-semibold">local storage</span> and are never sent to third-party servers.</span>
+                  <span>API keys are stored exclusively in your browser's <span className="text-emerald-950 font-semibold">local storage</span> and are never sent to third-party servers.</span>
                 </div>
 
                 <div className="flex justify-end">
