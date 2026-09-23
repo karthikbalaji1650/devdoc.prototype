@@ -18,6 +18,7 @@ import {
   getStoredFileBridgeUrl
 } from '../../services/workspaceFileService';
 import { exportTestRunReport } from '../../exporters/excelExporter';
+import { exportOperationsBackupToExcel } from '../../exporters/operationsBackupExporter';
 import {
   FlaskConical, Play, ChevronDown, ChevronRight, Plus, Flag, Filter,
   Trash2, Edit3, Download, Upload, X, Check, Clock,
@@ -644,7 +645,7 @@ const TestCasesView: React.FC<{
               <FileCode2 className="w-3.5 h-3.5" /> Export .robot
             </button>
           </>}
-          <button onClick={onExportProtocolExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold shadow-xs">
+          <button onClick={onExportProtocolExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] hover:border-[var(--blue)] text-[var(--blue)] border border-[var(--border)] rounded-lg text-xs font-semibold shadow-xs transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" /> Backup (.xlsx)
           </button>
           <label className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold cursor-pointer hover:bg-emerald-100 shadow-xs">
@@ -1059,10 +1060,10 @@ const TestRunsView: React.FC<{
           <button onClick={()=>setShowXmlModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold shadow-xs">
             <Upload className="w-3.5 h-3.5"/> Import output.xml
           </button>
-          <button onClick={onDownloadResultJson} disabled={!lastRunResults} className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-xs font-semibold disabled:opacity-40">
+          <button onClick={onDownloadResultJson} disabled={!lastRunResults} title={!lastRunResults ? 'Run a test first to enable this' : 'Download the last run\'s results as JSON'} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--blue)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-40">
             <Download className="w-3.5 h-3.5"/> Download JSON
           </button>
-          <button onClick={onExportRunReport} disabled={!lastRunResults} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold disabled:opacity-40">
+          <button onClick={onExportRunReport} disabled={!lastRunResults} title={!lastRunResults ? 'Run a test first to enable this' : 'Export the last run\'s results as an Excel report'} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--success)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-40">
             <FileSpreadsheet className="w-3.5 h-3.5"/> Export Report
           </button>
           <button onClick={()=>setShowAddModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-xs">
@@ -1232,12 +1233,12 @@ const ReportsView: React.FC<{ runs: TestRunItem[]; suites: TestSuiteItem[] }> = 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[
-          { label:'Total Test Runs', value: totalRuns, icon: <ClipboardList className="w-5 h-5 text-blue-600"/>, color:'border-blue-200 bg-blue-50/50' },
-          { label:'Total Test Cases', value: totalCases, icon: <FlaskConical className="w-5 h-5 text-teal-600"/>, color:'border-teal-200 bg-teal-50/50' },
-          { label:'Total Passed', value: totalPassed, icon: <CheckCircle2 className="w-5 h-5 text-emerald-600"/>, color:'border-emerald-200 bg-emerald-50/50' },
-          { label:'Total Failed', value: totalFailed, icon: <XCircle className="w-5 h-5 text-rose-600"/>, color:'border-rose-200 bg-rose-50/50' },
+          { label:'Total Test Runs', value: totalRuns, icon: <ClipboardList className="w-5 h-5 text-blue-600"/>, color:'bg-[var(--panel-alt)] border-t-[3px] border-[var(--blue)]' },
+          { label:'Total Test Cases', value: totalCases, icon: <FlaskConical className="w-5 h-5 text-teal-600"/>, color:'bg-[var(--panel-alt)] border-t-[3px] border-[var(--purple)]' },
+          { label:'Total Passed', value: totalPassed, icon: <CheckCircle2 className="w-5 h-5 text-emerald-600"/>, color:'bg-[var(--panel-alt)] border-t-[3px] border-[var(--success)]' },
+          { label:'Total Failed', value: totalFailed, icon: <XCircle className="w-5 h-5 text-rose-600"/>, color:'bg-[var(--panel-alt)] border-t-[3px] border-[var(--danger)]' },
         ].map(c=>(
-          <div key={c.label} className={`border rounded-xl p-4 shadow-xs ${c.color}`}>
+          <div key={c.label} className={`rounded-xl p-4 shadow-xs ${c.color}`}>
             <div className="flex items-center gap-2 mb-1">{c.icon}<span className="text-xs text-slate-600">{c.label}</span></div>
             <span className="text-3xl font-black text-slate-900">{c.value}</span>
           </div>
@@ -1560,7 +1561,7 @@ TC_RTC_004_Drift_Under_Thermal_Throttling
 
             {/* Tab 1: Upload */}
             {activeTab === 'file' && (
-              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
+              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-purple-200 bg-[var(--panel-alt)] rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
                 <Upload className="w-8 h-8 text-purple-600 mb-2" />
                 <span className="text-xs font-bold text-slate-800">Select or drop VS Code test script / results file</span>
                 <span className="text-[11px] text-slate-500 mt-1">Accepts .robot, .md (Markdown Test Suite), .xml (Robot Output), or .json</span>
@@ -1887,7 +1888,13 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   };
 
   const handleExportProtocolExcel = () => {
-    showToast('⚠️ Excel export for operations test cases coming soon.');
+    try {
+      exportOperationsBackupToExcel(suites, runs, milestones);
+      showToast('✅ Backup downloaded (.xlsx).');
+    } catch (err) {
+      console.error('Failed to export operations backup:', err);
+      showToast('⚠️ Failed to generate the backup. Please try again.');
+    }
   };
 
   const handleImportProtocolExcel = async (_file: File) => {
