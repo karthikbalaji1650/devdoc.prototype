@@ -1,9 +1,10 @@
-import React from 'react';
-import { FileText, Plus, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Plus, ChevronRight, Trash2, ArchiveRestore } from 'lucide-react';
 import type { DocumentModel, DocStatus } from '../../types/document';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
 import { AppSidebar } from '../AppSidebar';
+import { DocBinModal } from './DocBinModal';
 
 interface DocumentsListPageProps {
   user: UserProfile;
@@ -11,6 +12,8 @@ interface DocumentsListPageProps {
   scopeLabel: string; // e.g. "My in-progress documents" or "All documents"
   onOpen: (id: string) => void;
   onCreate: () => void;
+  onDelete: (id: string) => void;
+  onRestore: () => void;
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
 }
@@ -23,8 +26,9 @@ const STATUS_STYLES: Record<DocStatus, { bg: string; text: string; dot: string }
 };
 
 export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
-  user, documents, scopeLabel, onOpen, onCreate, onNavigate, onLogout,
+  user, documents, scopeLabel, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
 }) => {
+  const [docBinOpen, setDocBinOpen] = useState(false);
   return (
     <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
       <AppSidebar user={user} compact activeView="doccraft" onNavigate={onNavigate} onLogout={onLogout} />
@@ -35,6 +39,10 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
             <h1 className="text-lg font-bold text-[var(--text)]">Documents</h1>
             <p className="text-xs text-[var(--text-dim)] mt-0.5">{scopeLabel}</p>
           </div>
+          <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setDocBinOpen(true)} className="flex items-center gap-1.5 border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]">
+            <ArchiveRestore className="h-3.5 w-3.5" /> Doc Bin
+          </button>
           <button
             type="button"
             onClick={onCreate}
@@ -42,6 +50,7 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
           >
             <Plus className="w-3.5 h-3.5" /> New Document
           </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -56,13 +65,11 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
               {documents.map((doc) => {
                 const ss = STATUS_STYLES[doc.metadata.status] ?? STATUS_STYLES.DRAFT;
                 return (
-                  <button
+                  <div
                     key={doc.metadata.id}
-                    type="button"
-                    onClick={() => onOpen(doc.metadata.id)}
-                    className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left bg-[var(--panel)] hover:bg-[var(--panel-alt)] transition-colors"
+                    className="w-full flex items-center gap-4 px-5 py-4 text-left bg-[var(--panel)] hover:bg-[var(--panel-alt)] transition-colors"
                   >
-                    <div className="min-w-0 flex-1">
+                    <button type="button" onClick={() => onOpen(doc.metadata.id)} className="min-w-0 flex-1 text-left">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-[var(--text-faint)] uppercase">{doc.metadata.docNumber || 'N/A'}</span>
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${ss.bg} ${ss.text}`}>
@@ -74,15 +81,17 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
                       <div className="text-[11px] text-[var(--text-dim)] mt-0.5">
                         {doc.metadata.author || 'Unknown author'} · v{doc.metadata.version || '1.0'} · {doc.metadata.date}
                       </div>
-                    </div>
+                    </button>
+                    <button type="button" onClick={() => onDelete(doc.metadata.id)} aria-label={`Move ${doc.metadata.title || 'document'} to Doc Bin`} title="Move to Doc Bin" className="rounded p-2 text-[var(--text-faint)] hover:bg-red-500/10 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                     <ChevronRight className="w-4 h-4 text-[var(--text-faint)] shrink-0" />
-                  </button>
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
       </div>
+      {docBinOpen && <DocBinModal onClose={() => setDocBinOpen(false)} onRestore={onRestore} />}
     </div>
   );
 };

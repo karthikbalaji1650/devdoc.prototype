@@ -20,7 +20,8 @@ import { AppSidebar } from './components/AppSidebar';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { DataManagementPage } from './components/data/DataManagementPage';
 import { DocumentsListPage } from './components/documents/DocumentsListPage';
-import { listDocuments, getDocument, saveDocument, generateDocumentId } from './services/documentsStoreService';
+import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin } from './services/documentsStoreService';
+import { DocBinModal } from './components/documents/DocBinModal';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
@@ -31,7 +32,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle,
-  ShieldAlert
+  ShieldAlert,
+  ArchiveRestore
 } from 'lucide-react';
 
 const STORAGE_KEY = 'devdoc_studio_current_doc_v1';
@@ -84,6 +86,8 @@ export const App: React.FC = () => {
   const [documentSidebarWidth, setDocumentSidebarWidth] = useState(320);
   const [activeTab, setActiveTab] = useState<'split' | 'editor-only' | 'preview-only'>('split');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [docBinOpen, setDocBinOpen] = useState(false);
+  const [documentListVersion, setDocumentListVersion] = useState(0);
 
   // AI Modal States
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -141,6 +145,14 @@ export const App: React.FC = () => {
 
   const handleBackToDocumentsList = () => {
     setActiveDocumentId(null);
+  };
+
+  const handleMoveDocumentToBin = (id: string) => {
+    const doc = getDocument(id);
+    if (!doc) return;
+    moveDocumentToBin(doc);
+    setDocumentListVersion((version) => version + 1);
+    showToast(`Moved "${doc.metadata.title || 'Untitled Document'}" to Doc Bin.`);
   };
 
   // Auth Handlers
@@ -286,6 +298,9 @@ export const App: React.FC = () => {
 
   const handleDeleteSection = (id: string) => {
     if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
+    const deletedSection = document.sections.find((section) => section.id === id);
+    if (!deletedSection) return;
+    moveSectionToBin(document, deletedSection, document.sections.findIndex((section) => section.id === id));
     setDocument(prev => {
       const newSections = prev.sections.filter(s => s.id !== id);
       if (activeSectionId === id) {
@@ -293,7 +308,7 @@ export const App: React.FC = () => {
       }
       return { ...prev, sections: newSections };
     });
-    showToast('Section deleted');
+    showToast(`Moved "${deletedSection.title}" to Doc Bin.`);
   };
 
   const handleDuplicateSection = (id: string) => {
@@ -538,6 +553,7 @@ export const App: React.FC = () => {
 
   // 6. Render Documents List (landing point before opening a document)
   if (!activeDocumentId) {
+    void documentListVersion;
     const isAdmin = currentUser.role === 'admin';
     const allDocs = listDocuments();
     const visibleDocs = isAdmin
@@ -550,6 +566,8 @@ export const App: React.FC = () => {
         scopeLabel={isAdmin ? 'All documents' : 'Documents currently in progress'}
         onOpen={handleOpenDocument}
         onCreate={handleCreateDocument}
+        onDelete={handleMoveDocumentToBin}
+        onRestore={() => setDocumentListVersion((version) => version + 1)}
         onNavigate={handleLaunchApp}
         onLogout={handleLogout}
       />
@@ -617,6 +635,15 @@ export const App: React.FC = () => {
         onLaunchOperations={() => setCurrentApp('operations')}
         onLogout={handleLogout}
       />
+      {docBinOpen && (
+        <DocBinModal
+          onClose={() => setDocBinOpen(false)}
+          onRestore={(restored) => {
+            if (restored.metadata.id === activeDocumentId) setDocument(restored);
+            showToast('Restored item from Doc Bin.');
+          }}
+        />
+      )}
 
       {/* App Workspace Body */}
       <div className="flex-1 flex overflow-hidden">
@@ -636,7 +663,15 @@ export const App: React.FC = () => {
         {/* Workspace Central Split Layout */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* View Split Switcher — persistent across Split/Editor/Preview modes */}
-          <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
+          <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
+            <button
+              type="button"
+              onClick={() => setDocBinOpen(true)}
+              className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]"
+              title="View deleted documents and sections"
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" /> Doc Bin
+            </button>
             <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
               <button
                 type="button"

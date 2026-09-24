@@ -2,6 +2,7 @@ import type { DocumentModel } from '../types/document';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
 const LEGACY_SINGLE_DOC_KEY = 'devdoc_studio_current_doc_v1';
+const DOC_BIN_KEY = 'devdoc_studio_doc_bin_v1';
 
 interface StoredEntry {
   doc: DocumentModel;
@@ -9,6 +10,30 @@ interface StoredEntry {
 }
 
 type Store = Record<string, StoredEntry>;
+
+export interface DocBinEntry {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  itemType: 'document' | 'section';
+  deletedAt: string;
+  document?: DocumentModel;
+  section?: DocumentModel['sections'][number];
+  sectionIndex?: number;
+}
+
+function readBin(): DocBinEntry[] {
+  try {
+    const raw = localStorage.getItem(DOC_BIN_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBin(entries: DocBinEntry[]): void {
+  localStorage.setItem(DOC_BIN_KEY, JSON.stringify(entries));
+}
 
 function readStore(): Store {
   try {
@@ -68,6 +93,66 @@ export function deleteDocument(id: string): void {
   const store = readStore();
   delete store[id];
   writeStore(store);
+}
+
+export function listDocBin(): DocBinEntry[] {
+  return readBin().sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+}
+
+export function moveDocumentToBin(doc: DocumentModel): void {
+  const bin = readBin();
+  bin.push({
+    id: `document:${doc.metadata.id}:${Date.now()}`,
+    documentId: doc.metadata.id,
+    documentTitle: doc.metadata.title || 'Untitled Document',
+    itemType: 'document',
+    deletedAt: new Date().toISOString(),
+    document: doc,
+  });
+  writeBin(bin);
+  deleteDocument(doc.metadata.id);
+}
+
+export function moveSectionToBin(doc: DocumentModel, section: DocumentModel['sections'][number], sectionIndex: number): void {
+  const bin = readBin();
+  bin.push({
+    id: `section:${doc.metadata.id}:${section.id}:${Date.now()}`,
+    documentId: doc.metadata.id,
+    documentTitle: doc.metadata.title || 'Untitled Document',
+    itemType: 'section',
+    deletedAt: new Date().toISOString(),
+    section,
+    sectionIndex,
+  });
+  writeBin(bin);
+}
+
+export function restoreFromDocBin(entryId: string): DocumentModel | null {
+  const bin = readBin();
+  const entry = bin.find((item) => item.id === entryId);
+  if (!entry) return null;
+
+  let restoredDocument: DocumentModel | null = null;
+  if (entry.itemType === 'document' && entry.document) {
+    restoredDocument = entry.document;
+    saveDocument(restoredDocument);
+  } else if (entry.itemType === 'section' && entry.section) {
+    const doc = getDocument(entry.documentId);
+    if (!doc) return null;
+    const sections = [...doc.sections];
+    if (!sections.some((section) => section.id === entry.section!.id)) {
+      sections.splice(Math.min(entry.sectionIndex ?? sections.length, sections.length), 0, entry.section);
+    }
+    restoredDocument = { ...doc, sections };
+    saveDocument(restoredDocument);
+  }
+
+  writeBin(bin.filter((item) => item.id !== entryId));
+  return restoredDocument;
+}
+
+export function permanentlyDeleteFromDocBin(entryId: string): void {
+  writeBin(readBin().filter((item) => item.id !== entryId));
 }
 
 export function generateDocumentId(): string {
