@@ -150,6 +150,11 @@ export const App: React.FC = () => {
   const handleMoveDocumentToBin = (id: string) => {
     const doc = getDocument(id);
     if (!doc) return;
+    // Same rule as editing (#2/#4): only the author or an admin may delete.
+    if (!currentUser || (currentUser.role !== 'admin' && doc.metadata.author !== currentUser.name)) {
+      showToast('You can only delete documents you authored.');
+      return;
+    }
     moveDocumentToBin(doc);
     setDocumentListVersion((version) => version + 1);
     showToast(`Moved "${doc.metadata.title || 'Untitled Document'}" to Doc Bin.`);
