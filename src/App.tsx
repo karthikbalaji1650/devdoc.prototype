@@ -565,17 +565,25 @@ export const App: React.FC = () => {
       ? allDocs
       : allDocs.filter((d) => d.metadata.status === 'DRAFT' || d.metadata.status === 'IN_REVIEW');
     return (
-      <DocumentsListPage
-        user={currentUser}
-        documents={visibleDocs}
-        scopeLabel={isAdmin ? 'All documents' : 'Documents currently in progress'}
-        onOpen={handleOpenDocument}
-        onCreate={handleCreateDocument}
-        onDelete={handleMoveDocumentToBin}
-        onRestore={() => setDocumentListVersion((version) => version + 1)}
-        onNavigate={handleLaunchApp}
-        onLogout={handleLogout}
-      />
+      <>
+        <DocumentsListPage
+          user={currentUser}
+          documents={visibleDocs}
+          scopeLabel={isAdmin ? 'All documents' : 'Documents currently in progress'}
+          onOpen={handleOpenDocument}
+          onCreate={handleCreateDocument}
+          onDelete={handleMoveDocumentToBin}
+          onRestore={() => setDocumentListVersion((version) => version + 1)}
+          onNavigate={handleLaunchApp}
+          onLogout={handleLogout}
+        />
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-[var(--panel-alt)] text-[var(--text)] px-4 py-2.5 flex items-center gap-2 text-xs font-semibold animate-fade-in border border-[var(--success)]">
+            <CheckCircle className="w-4 h-4" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+      </>
     );
   }
 
