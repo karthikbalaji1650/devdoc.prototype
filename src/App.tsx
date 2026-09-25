@@ -20,6 +20,7 @@ import { DocBinModal } from './components/documents/DocBinModal';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
+import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
 import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
 
 import { saveAs } from 'file-saver';
@@ -114,8 +115,10 @@ export const App: React.FC = () => {
   // leaves the page / editor) calls flush() first so no edit is lost.
   const autosaverRef = useRef(
     createDebouncedSaver<DocumentModel>((doc) => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+      // The store is the source of truth; the legacy copy is best-effort
+      // and must not raise a second warning when storage is full.
       saveDocument(doc);
+      safeSetItem(STORAGE_KEY, JSON.stringify(doc), { notify: false });
     }, 400)
   );
 
@@ -142,6 +145,20 @@ export const App: React.FC = () => {
       window.removeEventListener('pagehide', flush);
       window.document.removeEventListener('visibilitychange', onVisibility);
     };
+  }, []);
+
+  // Browser storage is full or blocked: tell the user their latest edits
+  // are NOT being saved (rate-limited so autosave retries don't spam).
+  useEffect(() => {
+    let lastShown = 0;
+    const onStorageError = () => {
+      if (Date.now() - lastShown < 30000) return;
+      lastShown = Date.now();
+      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Data Management.');
+      setTimeout(() => setToastMessage(null), 8000);
+    };
+    window.addEventListener(STORAGE_ERROR_EVENT, onStorageError);
+    return () => window.removeEventListener(STORAGE_ERROR_EVENT, onStorageError);
   }, []);
 
   const showToast = (msg: string) => {

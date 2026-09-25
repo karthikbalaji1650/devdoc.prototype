@@ -1,4 +1,5 @@
 import type { DocumentModel } from '../types/document';
+import { safeSetItem } from './safeStorage';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
 const LEGACY_SINGLE_DOC_KEY = 'devdoc_studio_current_doc_v1';
@@ -31,8 +32,8 @@ function readBin(): DocBinEntry[] {
   }
 }
 
-function writeBin(entries: DocBinEntry[]): void {
-  localStorage.setItem(DOC_BIN_KEY, JSON.stringify(entries));
+function writeBin(entries: DocBinEntry[]): boolean {
+  return safeSetItem(DOC_BIN_KEY, JSON.stringify(entries));
 }
 
 function readStore(): Store {
@@ -44,8 +45,8 @@ function readStore(): Store {
   }
 }
 
-function writeStore(store: Store): void {
-  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+function writeStore(store: Store): boolean {
+  return safeSetItem(STORE_KEY, JSON.stringify(store));
 }
 
 /** One-time migration: bring the old single-document key in as the
@@ -82,11 +83,12 @@ export function getDocument(id: string): DocumentModel | null {
   return readStore()[id]?.doc ?? null;
 }
 
-export function saveDocument(doc: DocumentModel): void {
-  if (!doc?.metadata?.id) return;
+/** Returns false when the document could not be persisted (storage full). */
+export function saveDocument(doc: DocumentModel): boolean {
+  if (!doc?.metadata?.id) return false;
   const store = readStore();
   store[doc.metadata.id] = { doc, updatedAt: new Date().toISOString() };
-  writeStore(store);
+  return writeStore(store);
 }
 
 export function deleteDocument(id: string): void {

@@ -13,6 +13,8 @@ interface DataManagementPageProps {
   onLogout: () => void;
 }
 
+import { getStorageUsage } from '../../services/safeStorage';
+
 function bytesForKey(key: string): number {
   const val = localStorage.getItem(key);
   return val ? new Blob([val]).size : 0;
@@ -37,6 +39,7 @@ export const DataManagementPage: React.FC<DataManagementPageProps> = ({ user, on
 
   const storageKeys = Object.keys(localStorage);
   const totalBytes = storageKeys.reduce((sum, k) => sum + bytesForKey(k), 0);
+  const usage = getStorageUsage();
 
   const handleExportData = () => {
     const data: Record<string, unknown> = {};
@@ -86,6 +89,15 @@ export const DataManagementPage: React.FC<DataManagementPageProps> = ({ user, on
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Local data size</div>
               <div className="text-2xl font-black text-slate-900">{(totalBytes / 1024).toFixed(1)} KB</div>
+              <div className="mt-3 h-1.5 w-full rounded-full bg-slate-200" role="progressbar" aria-label="Browser storage used" aria-valuenow={Math.round(usage.fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
+                <div
+                  className={`h-full rounded-full ${usage.fraction >= 0.9 ? 'bg-red-500' : usage.fraction >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(100, usage.fraction * 100)}%` }}
+                />
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-500">
+                ~{Math.round(usage.fraction * 100)}% of the browser's ~5 MB limit{usage.fraction >= 0.7 ? ' - export a backup and clear space soon' : ''}
+              </div>
             </div>
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Drive exports logged</div>

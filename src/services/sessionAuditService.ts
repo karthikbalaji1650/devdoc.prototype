@@ -1,4 +1,5 @@
 import { DEMO_USERS } from '../types/auth';
+import { safeSetItem } from './safeStorage';
 
 const AUDIT_LOG_KEY = 'devdoc_studio_session_audit_v1';
 const SEEDED_FLAG_KEY = 'devdoc_studio_session_audit_seeded_v1';
@@ -22,7 +23,7 @@ function readLog(): SessionAuditEntry[] {
 }
 
 function writeLog(entries: SessionAuditEntry[]): void {
-  localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(entries));
+  safeSetItem(AUDIT_LOG_KEY, JSON.stringify(entries));
 }
 
 /** This is a frontend-only app with no shared backend, so there's no
