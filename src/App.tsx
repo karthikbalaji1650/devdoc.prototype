@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { DocumentModel, DocSection, SectionType } from './types/document';
 import type { AppView, OperationsTab } from './types/appState';
 import type { UserProfile } from './types/auth';
@@ -25,6 +25,7 @@ import { DocBinModal } from './components/documents/DocBinModal';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
+import { createDebouncedSaver } from './services/autosave';
 import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
 import { parseDocxFile } from './exporters/docxImporter';
 
@@ -100,11 +101,40 @@ export const App: React.FC = () => {
   // (Legacy single-doc key is kept in sync too, only so an older build
   // reverting mid-session wouldn't see a blank slate; documentsStoreService
   // migrates it in on first read.)
+  // Saves are debounced so a burst of keystrokes serialises the document
+  // once, not once per keystroke. Anything that reads the saved copy (or
+  // leaves the page / editor) calls flush() first so no edit is lost.
+  const autosaverRef = useRef(
+    createDebouncedSaver<DocumentModel>((doc) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+      saveDocument(doc);
+    }, 400)
+  );
+
   useEffect(() => {
     if (!activeDocumentId) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-    saveDocument(document);
+    autosaverRef.current.schedule(document);
   }, [document, activeDocumentId]);
+
+  // Leaving or switching documents flushes the pending save.
+  useEffect(() => {
+    if (!activeDocumentId) return;
+    const saver = autosaverRef.current;
+    return () => saver.flush();
+  }, [activeDocumentId]);
+
+  // Closing or hiding the tab flushes it too.
+  useEffect(() => {
+    const saver = autosaverRef.current;
+    const flush = () => saver.flush();
+    const onVisibility = () => { if (window.document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    window.document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -145,6 +175,9 @@ export const App: React.FC = () => {
   };
 
   const handleBackToDocumentsList = () => {
+    // Flush first: the list reads the store during render, which happens
+    // before any effect cleanup would get the chance to save.
+    autosaverRef.current.flush();
     setActiveDocumentId(null);
   };
 
@@ -192,7 +225,9 @@ export const App: React.FC = () => {
     setCurrentApp(app);
     if (app === 'doccraft') {
       // "Document Editor" in the sidebar is a launcher, not "resume last
-      // doc" - always land on the documents list.
+      // doc" - always land on the documents list (flush so it shows the
+      // latest edit).
+      autosaverRef.current.flush();
       setActiveDocumentId(null);
     }
     if (opsTab) {
@@ -676,7 +711,7 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
             <button
               type="button"
-              onClick={() => setDocBinOpen(true)}
+              onClick={() => { autosaverRef.current.flush(); setDocBinOpen(true); }}
               className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]"
               title="View deleted documents and sections"
             >
