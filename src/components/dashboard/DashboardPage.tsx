@@ -56,6 +56,7 @@ const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; lab
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout }) => {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [chartHover, setChartHover] = useState<'approved' | 'in-review' | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,6 +75,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
   const inReviewDocs = reviewers.filter(r => r.reviewStatus === 'IN_REVIEW').length;
   const latestDriveExport = useMemo(() => getLatestDriveExport(), []);
+  const reviewedDocs = approvedDocs + inReviewDocs;
+  const approvalRate = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
+  const inReviewRate = reviewedDocs > 0 ? Math.round((inReviewDocs / reviewedDocs) * 100) : 0;
+  const testProgress = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
+  const chartRadius = 46;
+  const chartCircumference = 2 * Math.PI * chartRadius;
+  const approvedArc = (approvedDocs / (reviewedDocs || 1)) * chartCircumference;
+  const reviewArc = (inReviewDocs / (reviewedDocs || 1)) * chartCircumference;
 
   const STATS = [
     { label: 'total docs', value: totalDocs, icon: FileText, valueColor: 'text-[#ededed]' },
@@ -198,28 +207,124 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               </div>
             </section>
 
-            <aside className="p-6">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">Recent activity</div>
-              <div className="space-y-3">
-                {recentActivity.map((item) => {
-                  const ss = STATUS_STYLES[item.type];
-                  return (
-                    <div key={item.id} className="border border-[#242424] bg-[#111111] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.docNumber}</div>
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] font-mono ${ss.bg}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} />
-                          {ss.label}
-                        </span>
+            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.75fr)] items-start border-t border-[#242424]">
+              <aside className="p-6 border-b xl:border-b-0 xl:border-r border-[#242424]">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">Recent activity</div>
+                <div className="space-y-3">
+                  {recentActivity.map((item) => {
+                    const ss = STATUS_STYLES[item.type];
+                    return (
+                      <div key={item.id} className="border border-[#242424] bg-[#111111] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.docNumber}</div>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] font-mono ${ss.bg}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} />
+                            {ss.label}
+                          </span>
+                        </div>
+                        <div className="mt-3 text-sm font-medium text-[#ededed]">{item.docTitle}</div>
+                        <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.reviewer}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.date}</div>
                       </div>
-                      <div className="mt-3 text-sm font-medium text-[#ededed]">{item.docTitle}</div>
-                      <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.reviewer}</div>
-                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.date}</div>
+                    );
+                  })}
+                </div>
+              </aside>
+
+              <aside className="self-start w-full p-5 bg-[#0d0d0d]">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Review results</div>
+                    <div className="mt-1 text-sm font-semibold text-[#ededed]">Approval progress</div>
+                  </div>
+                  <div className="text-[10px] text-[#8a8a8a] font-mono">LIVE DATA</div>
+                </div>
+
+                <div className="mt-4 flex flex-col sm:flex-row xl:flex-col 2xl:flex-row items-center gap-4">
+                  <div className="relative shrink-0 w-28 h-28">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120" role="img" aria-label={`${approvalRate}% approved, ${inReviewDocs} in review`}>
+                      <circle cx="60" cy="60" r={chartRadius} fill="none" stroke="#242424" strokeWidth="13" />
+                      {reviewedDocs > 0 && (
+                        <>
+                          <circle
+                            cx="60" cy="60" r={chartRadius} fill="none" stroke="#4ade80" strokeWidth="13" strokeLinecap="butt"
+                            strokeDasharray={`${Math.max(approvedArc - 4, 0)} ${chartCircumference}`}
+                            className="cursor-pointer"
+                            tabIndex={0}
+                            onMouseEnter={() => setChartHover('approved')}
+                            onMouseLeave={() => setChartHover(null)}
+                            onFocus={() => setChartHover('approved')}
+                            onBlur={() => setChartHover(null)}
+                          />
+                          {inReviewDocs > 0 && (
+                            <circle
+                              cx="60" cy="60" r={chartRadius} fill="none" stroke="#fbbf24" strokeWidth="13" strokeLinecap="butt"
+                              strokeDasharray={`${Math.max(reviewArc - 4, 0)} ${chartCircumference}`}
+                              strokeDashoffset={-approvedArc}
+                              className="cursor-pointer"
+                              tabIndex={0}
+                              onMouseEnter={() => setChartHover('in-review')}
+                              onMouseLeave={() => setChartHover(null)}
+                              onFocus={() => setChartHover('in-review')}
+                              onBlur={() => setChartHover(null)}
+                            />
+                          )}
+                        </>
+                      )}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-xl font-bold text-[#ededed] font-mono">{approvalRate}%</span>
+                      <span className="text-[8px] uppercase tracking-[0.13em] text-[#8a8a8a] font-mono">approved</span>
                     </div>
-                  );
-                })}
-              </div>
-            </aside>
+                    {chartHover && (
+                      <div role="status" className="absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 whitespace-nowrap border border-[#303030] bg-[#171717] px-2.5 py-1.5 text-[10px] text-[#ededed] shadow-lg font-mono">
+                        <span className={chartHover === 'approved' ? 'text-[#4ade80]' : 'text-[#fbbf24]'}>
+                          {chartHover === 'approved' ? 'Approved' : 'In review'}
+                        </span>
+                        {' — '}{chartHover === 'approved' ? approvedDocs : inReviewDocs} documents ({chartHover === 'approved' ? approvalRate : inReviewRate}%)
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="w-full space-y-2.5">
+                    <div className="flex items-center justify-between gap-3 border-b border-[#242424] pb-2.5">
+                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
+                        <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#4ade80]" /> Approved
+                      </div>
+                      <span className="text-base font-bold text-[#4ade80] font-mono">{approvedDocs}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
+                        <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
+                        <Clock className="w-3.5 h-3.5 text-[#fbbf24]" /> In review
+                      </div>
+                      <span className="text-base font-bold text-[#fbbf24] font-mono">{inReviewDocs}</span>
+                    </div>
+                    <div className="pt-1 text-[9px] text-[#8a8a8a] font-mono">{reviewedDocs} DOCUMENTS IN REVIEW PIPELINE</div>
+                  </div>
+                </div>
+
+                <div className="mt-5 border-t border-[#242424] pt-4">
+                  <div className="text-[9px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Delivery forecast</div>
+                  <div className="mt-3">
+                    <div className="border border-[#242424] bg-[#111111] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[10px] text-[#bdbdbd]">Live test cases</div>
+                        <span className="text-xs font-bold text-[#a78bfa] font-mono">{reviewedDocs}</span>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden bg-[#242424]">
+                        <div className="h-full bg-[#4ade80]" style={{ width: `${testProgress}%` }} />
+                      </div>
+                      <div className="mt-2 flex justify-between text-[9px] text-[#8a8a8a] font-mono">
+                        <span>{approvedDocs} PASSED</span>
+                        <span className="text-[#fbbf24]">{inReviewDocs} RUNNING</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </section>
           </div>
         </main>
       </div>
