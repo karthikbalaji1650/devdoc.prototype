@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import type { DocumentModel, DocSection, SectionType, DocStatus } from './types/document';
+import type { DocumentModel, DocSection, SectionType } from './types/document';
 import type { AppView, OperationsTab } from './types/appState';
 import type { UserProfile } from './types/auth';
 import type { IncidentItem } from './types/operations';
@@ -22,7 +22,8 @@ import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService'
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
-import { filterByStatus } from './services/documentStats';
+import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
+import { getStoredReviewersLog } from './services/reviewersLogService';
 import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
 import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
 
@@ -104,7 +105,7 @@ export const App: React.FC = () => {
   const [docBinOpen, setDocBinOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Set when the dashboard sends you to the list narrowed to one status.
-  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<DocStatus | null>(null);
+  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<TrackedStatus, 'OTHER'> | null>(null);
   const [documentListVersion, setDocumentListVersion] = useState(0);
 
   // AI Modal States
@@ -271,7 +272,7 @@ export const App: React.FC = () => {
 
   // Dashboard drill-downs: a status card opens the list for that status,
   // an activity row opens that document directly.
-  const handleOpenDocumentsByStatus = (status: DocStatus | null) => {
+  const handleOpenDocumentsByStatus = (status: Exclude<TrackedStatus, 'OTHER'> | null) => {
     autosaverRef.current.flush();
     setDocumentsStatusFilter(status);
     setActiveDocumentId(null);
@@ -662,7 +663,14 @@ export const App: React.FC = () => {
   if (!activeDocumentId) {
     void documentListVersion;
     const userIsAdmin = isAdmin(currentUser);
-    const visibleDocs = filterByStatus(visibleDocumentsFor(currentUser, listDocuments()), documentsStatusFilter);
+    const tracked = filterTracked(
+      buildTrackedDocuments(visibleDocumentsFor(currentUser, listDocuments()), getStoredReviewersLog(), userIsAdmin),
+      documentsStatusFilter,
+    );
+    const visibleDocs = documentsStatusFilter
+      ? tracked.flatMap((t) => (t.stored ? [t.stored] : []))
+      : visibleDocumentsFor(currentUser, listDocuments());
+    const notStored = documentsStatusFilter ? tracked.filter((t) => !t.stored) : [];
     const scopeBase = userIsAdmin ? 'All documents' : 'Documents currently in progress';
     return (
       <>
@@ -671,6 +679,7 @@ export const App: React.FC = () => {
           documents={visibleDocs}
           scopeLabel={documentsStatusFilter ? `${scopeBase} · ${documentsStatusFilter.replace('_', ' ').toLowerCase()} only` : scopeBase}
           onClearFilter={documentsStatusFilter ? () => setDocumentsStatusFilter(null) : undefined}
+          notStoredNote={notStored.length > 0 ? `${notStored.length} more tracked in the Reviewers Log but not stored in this browser: ${notStored.map((t) => t.docNumber || t.title).join(', ')}` : undefined}
           onOpen={handleOpenDocument}
           onCreate={handleCreateDocument}
           onDelete={handleMoveDocumentToBin}

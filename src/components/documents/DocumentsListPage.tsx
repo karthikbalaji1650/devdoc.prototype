@@ -12,6 +12,8 @@ interface DocumentsListPageProps {
   scopeLabel: string; // e.g. "My in-progress documents" or "All documents"
   /** Present while the list is narrowed to one status. */
   onClearFilter?: () => void;
+  /** Explains documents counted on the dashboard that have no stored copy here. */
+  notStoredNote?: string;
   onOpen: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
@@ -28,7 +30,7 @@ const STATUS_STYLES: Record<DocStatus, { bg: string; text: string; dot: string }
 };
 
 export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
-  user, documents, scopeLabel, onClearFilter, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
+  user, documents, scopeLabel, onClearFilter, notStoredNote, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
 }) => {
   const [docBinOpen, setDocBinOpen] = useState(false);
   return (
@@ -63,14 +65,17 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {documents.length === 0 ? (
+          {notStoredNote && (
+            <p role="note" className="mb-4 border border-[var(--border)] bg-[var(--panel-alt)] px-4 py-2.5 text-xs text-[var(--text-dim)]">{notStoredNote}</p>
+          )}
+          {documents.length === 0 && !notStoredNote ? (
             <div className="border border-dashed border-[var(--border)] rounded-xl p-12 text-center">
               <FileText className="w-8 h-8 text-[var(--text-faint)] mx-auto mb-3" />
               <p className="text-sm text-[var(--text-dim)]">No documents yet.</p>
               <p className="text-xs text-[var(--text-faint)] mt-1">Click "New Document" to start one.</p>
             </div>
           ) : (
-            <div className="border border-[var(--border)] rounded-xl overflow-hidden divide-y divide-[var(--border)]">
+            <div className="border border-[var(--border)] rounded-xl overflow-hidden divide-y divide-[var(--border)] empty:hidden">
               {documents.map((doc) => {
                 const ss = STATUS_STYLES[doc.metadata.status] ?? STATUS_STYLES.DRAFT;
                 return (

@@ -1,34 +1,55 @@
 import { describe, it, expect } from 'vitest';
-import { countByStatus, filterByStatus, findDocumentByNumber } from './documentStats';
+import { buildTrackedDocuments, countTracked, filterTracked, findDocumentByNumber } from './documentStats';
 import { makeDoc } from '../test/fixtures';
+import type { ReviewerLogItem } from '../types/operations';
 
-const docs = [
-  makeDoc('a', { status: 'APPROVED', docNumber: 'WH3-1205' }),
-  makeDoc('b', { status: 'APPROVED', docNumber: 'X-2' }),
-  makeDoc('c', { status: 'IN_REVIEW', docNumber: 'ADR-042' }),
-  makeDoc('d', { status: 'DRAFT', docNumber: '' }),
-];
+const entry = (docNumber: string, reviewStatus: ReviewerLogItem['reviewStatus'], docTitle = docNumber): ReviewerLogItem => ({
+  id: `${docNumber}-${reviewStatus}-${Math.random()}`, docId: '', docTitle, docNumber,
+  reviewerName: 'R', reviewerRole: 'Lead', reviewStatus, reviewDate: '2026-01-01', comments: '',
+});
 
-describe('countByStatus', () => {
-  it('counts totals, approved and in review', () => {
-    expect(countByStatus(docs)).toEqual({ total: 4, approved: 2, inReview: 1 });
+// Mirrors the demo data: three approvals for one document, one review row for another.
+const log = [entry('WH3-1205', 'APPROVED'), entry('WH3-1205', 'APPROVED'), entry('WH3-1205', 'APPROVED'), entry('ADR-2026-042', 'IN_REVIEW')];
+
+describe('buildTrackedDocuments', () => {
+  it('counts each document once, however many reviewers signed off', () => {
+    expect(countTracked(buildTrackedDocuments([], log, true))).toEqual({ total: 2, approved: 1, inReview: 1 });
   });
-  it('handles no documents', () => {
-    expect(countByStatus([])).toEqual({ total: 0, approved: 0, inReview: 0 });
+
+  it('lets sign-offs decide the status of a stored document they track', () => {
+    const stored = [makeDoc('a', { docNumber: 'ADR-2026-042', status: 'DRAFT' })];
+    const [doc] = buildTrackedDocuments(stored, [entry('ADR-2026-042', 'IN_REVIEW')], true);
+    expect(doc.status).toBe('IN_REVIEW');
+    expect(doc.stored?.metadata.id).toBe('a');
+  });
+
+  it('uses the document status when the log does not track it, and merges without duplicates', () => {
+    const stored = [makeDoc('a', { docNumber: 'WH3-1205', status: 'APPROVED' }), makeDoc('b', { docNumber: 'NEW-1', status: 'IN_REVIEW' })];
+    const tracked = buildTrackedDocuments(stored, log, true);
+    expect(tracked).toHaveLength(3);
+    expect(countTracked(tracked)).toEqual({ total: 3, approved: 1, inReview: 2 });
+  });
+
+  it('is not approved until every reviewer has approved', () => {
+    const [d] = buildTrackedDocuments([], [entry('X', 'APPROVED'), entry('X', 'IN_REVIEW')], true);
+    expect(d.status).toBe('IN_REVIEW');
+  });
+
+  it('hides log-only approved documents from non-admins', () => {
+    expect(countTracked(buildTrackedDocuments([], log, false))).toEqual({ total: 1, approved: 0, inReview: 1 });
   });
 });
 
-describe('filterByStatus', () => {
-  it('returns the matching documents, and everything for null', () => {
-    expect(filterByStatus(docs, 'APPROVED').map((d) => d.metadata.id)).toEqual(['a', 'b']);
-    expect(filterByStatus(docs, null)).toHaveLength(4);
-  });
-  it('matches what countByStatus reports, so a card and its list always agree', () => {
-    expect(filterByStatus(docs, 'IN_REVIEW')).toHaveLength(countByStatus(docs).inReview);
+describe('filterTracked', () => {
+  it('matches the count for the same status, so a card and its list agree', () => {
+    const tracked = buildTrackedDocuments([], log, true);
+    expect(filterTracked(tracked, 'IN_REVIEW')).toHaveLength(countTracked(tracked).inReview);
+    expect(filterTracked(tracked, null)).toHaveLength(2);
   });
 });
 
 describe('findDocumentByNumber', () => {
+  const docs = [makeDoc('a', { docNumber: 'WH3-1205' })];
   it('finds a document ignoring case and spaces', () => {
     expect(findDocumentByNumber(docs, ' wh3-1205 ')?.metadata.id).toBe('a');
   });

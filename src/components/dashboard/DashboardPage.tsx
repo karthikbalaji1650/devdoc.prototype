@@ -11,8 +11,8 @@ import type { AppView, OperationsTab } from '../../types/appState';
 import { getStoredReviewersLog } from '../../services/reviewersLogService';
 import { listDocuments } from '../../services/documentsStoreService';
 import { visibleDocumentsFor } from '../../services/permissions';
-import { countByStatus, findDocumentByNumber } from '../../services/documentStats';
-import type { DocStatus } from '../../types/document';
+import { buildTrackedDocuments, countTracked, findDocumentByNumber, type TrackedStatus } from '../../services/documentStats';
+import { isAdmin } from '../../services/permissions';
 import { getLatestDriveExport } from '../../services/googleDriveStatusService';
 import { AppSidebar } from '../AppSidebar';
 
@@ -21,7 +21,7 @@ interface DashboardPageProps {
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
   /** Opens the documents list, optionally narrowed to one status. */
-  onOpenDocuments: (status: DocStatus | null) => void;
+  onOpenDocuments: (status: Exclude<TrackedStatus, 'OTHER'> | null) => void;
   onOpenDocument: (id: string) => void;
 }
 
@@ -89,13 +89,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const approvedArc = (approvedDocs / (reviewedDocs || 1)) * chartCircumference;
   const reviewArc = (inReviewDocs / (reviewedDocs || 1)) * chartCircumference;
 
-  // The three headline cards count real documents (what this user can
-  // see), so each one matches the list it opens when clicked. The ring
-  // and forecast below still summarise reviewer sign-offs.
+  // The headline cards count distinct documents (stored documents merged
+  // with reviewer sign-offs), so they agree with Recent Activity and
+  // with the list each card opens.
   const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user]);
-  const docCounts = countByStatus(visibleDocs);
+  const docCounts = countTracked(buildTrackedDocuments(visibleDocs, reviewers, isAdmin(user)));
 
-  const STATS: { label: string; value: number; status: DocStatus | null; valueColor: string }[] = [
+  const STATS: { label: string; value: number; status: Exclude<TrackedStatus, 'OTHER'> | null; valueColor: string }[] = [
     { label: 'total docs', value: docCounts.total, status: null, valueColor: 'text-[#ededed]' },
     { label: 'approved', value: docCounts.approved, status: 'APPROVED', valueColor: 'text-[#4ade80]' },
     { label: 'in review', value: docCounts.inReview, status: 'IN_REVIEW', valueColor: 'text-[#fbbf24]' },
