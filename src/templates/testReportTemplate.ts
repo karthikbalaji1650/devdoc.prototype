@@ -143,7 +143,7 @@ export const blankTestReportDoc: DocumentModel = {
     if (section.type === 'richText') return { ...section, content: 'Describe the change, its impact, validation requirements, and operational considerations.' };
     if (section.type === 'table') {
       const tableData = section.tableData || { headers: ['Parameter', 'Value'], rows: [['', '']] };
-      return { ...section, tableData: { headers: tableData.headers, rows: [new Array(tableData.headers.length).fill('')] } };
+      return { ...section, tableData: { headers: tableData.headers, rows: [Array.from({ length: tableData.headers.length }, () => '')] } };
     }
     if (section.type === 'testCases') return { ...section, testCases: [{ id: 'IA-TC-01', title: 'Primary validation scenario', objective: 'Verify the intended behavior after the change.', steps: ['Prepare the test environment.', 'Execute the changed workflow.', 'Inspect the result and evidence.'], expectedResult: 'The changed workflow completes successfully with no unacceptable regression.', status: 'PENDING' as const }] };
     return { ...section, callout: { type: 'info' as const, title: 'Pending Review', text: 'Record the final recommendation, approval status, and release conditions.' } };

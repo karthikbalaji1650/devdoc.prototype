@@ -50,7 +50,7 @@ export function parseRobotOutputXml(xmlString: string, suiteId: string): { run: 
     const failureMessage = status === 'FAIL' ? (statusNode?.textContent?.trim() || 'Assertion error during keyword execution.') : undefined;
 
     // Extract custom ID from test name if formatted like "TC_HPM_001_Title" or default
-    const matchId = title.match(/^(TC[_\-A-Z0-9]+)[\s_\-]/i);
+    const matchId = title.match(/^(TC[_\-A-Z0-9]+)[\s_-]/i);
     const customId = matchId ? matchId[1].replace(/_/g, '-') : `TC-ROBOT-00${idx + 1}`;
 
     results.push({
@@ -143,7 +143,7 @@ export function parseRobotScriptText(robotText: string, suiteId: string): TestCa
   if (!testCasesSection) return cases;
 
   // Split section into individual test blocks
-  const rawBlocks = testCasesSection.split(/\n(?=[A-Za-z0-9_#\-]+\n|\n[A-Za-z0-9_#\-]+)/);
+  const rawBlocks = testCasesSection.split(/\n(?=[A-Za-z0-9_#-]+\n|\n[A-Za-z0-9_#-]+)/);
   let index = 1;
 
   rawBlocks.forEach((block) => {
@@ -155,7 +155,7 @@ export function parseRobotScriptText(robotText: string, suiteId: string): TestCa
     if (!firstLine || firstLine.startsWith('[')) return;
 
     const testTitle = firstLine;
-    const matchId = testTitle.match(/^(TC[_\-A-Z0-9]+)[\s_\-]/i);
+    const matchId = testTitle.match(/^(TC[_\-A-Z0-9]+)[\s_-]/i);
     const customId = matchId ? matchId[1].replace(/_/g, '-') : `C${Date.now().toString().slice(-3)}${index}`;
 
     let priority: 'P1' | 'P2' | 'P3' | 'P4' = 'P2';
@@ -188,7 +188,7 @@ export function parseRobotScriptText(robotText: string, suiteId: string): TestCa
       id: `tc-back-${Date.now()}-${index}`,
       suiteId,
       customId,
-      title: testTitle.replace(/^TC[_\-A-Z0-9]+[\s_\-]*/i, ''),
+      title: testTitle.replace(/^TC[_\-A-Z0-9]+[\s_-]*/i, ''),
       preconditions,
       steps: stepsList,
       expectedResult,

@@ -40,13 +40,13 @@ export const TableEditor: React.FC<TableEditorProps> = ({
   };
 
   const addRow = () => {
-    const newRow = new Array(headers.length).fill('');
+    const newRow = Array.from({ length: headers.length }, () => '');
     onChange({ headers, rows: [...rows, newRow] });
   };
 
   const removeRow = (rowIdx: number) => {
     if (rows.length <= 1) {
-      onChange({ headers, rows: [new Array(headers.length).fill('')] });
+      onChange({ headers, rows: [Array.from({ length: headers.length }, () => '')] });
       return;
     }
     const newRows = rows.filter((_, i) => i !== rowIdx);

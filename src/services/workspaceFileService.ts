@@ -12,7 +12,7 @@ export function getStoredFileBridgeUrl(): string {
       try {
         const parsed = new URL(vscodeUrl);
         return `${parsed.protocol}//${parsed.hostname}:8081`;
-      } catch (e) {
+      } catch {
         // ignore
       }
     }

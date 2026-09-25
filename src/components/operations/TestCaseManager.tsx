@@ -1326,7 +1326,7 @@ const AiGenerateModal: React.FC<{
       await onGenerate(suiteId, SAMPLE_TA_DOC);
       setStatusMsg('✅ Test cases generated successfully!');
       setTimeout(onClose, 1000);
-    } catch (err) {
+    } catch {
       setStatusMsg('❌ Generation failed. Please try again.');
     } finally {
       setIsLoading(false);
