@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FileText,
   Bell,
   LogOut,
   CheckCircle2,
@@ -10,6 +9,10 @@ import {
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
 import { getStoredReviewersLog } from '../../services/reviewersLogService';
+import { listDocuments } from '../../services/documentsStoreService';
+import { visibleDocumentsFor } from '../../services/permissions';
+import { countByStatus, findDocumentByNumber } from '../../services/documentStats';
+import type { DocStatus } from '../../types/document';
 import { getLatestDriveExport } from '../../services/googleDriveStatusService';
 import { AppSidebar } from '../AppSidebar';
 
@@ -17,6 +20,9 @@ interface DashboardPageProps {
   user: UserProfile;
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
+  /** Opens the documents list, optionally narrowed to one status. */
+  onOpenDocuments: (status: DocStatus | null) => void;
+  onOpenDocument: (id: string) => void;
 }
 
 type ActivityItem = {
@@ -54,7 +60,7 @@ const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; lab
   CHANGES_REQUESTED: { bg: 'bg-[#2a1212] text-[#f87171] border border-[#7d2d2d]', dot: 'bg-[#f87171]', label: 'Changes Req.' },
 };
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout, onOpenDocuments, onOpenDocument }) => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [chartHover, setChartHover] = useState<'approved' | 'in-review' | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -71,7 +77,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   }, [notifOpen]);
 
   const reviewers = useMemo(() => getStoredReviewersLog(), []);
-  const totalDocs = reviewers.length;
   const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
   const inReviewDocs = reviewers.filter(r => r.reviewStatus === 'IN_REVIEW').length;
   const latestDriveExport = useMemo(() => getLatestDriveExport(), []);
@@ -84,10 +89,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const approvedArc = (approvedDocs / (reviewedDocs || 1)) * chartCircumference;
   const reviewArc = (inReviewDocs / (reviewedDocs || 1)) * chartCircumference;
 
-  const STATS = [
-    { label: 'total docs', value: totalDocs, icon: FileText, valueColor: 'text-[#ededed]' },
-    { label: 'approved', value: approvedDocs, icon: CheckCircle2, valueColor: 'text-[#4ade80]' },
-    { label: 'in review', value: inReviewDocs, icon: Clock, valueColor: 'text-[#fbbf24]' },
+  // The three headline cards count real documents (what this user can
+  // see), so each one matches the list it opens when clicked. The ring
+  // and forecast below still summarise reviewer sign-offs.
+  const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user]);
+  const docCounts = countByStatus(visibleDocs);
+
+  const STATS: { label: string; value: number; status: DocStatus | null; valueColor: string }[] = [
+    { label: 'total docs', value: docCounts.total, status: null, valueColor: 'text-[#ededed]' },
+    { label: 'approved', value: docCounts.approved, status: 'APPROVED', valueColor: 'text-[#4ade80]' },
+    { label: 'in review', value: docCounts.inReview, status: 'IN_REVIEW', valueColor: 'text-[#fbbf24]' },
   ];
 
   const recentActivity: ActivityItem[] = useMemo(
@@ -186,10 +197,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[#242424] bg-[#111111]">
                 {STATS.map((stat) => (
-                  <div key={stat.label} className="border-r border-[#242424] last:border-r-0 p-5">
+                  <button
+                    key={stat.label}
+                    type="button"
+                    onClick={() => onOpenDocuments(stat.status)}
+                    title={`View ${stat.label === 'total docs' ? 'all documents' : `${stat.label} documents`}`}
+                    className="border-r border-[#242424] last:border-r-0 p-5 text-left transition-colors hover:bg-[#161616] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#4ade80]"
+                  >
                     <div className="text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">{stat.label}</div>
                     <div className={`text-3xl font-bold ${stat.valueColor} font-mono`}>{stat.value}</div>
-                  </div>
+                  </button>
                 ))}
                 <div className="p-5">
                   <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">
@@ -213,8 +230,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                 <div className="space-y-3">
                   {recentActivity.map((item) => {
                     const ss = STATUS_STYLES[item.type];
+                    const linked = findDocumentByNumber(visibleDocs, item.docNumber);
+                    const Wrapper = (linked ? 'button' : 'div') as React.ElementType;
                     return (
-                      <div key={item.id} className="border border-[#242424] bg-[#111111] p-3">
+                      <Wrapper
+                        key={item.id}
+                        {...(linked ? { type: 'button', onClick: () => onOpenDocument(linked.metadata.id), title: 'Open this document' } : {})}
+                        className={`block w-full text-left border border-[#242424] bg-[#111111] p-3 ${linked ? 'transition-colors hover:border-[#4ade80] hover:bg-[#161616]' : ''}`}
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.docNumber}</div>
                           <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] font-mono ${ss.bg}`}>
@@ -225,7 +248,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                         <div className="mt-3 text-sm font-medium text-[#ededed]">{item.docTitle}</div>
                         <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.reviewer}</div>
                         <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.date}</div>
-                      </div>
+                      </Wrapper>
                     );
                   })}
                 </div>

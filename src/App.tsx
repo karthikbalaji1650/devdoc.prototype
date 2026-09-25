@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import type { DocumentModel, DocSection, SectionType } from './types/document';
+import type { DocumentModel, DocSection, SectionType, DocStatus } from './types/document';
 import type { AppView, OperationsTab } from './types/appState';
 import type { UserProfile } from './types/auth';
 import type { IncidentItem } from './types/operations';
@@ -22,6 +22,7 @@ import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService'
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
+import { filterByStatus } from './services/documentStats';
 import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
 import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
 
@@ -102,6 +103,8 @@ export const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [docBinOpen, setDocBinOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Set when the dashboard sends you to the list narrowed to one status.
+  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<DocStatus | null>(null);
   const [documentListVersion, setDocumentListVersion] = useState(0);
 
   // AI Modal States
@@ -259,10 +262,29 @@ export const App: React.FC = () => {
       // latest edit).
       autosaverRef.current.flush();
       setActiveDocumentId(null);
+      setDocumentsStatusFilter(null);
     }
     if (opsTab) {
       setActiveOpsTab(opsTab);
     }
+  };
+
+  // Dashboard drill-downs: a status card opens the list for that status,
+  // an activity row opens that document directly.
+  const handleOpenDocumentsByStatus = (status: DocStatus | null) => {
+    autosaverRef.current.flush();
+    setDocumentsStatusFilter(status);
+    setActiveDocumentId(null);
+    setCurrentApp('doccraft');
+  };
+
+  const handleOpenDocumentFromDashboard = (id: string) => {
+    const doc = getDocument(id);
+    if (!doc) { showToast('Could not find that document.'); return; }
+    setDocument(doc);
+    setActiveSectionId('metadata');
+    setActiveDocumentId(id);
+    setCurrentApp('doccraft');
   };
 
   // Cross-App Incident -> RCA Document Generator
@@ -531,6 +553,8 @@ export const App: React.FC = () => {
           user={currentUser}
           onNavigate={handleLaunchApp}
           onLogout={handleLogout}
+          onOpenDocuments={handleOpenDocumentsByStatus}
+          onOpenDocument={handleOpenDocumentFromDashboard}
         />
       </Suspense>
     );
@@ -638,13 +662,15 @@ export const App: React.FC = () => {
   if (!activeDocumentId) {
     void documentListVersion;
     const userIsAdmin = isAdmin(currentUser);
-    const visibleDocs = visibleDocumentsFor(currentUser, listDocuments());
+    const visibleDocs = filterByStatus(visibleDocumentsFor(currentUser, listDocuments()), documentsStatusFilter);
+    const scopeBase = userIsAdmin ? 'All documents' : 'Documents currently in progress';
     return (
       <>
         <DocumentsListPage
           user={currentUser}
           documents={visibleDocs}
-          scopeLabel={userIsAdmin ? 'All documents' : 'Documents currently in progress'}
+          scopeLabel={documentsStatusFilter ? `${scopeBase} · ${documentsStatusFilter.replace('_', ' ').toLowerCase()} only` : scopeBase}
+          onClearFilter={documentsStatusFilter ? () => setDocumentsStatusFilter(null) : undefined}
           onOpen={handleOpenDocument}
           onCreate={handleCreateDocument}
           onDelete={handleMoveDocumentToBin}

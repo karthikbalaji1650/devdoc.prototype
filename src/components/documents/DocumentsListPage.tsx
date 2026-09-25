@@ -10,6 +10,8 @@ interface DocumentsListPageProps {
   user: UserProfile;
   documents: DocumentModel[];
   scopeLabel: string; // e.g. "My in-progress documents" or "All documents"
+  /** Present while the list is narrowed to one status. */
+  onClearFilter?: () => void;
   onOpen: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
@@ -26,7 +28,7 @@ const STATUS_STYLES: Record<DocStatus, { bg: string; text: string; dot: string }
 };
 
 export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
-  user, documents, scopeLabel, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
+  user, documents, scopeLabel, onClearFilter, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
 }) => {
   const [docBinOpen, setDocBinOpen] = useState(false);
   return (
@@ -37,7 +39,14 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
         <div className="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-lg font-bold text-[var(--text)]">Documents</h1>
-            <p className="text-xs text-[var(--text-dim)] mt-0.5">{scopeLabel}</p>
+            <p className="text-xs text-[var(--text-dim)] mt-0.5">
+              {scopeLabel}
+              {onClearFilter && (
+                <button type="button" onClick={onClearFilter} className="ml-2 font-semibold text-[var(--blue)] hover:underline">
+                  Show all
+                </button>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-2">
           <button type="button" onClick={() => setDocBinOpen(true)} className="flex items-center gap-1.5 border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]">
