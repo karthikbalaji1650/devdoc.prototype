@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { ReviewerLogItem } from '../types/operations';
 import type { DocumentModel } from '../types/document';
 
@@ -100,7 +99,8 @@ export function ensureCurrentDocReviewEntry(currentDoc: DocumentModel, logs: Rev
   return logs;
 }
 
-export function exportReviewersLogToExcel(logs: ReviewerLogItem[]): void {
+export async function exportReviewersLogToExcel(logs: ReviewerLogItem[]): Promise<void> {
+  const XLSX = await import('xlsx');
   const rows = logs.map((item, idx) => ({
     '#': idx + 1,
     'Document Number': item.docNumber,

@@ -17,8 +17,6 @@ import {
   convertTestSuiteToMarkdown,
   getStoredFileBridgeUrl
 } from '../../services/workspaceFileService';
-import { exportTestRunReport } from '../../exporters/excelExporter';
-import { exportOperationsBackupToExcel } from '../../exporters/operationsBackupExporter';
 import {
   FlaskConical, Play, ChevronDown, ChevronRight, Plus, Flag, Filter,
   Trash2, Edit3, Download, Upload, X, Check, Clock,
@@ -1869,10 +1867,11 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   };
 
 
-  const handleExportRunReport = () => {
+  const handleExportRunReport = async () => {
     if (!lastRunResults) return;
     try {
-      exportTestRunReport(lastRunResults.results, lastRunResults.suiteName, lastRunResults.run.executedAt);
+      const { exportTestRunReport } = await import('../../exporters/excelExporter');
+      await exportTestRunReport(lastRunResults.results, lastRunResults.suiteName, lastRunResults.run.executedAt);
       showToast('✅ Report exported.');
     } catch{ showToast('❌ Export failed.'); }
   };
@@ -1923,9 +1922,10 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     }
   };
 
-  const handleExportProtocolExcel = () => {
+  const handleExportProtocolExcel = async () => {
     try {
-      exportOperationsBackupToExcel(suites, runs, milestones);
+      const { exportOperationsBackupToExcel } = await import('../../exporters/operationsBackupExporter');
+      await exportOperationsBackupToExcel(suites, runs, milestones);
       showToast('✅ Backup downloaded (.xlsx).');
     } catch (err) {
       console.error('Failed to export operations backup:', err);

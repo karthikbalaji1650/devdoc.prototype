@@ -24,11 +24,9 @@ import confetti from 'canvas-confetti';
 import type { DocumentModel } from '../types/document';
 import type { UserProfile } from '../types/auth';
 import { TEMPLATE_REGISTRY } from '../templates';
-import { exportToDocx } from '../exporters/docxExporter';
 import { exportToGoogleDoc } from '../exporters/googleDocsExport';
 import { GoogleAuthCancelledError } from '../services/googleAuthService';
 import { recordDriveExport } from '../services/googleDriveStatusService';
-import { exportTestCasesToExcel } from '../exporters/excelExporter';
 import { exportDocToVsCodeSpecs } from '../services/workspaceFileService';
 
 interface HeaderNavProps {
@@ -92,6 +90,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   const handleDocxExport = async () => {
     try {
       setIsExportingDocx(true);
+      const { exportToDocx } = await import('../exporters/docxExporter');
       await exportToDocx(document);
       confetti({
         particleCount: 80,
@@ -141,10 +140,11 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     }
   };
 
-  const handleExcelExport = () => {
+  const handleExcelExport = async () => {
     const allTestCases = document.sections.flatMap(s => s.testCases || []);
     if (allTestCases.length > 0) {
-      exportTestCasesToExcel(allTestCases, document.metadata.docNumber || 'Test_Cases');
+      const { exportTestCasesToExcel } = await import('../exporters/excelExporter');
+      await exportTestCasesToExcel(allTestCases, document.metadata.docNumber || 'Test_Cases');
       confetti({ particleCount: 50, spread: 50, origin: { y: 0.1 } });
     } else {
       alert('No test cases found in this document to export to Excel.');

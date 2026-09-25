@@ -1,5 +1,4 @@
 import type { DocumentModel } from '../types/document';
-import { generateDocxBlob } from '../exporters/docxExporter';
 import { saveAs } from 'file-saver';
 
 /** Dynamic helper to resolve file-bridge URL (port 8081) */
@@ -166,6 +165,7 @@ export async function exportDocToVsCodeSpecs(doc: DocumentModel): Promise<{ docx
   const baseName = `${prefix}${cleanTitle}`;
   
   // 1. Generate DOCX Blob and download
+  const { generateDocxBlob } = await import('../exporters/docxExporter');
   const docxBlob = await generateDocxBlob(doc);
   saveAs(docxBlob, `${baseName}.docx`);
 

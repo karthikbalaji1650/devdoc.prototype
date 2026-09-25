@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import type { DocumentModel, DocSection, SectionType } from './types/document';
 import type { AppView, OperationsTab } from './types/appState';
 import type { UserProfile } from './types/auth';
@@ -13,21 +13,14 @@ import { DocumentPreview } from './components/DocumentPreview';
 import { AiRephraseModal } from './components/ai/AiRephraseModal';
 import { AiSettingsModal } from './components/ai/AiSettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
-import { DashboardPage } from './components/dashboard/DashboardPage';
-import { LandingHub } from './components/hub/LandingHub';
-import { OperationsLayout } from './components/operations/OperationsLayout';
 import { AppSidebar } from './components/AppSidebar';
-import { SettingsPage } from './components/settings/SettingsPage';
-import { DataManagementPage } from './components/data/DataManagementPage';
 import { DocumentsListPage } from './components/documents/DocumentsListPage';
 import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin } from './services/documentsStoreService';
 import { DocBinModal } from './components/documents/DocBinModal';
-import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
 import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
-import { parseDocxFile } from './exporters/docxImporter';
 
 import { saveAs } from 'file-saver';
 import { 
@@ -37,6 +30,21 @@ import {
   ShieldAlert,
   ArchiveRestore
 } from 'lucide-react';
+
+// Heavy screens load on demand so the login/document screens ship a much
+// smaller first bundle.
+const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const LandingHub = lazy(() => import('./components/hub/LandingHub').then((m) => ({ default: m.LandingHub })));
+const OperationsLayout = lazy(() => import('./components/operations/OperationsLayout').then((m) => ({ default: m.OperationsLayout })));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const DataManagementPage = lazy(() => import('./components/data/DataManagementPage').then((m) => ({ default: m.DataManagementPage })));
+const CoderView = lazy(() => import('./components/coder/CoderView').then((m) => ({ default: m.CoderView })));
+
+const PageLoading: React.FC = () => (
+  <div className="flex h-screen items-center justify-center bg-[var(--bg)] text-xs font-mono uppercase tracking-[0.14em] text-[var(--text-dim)]">
+    Loading…
+  </div>
+);
 
 const STORAGE_KEY = 'devdoc_studio_current_doc_v1';
 
@@ -470,6 +478,7 @@ export const App: React.FC = () => {
   const handleUploadDocx = async (file: File) => {
     try {
       showToast('Parsing uploaded Word template...');
+      const { parseDocxFile } = await import('./exporters/docxImporter');
       const importedDoc = await parseDocxFile(file);
       openDocumentInEditor(importedDoc);
       showToast(`Imported ${importedDoc.sections.length} sections from DOCX!`);
@@ -495,57 +504,65 @@ export const App: React.FC = () => {
   // 2. Render Dashboard (new landing page)
   if (currentApp === 'dashboard') {
     return (
-      <DashboardPage
-        user={currentUser}
-        onNavigate={handleLaunchApp}
-        onLogout={handleLogout}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <DashboardPage
+          user={currentUser}
+          onNavigate={handleLaunchApp}
+          onLogout={handleLogout}
+        />
+      </Suspense>
     );
   }
 
   // 3. Render Landing Hub Screen (legacy)
   if (currentApp === 'hub') {
     return (
-      <LandingHub
-        user={currentUser}
-        onLaunchApp={handleLaunchApp}
-        onLogout={handleLogout}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <LandingHub
+          user={currentUser}
+          onLaunchApp={handleLaunchApp}
+          onLogout={handleLogout}
+        />
+      </Suspense>
     );
   }
 
   // 4. Render Engineering Operations Suite Screen (Options 1-5 with Sidebar)
   if (currentApp === 'operations') {
     return (
-      <OperationsLayout
-        activeTab={activeOpsTab}
-        onTabChange={setActiveOpsTab}
-        user={currentUser}
-        currentDocument={document}
-        onBackToHub={() => setCurrentApp('dashboard')}
-        onLaunchDocCraft={(_docId, doc) => {
-          if (doc) {
-            setDocument(doc);
-            setActiveSectionId('metadata');
-          }
-          setCurrentApp('doccraft');
-        }}
-        onExportIncidentToRCA={handleExportIncidentToRCA}
-        onLogout={handleLogout}
-        onNavigate={handleLaunchApp}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <OperationsLayout
+          activeTab={activeOpsTab}
+          onTabChange={setActiveOpsTab}
+          user={currentUser}
+          currentDocument={document}
+          onBackToHub={() => setCurrentApp('dashboard')}
+          onLaunchDocCraft={(_docId, doc) => {
+            if (doc) {
+              setDocument(doc);
+              setActiveSectionId('metadata');
+            }
+            setCurrentApp('doccraft');
+          }}
+          onExportIncidentToRCA={handleExportIncidentToRCA}
+          onLogout={handleLogout}
+          onNavigate={handleLaunchApp}
+        />
+      </Suspense>
     );
   }
 
   // 5. Render Settings Page
   if (currentApp === 'settings') {
     return (
-      <SettingsPage
-        user={currentUser}
-        onNavigate={handleLaunchApp}
-        onLogout={handleLogout}
-        onUpdateAvatar={handleUpdateAvatar}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <SettingsPage
+          user={currentUser}
+          onNavigate={handleLaunchApp}
+          onLogout={handleLogout}
+          onUpdateAvatar={handleUpdateAvatar}
+        />
+      </Suspense>
     );
   }
 
@@ -572,22 +589,26 @@ export const App: React.FC = () => {
       );
     }
     return (
-      <DataManagementPage
-        user={currentUser}
-        onNavigate={handleLaunchApp}
-        onLogout={handleLogout}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <DataManagementPage
+          user={currentUser}
+          onNavigate={handleLaunchApp}
+          onLogout={handleLogout}
+        />
+      </Suspense>
     );
   }
 
   // 5b. Render Coder (VS Code + Cline Agent embedded iframe)
   if (currentApp === 'coder') {
     return (
-      <CoderView
-        user={currentUser}
-        onNavigate={handleLaunchApp}
-        onLogout={handleLogout}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <CoderView
+          user={currentUser}
+          onNavigate={handleLaunchApp}
+          onLogout={handleLogout}
+        />
+      </Suspense>
     );
   }
 

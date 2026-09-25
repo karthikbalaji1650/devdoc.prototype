@@ -15,7 +15,6 @@ import {
   ,ImagePlus
   ,X
 } from 'lucide-react';
-import { exportTestCasesToExcel, importTestCasesFromExcel } from '../../exporters/excelExporter';
 
 interface TestCasesEditorProps {
   testCases?: TestCaseItem[];
@@ -106,6 +105,7 @@ export const TestCasesEditor: React.FC<TestCasesEditorProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       try {
+        const { importTestCasesFromExcel } = await import('../../exporters/excelExporter');
         const importedTCs = await importTestCasesFromExcel(file);
         if (importedTCs.length > 0) {
           onChange([...testCases, ...importedTCs]);
@@ -185,7 +185,7 @@ export const TestCasesEditor: React.FC<TestCasesEditorProps> = ({
 
           <button
             type="button"
-            onClick={() => exportTestCasesToExcel(testCases)}
+            onClick={() => void import('../../exporters/excelExporter').then((m) => m.exportTestCasesToExcel(testCases))}
             title="Export test cases to formatted Excel workbook (.xlsx)"
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-xs"
           >
