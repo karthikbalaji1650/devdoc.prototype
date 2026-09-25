@@ -48,7 +48,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex justify-center bg-[#0a0a0a]">
+      <div tabIndex={0} role="region" aria-label="Document preview" className="flex-1 overflow-y-auto p-6 md:p-8 flex justify-center bg-[#0a0a0a]">
         <div 
           style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
           className="transition-transform duration-150 ease-out"
@@ -91,7 +91,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
             {/* Document Main Title Block (Editable body starts here) */}
             <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-blue-950 tracking-tight leading-tight">
+              <h1 className="text-2xl md:text-3xl font-extrabold text-[var(--text)] tracking-tight leading-tight">
                 {metadata.title || 'Untitled Technical Document'}
               </h1>
               {metadata.subtitle && (

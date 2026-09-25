@@ -356,6 +356,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         <div className="relative">
           <button
             onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+            aria-label="Export options"
+            aria-expanded={exportDropdownOpen}
             className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-300"
           >
             <ChevronDown className="w-4 h-4" />

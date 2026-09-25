@@ -119,7 +119,7 @@ export const DataManagementPage: React.FC<DataManagementPageProps> = ({ user, on
             </div>
             <div className="flex items-center justify-between px-5 py-4">
               <div>
-                <div className="text-xs font-bold text-rose-600">Clear All Local Data</div>
+                <div className="text-xs font-bold text-[var(--danger)]">Clear All Local Data</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">Wipes all stored documents, settings, and session. You will be logged out.</div>
               </div>
               <button type="button" onClick={handleClearLocalStorage}

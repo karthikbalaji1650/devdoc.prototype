@@ -185,7 +185,7 @@ export const MetadataEditor: React.FC<MetadataEditorProps> = ({ metadata, onChan
               <button
                 type="button"
                 onClick={() => onTriggerAi(metadata.title, (newT) => onChange({ title: newT }))}
-                className="flex items-center gap-1 text-[11px] text-purple-600 hover:text-purple-700 font-medium"
+                className="flex items-center gap-1 text-[11px] text-[var(--purple)] hover:text-[var(--text)] font-medium"
               >
                 <Sparkles className="w-3 h-3" />
                 <span>AI Polish Title</span>
@@ -209,7 +209,7 @@ export const MetadataEditor: React.FC<MetadataEditorProps> = ({ metadata, onChan
               <button
                 type="button"
                 onClick={() => onTriggerAi(metadata.subtitle || '', (newS) => onChange({ subtitle: newS }))}
-                className="flex items-center gap-1 text-[11px] text-purple-600 hover:text-purple-700 font-medium"
+                className="flex items-center gap-1 text-[11px] text-[var(--purple)] hover:text-[var(--text)] font-medium"
               >
                 <Sparkles className="w-3 h-3" />
                 <span>AI Polish Subtitle</span>
@@ -269,11 +269,12 @@ export const MetadataEditor: React.FC<MetadataEditorProps> = ({ metadata, onChan
 
         {/* Date */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+          <label htmlFor="meta-date" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-emerald-600" />
             <span>Date</span>
           </label>
           <input
+            id="meta-date"
             type="date"
             value={metadata.date}
             onChange={(e) => onChange({ date: e.target.value })}
@@ -295,11 +296,12 @@ export const MetadataEditor: React.FC<MetadataEditorProps> = ({ metadata, onChan
 
         {/* Classification */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+          <label htmlFor="meta-classification" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
             <span>Security Classification</span>
           </label>
           <select
+            id="meta-classification"
             value={metadata.classification}
             onChange={(e) => onChange({ classification: e.target.value as DocClassification })}
             className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-colors shadow-xs"
@@ -312,11 +314,12 @@ export const MetadataEditor: React.FC<MetadataEditorProps> = ({ metadata, onChan
 
         {/* Status */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+          <label htmlFor="meta-status" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             <span>Document Status</span>
           </label>
           <select
+            id="meta-status"
             value={metadata.status}
             onChange={(e) => onChange({ status: e.target.value as DocStatus })}
             className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-colors shadow-xs"

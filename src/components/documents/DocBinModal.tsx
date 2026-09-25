@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArchiveRestore, FileText, RotateCcw, Trash2, X } from 'lucide-react';
 import type { DocumentModel } from '../../types/document';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 import {
   listDocBin,
   permanentlyDeleteFromDocBin,
@@ -16,6 +17,7 @@ interface DocBinModalProps {
 export const DocBinModal: React.FC<DocBinModalProps> = ({ onClose, onRestore }) => {
   const [entries, setEntries] = useState<DocBinEntry[]>([]);
   const [message, setMessage] = useState('');
+  const dialogRef = useDialogA11y<HTMLElement>(onClose);
 
   const refresh = () => setEntries(listDocBin());
   useEffect(() => { refresh(); }, []);
@@ -41,7 +43,7 @@ export const DocBinModal: React.FC<DocBinModalProps> = ({ onClose, onRestore }) 
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="doc-bin-title" className="flex max-h-[85vh] w-full max-w-2xl flex-col border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] shadow-2xl">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="doc-bin-title" className="flex max-h-[85vh] w-full max-w-2xl flex-col border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] shadow-2xl">
         <header className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-center gap-2.5">
             <ArchiveRestore className="h-5 w-5 text-[var(--success)]" />

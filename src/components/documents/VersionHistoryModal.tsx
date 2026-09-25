@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { History, RotateCcw, X } from 'lucide-react';
 import type { DocumentModel } from '../../types/document';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 import { listSnapshots, type Snapshot } from '../../services/versionHistoryService';
 
 interface VersionHistoryModalProps {
@@ -17,10 +18,11 @@ function summarise(doc: DocumentModel): string {
 
 export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({ documentId, canRestore, onClose, onRestore }) => {
   const [snapshots] = useState<Snapshot[]>(() => listSnapshots(documentId));
+  const dialogRef = useDialogA11y<HTMLElement>(onClose);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="version-history-title" className="flex max-h-[85vh] w-full max-w-xl flex-col border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] shadow-2xl">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="version-history-title" className="flex max-h-[85vh] w-full max-w-xl flex-col border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] shadow-2xl">
         <header className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-center gap-2.5">
             <History className="h-5 w-5 text-[var(--blue)]" />
