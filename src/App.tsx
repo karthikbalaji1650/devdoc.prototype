@@ -22,6 +22,7 @@ import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService'
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
+import { seedSampleDocumentsIfNeeded } from './services/sampleData';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
 import { getStoredReviewersLog } from './services/reviewersLogService';
 import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
@@ -106,7 +107,8 @@ export const App: React.FC = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   // Set when the dashboard sends you to the list narrowed to one status.
   const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<TrackedStatus, 'OTHER'> | null>(null);
-  const [documentListVersion, setDocumentListVersion] = useState(0);
+  // Adds the ADR-2026-042 sample once so the dashboard's In review card has a document to open.
+  const [documentListVersion, setDocumentListVersion] = useState(() => (seedSampleDocumentsIfNeeded() ? 1 : 0));
 
   // AI Modal States
   const [aiModalOpen, setAiModalOpen] = useState(false);
