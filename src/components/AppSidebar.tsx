@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../types/auth';
 import type { AppView, OperationsTab } from '../types/appState';
+import { isAdmin } from '../services/permissions';
 
 interface AppSidebarProps {
   user: UserProfile;
@@ -123,7 +124,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         </div>
 
         <nav className={`${expanded ? 'px-2.5' : 'px-2'} pt-3 space-y-1`}>
-          {NAV_ITEMS.filter((item) => !('adminOnly' in item) || user.role === 'admin').map((item) => {
+          {NAV_ITEMS.filter((item) => !('adminOnly' in item) || isAdmin(user)).map((item) => {
             const active = isActive(item, activeView, activeOpsTab);
             const Icon = item.icon;
             return (

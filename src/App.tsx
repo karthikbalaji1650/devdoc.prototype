@@ -25,6 +25,7 @@ import { DocBinModal } from './components/documents/DocBinModal';
 import { CoderView } from './components/coder/CoderView';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
+import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
 import { parseDocxFile } from './exporters/docxImporter';
 
 import { saveAs } from 'file-saver';
@@ -151,7 +152,7 @@ export const App: React.FC = () => {
     const doc = getDocument(id);
     if (!doc) return;
     // Same rule as editing (#2/#4): only the author or an admin may delete.
-    if (!currentUser || (currentUser.role !== 'admin' && doc.metadata.author !== currentUser.name)) {
+    if (!canDeleteDocument(currentUser, doc)) {
       showToast('You can only delete documents you authored.');
       return;
     }
@@ -282,8 +283,7 @@ export const App: React.FC = () => {
   // Requirement #2/#4: a user may only edit documents they authored;
   // admins may edit any document. Guarding here (not just visually)
   // means the restriction holds regardless of which UI path is used.
-  const canEditActiveDocument = (): boolean =>
-    !!currentUser && (currentUser.role === 'admin' || document.metadata.author === currentUser.name);
+  const canEditActiveDocument = (): boolean => canEditDocument(currentUser, document);
 
   const handleUpdateMetadata = (updates: Partial<DocumentModel['metadata']>) => {
     if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
@@ -518,7 +518,7 @@ export const App: React.FC = () => {
     // Requirement #8: database/data management is admin-only. The
     // sidebar already hides this link for non-admins; this guard
     // covers direct navigation too.
-    if (currentUser.role !== 'admin') {
+    if (!canAccessDataManagement(currentUser)) {
       return (
         <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
           <AppSidebar user={currentUser} activeView="dashboard" onNavigate={handleLaunchApp} onLogout={handleLogout} />
@@ -559,17 +559,14 @@ export const App: React.FC = () => {
   // 6. Render Documents List (landing point before opening a document)
   if (!activeDocumentId) {
     void documentListVersion;
-    const isAdmin = currentUser.role === 'admin';
-    const allDocs = listDocuments();
-    const visibleDocs = isAdmin
-      ? allDocs
-      : allDocs.filter((d) => d.metadata.status === 'DRAFT' || d.metadata.status === 'IN_REVIEW');
+    const userIsAdmin = isAdmin(currentUser);
+    const visibleDocs = visibleDocumentsFor(currentUser, listDocuments());
     return (
       <>
         <DocumentsListPage
           user={currentUser}
           documents={visibleDocs}
-          scopeLabel={isAdmin ? 'All documents' : 'Documents currently in progress'}
+          scopeLabel={userIsAdmin ? 'All documents' : 'Documents currently in progress'}
           onOpen={handleOpenDocument}
           onCreate={handleCreateDocument}
           onDelete={handleMoveDocumentToBin}
