@@ -17,6 +17,8 @@ import { AppSidebar } from './components/AppSidebar';
 import { DocumentsListPage } from './components/documents/DocumentsListPage';
 import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin } from './services/documentsStoreService';
 import { DocBinModal } from './components/documents/DocBinModal';
+import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
+import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
@@ -29,7 +31,8 @@ import {
   PanelLeftOpen,
   CheckCircle,
   ShieldAlert,
-  ArchiveRestore
+  ArchiveRestore,
+  History
 } from 'lucide-react';
 
 // Heavy screens load on demand so the login/document screens ship a much
@@ -98,6 +101,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'split' | 'editor-only' | 'preview-only'>('split');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [docBinOpen, setDocBinOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [documentListVersion, setDocumentListVersion] = useState(0);
 
   // AI Modal States
@@ -117,6 +121,7 @@ export const App: React.FC = () => {
     createDebouncedSaver<DocumentModel>((doc) => {
       // The store is the source of truth; the legacy copy is best-effort
       // and must not raise a second warning when storage is full.
+      snapshotIfDue(() => getDocument(doc.metadata.id), doc.metadata.id);
       saveDocument(doc);
       safeSetItem(STORAGE_KEY, JSON.stringify(doc), { notify: false });
     }, 400)
@@ -718,6 +723,21 @@ export const App: React.FC = () => {
         onLaunchOperations={() => setCurrentApp('operations')}
         onLogout={handleLogout}
       />
+      {historyOpen && activeDocumentId && (
+        <VersionHistoryModal
+          documentId={activeDocumentId}
+          canRestore={canEditActiveDocument()}
+          onClose={() => setHistoryOpen(false)}
+          onRestore={(snap) => {
+            if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
+            autosaverRef.current.flush();
+            recordSnapshot(document, 'Before restore');
+            setDocument(snap.doc);
+            setHistoryOpen(false);
+            showToast(`Restored version from ${new Date(snap.savedAt).toLocaleString()}.`);
+          }}
+        />
+      )}
       {docBinOpen && (
         <DocBinModal
           onClose={() => setDocBinOpen(false)}
@@ -747,6 +767,14 @@ export const App: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* View Split Switcher — persistent across Split/Editor/Preview modes */}
           <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
+            <button
+              type="button"
+              onClick={() => { autosaverRef.current.flush(); setHistoryOpen(true); }}
+              className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--blue)] hover:text-[var(--blue)]"
+              title="Restore an earlier saved version of this document"
+            >
+              <History className="h-3.5 w-3.5" /> History
+            </button>
             <button
               type="button"
               onClick={() => { autosaverRef.current.flush(); setDocBinOpen(true); }}

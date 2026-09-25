@@ -1,5 +1,6 @@
 import type { DocumentModel } from '../types/document';
 import { safeSetItem } from './safeStorage';
+import { deleteHistory } from './versionHistoryService';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
 const LEGACY_SINGLE_DOC_KEY = 'devdoc_studio_current_doc_v1';
@@ -154,7 +155,10 @@ export function restoreFromDocBin(entryId: string): DocumentModel | null {
 }
 
 export function permanentlyDeleteFromDocBin(entryId: string): void {
-  writeBin(readBin().filter((item) => item.id !== entryId));
+  const bin = readBin();
+  const entry = bin.find((item) => item.id === entryId);
+  if (entry?.itemType === 'document') deleteHistory(entry.documentId);
+  writeBin(bin.filter((item) => item.id !== entryId));
 }
 
 export function generateDocumentId(): string {
