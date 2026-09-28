@@ -20,6 +20,7 @@ import { DocBinModal } from './components/documents/DocBinModal';
 import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
 import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
+import { isBackendConfigured, logoutBackend } from './services/backendAuthService';
 import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
 import { seedSampleDocumentsIfNeeded } from './services/sampleData';
@@ -241,6 +242,11 @@ export const App: React.FC = () => {
 
   const handleLogout = () => {
     if (currentUser) recordLogout(currentUser.id);
+    // Best-effort: drops the server-side session row when an API is
+    // configured, so the sign-out actually revokes it rather than just
+    // clearing the browser's copy. Fire-and-forget — logout must not
+    // hang on the network.
+    if (isBackendConfigured()) void logoutBackend();
     logout();
     setCurrentUser(null);
     setCurrentApp('login');

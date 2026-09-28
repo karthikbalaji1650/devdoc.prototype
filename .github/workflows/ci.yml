@@ -33,6 +33,34 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Runs against an in-memory Postgres (pg-mem) — no database service needed.
+      - name: Tests
+        run: npm test
+
+      - name: Type-check and build
+        run: npm run build
+
   browser-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -45,6 +73,12 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        run: npm ci
+
+      # e2e/backend-login.spec.ts starts the real API (server/) against
+      # an in-memory Postgres to check the frontend and API together.
+      - name: Install server dependencies
+        working-directory: server
         run: npm ci
 
       - name: Install Chromium

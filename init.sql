@@ -19,7 +19,24 @@ CREATE TABLE IF NOT EXISTS users (
         TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed Initial Demo Users
+-- Server-side sessions for the API (server/): a random id per sign-in,
+-- deleted on logout, so revoking access takes effect immediately
+-- (unlike a JWT, which stays valid until it expires on its own).
+CREATE TABLE IF NOT EXISTS sessions (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expires_at TIMESTAMP
+    WITH
+        TIME ZONE NOT NULL,
+        created_at TIMESTAMP
+    WITH
+        TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed Initial Demo Users. Kept in sync with src/types/auth.ts
+-- DEMO_USERS (same id / name / email / role) so the API and the
+-- browser-only demo agree on who's who.
+-- Demo password for all three, for local/demo use only: devdoc-demo
 INSERT INTO
     users (
         id,
@@ -35,11 +52,11 @@ INSERT INTO
 VALUES (
         'usr-01',
         'Manivannan Thangavel',
-        'manivannan_thangavel@sanmina.com',
-        '$2a$12$e8Ym...demo',
-        'SW Engg Manager',
+        'mani.thangavel@sanmina.com',
+        '$2b$12$BQIuT1ww9MkDytXfjN2mzu/YajotxDvzxLVwuLsTPvBdXvLPFxADC',
+        'Software engineering manager',
         'Platform Systems Engineering',
-        'firmware-lead',
+        'admin',
         'from-blue-600 to-indigo-600',
         'MT'
     ),
@@ -47,23 +64,23 @@ VALUES (
         'usr-02',
         'Vaishnavi Aasaithambi',
         'vaishnavi.aasaithambi@sanmina.com',
-        '$2a$12$e8Ym...demo',
-        'Technical Lead',
-        'Platform Systems Engineering',
-        'technical-lead',
+        '$2b$12$BQIuT1ww9MkDytXfjN2mzu/YajotxDvzxLVwuLsTPvBdXvLPFxADC',
+        'Technical lead',
+        'SW engineering',
+        'release-manager',
         'from-purple-600 to-pink-600',
-        'SC'
+        'VA'
     ),
     (
         'usr-03',
-        'Aravind Samivel',
-        'aravind.samivel@sanmina.com',
-        '$2a$12$e8Ym...demo',
-        'Senior Engineer',
-        'Platform Systems Engineering',
-        'senior-engineer',
+        'Judia Lumina',
+        'judia.lumina@sanmina.com',
+        '$2b$12$BQIuT1ww9MkDytXfjN2mzu/YajotxDvzxLVwuLsTPvBdXvLPFxADC',
+        'Team lead',
+        'SW engineering',
+        'firmware-lead',
         'from-emerald-600 to-teal-600',
-        'AR'
+        'JL'
     ) ON CONFLICT (id) DO NOTHING;
 
 -- 2. Option 1: Incidents & RCA Table
@@ -361,7 +378,12 @@ CREATE TABLE IF NOT EXISTS documents (
     status VARCHAR(32) DEFAULT 'APPROVED',
     template_type VARCHAR(64) DEFAULT 'technical-analysis',
     document_json JSONB NOT NULL,
-    updated_at TIMESTAMP
+    -- Soft delete, mirroring the app's own Doc Bin convention: the API
+    -- never destroys a document, it just stops returning it.
+    deleted_at TIMESTAMP
+    WITH
+        TIME ZONE,
+        updated_at TIMESTAMP
     WITH
         TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

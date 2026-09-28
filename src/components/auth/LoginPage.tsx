@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { DEMO_USERS, type UserProfile } from '../../types/auth';
+import { isBackendConfigured, loginWithBackend } from '../../services/backendAuthService';
 
 interface LoginPageProps {
   onLogin: (profile: UserProfile) => void;
@@ -11,11 +12,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const backendMode = isBackendConfigured();
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     setIsLoading(true);
+
+    // With an API configured (server/), the password is actually
+    // checked there. Without one, this stays the browser-only demo:
+    // any password signs in as whichever DEMO_USERS profile matches
+    // the email.
+    if (backendMode) {
+      try {
+        const user = await loginWithBackend(email.trim(), password);
+        onLogin(user);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Invalid email or password. Check your credentials and try again.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     setTimeout(() => {
       const user = DEMO_USERS.find((profile) => profile.email.toLowerCase() === email.trim().toLowerCase());
       if (!user) {
