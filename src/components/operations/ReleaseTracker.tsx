@@ -155,7 +155,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
               <div className="font-semibold text-[var(--text)] transition-colors">
                 {activeRelease.technicalAnalysisDocTitle}
               </div>
-              <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+              <span className="text-[11px] text-[var(--success)] font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> Signed off & Verified
               </span>
             </div>
@@ -179,7 +179,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
               <div className="font-semibold text-[var(--text)] transition-colors">
                 {activeRelease.testReportDocTitle}
               </div>
-              <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+              <span className="text-[11px] text-[var(--success)] font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> QA Matrix Certified
               </span>
             </div>
@@ -222,7 +222,7 @@ export const ReleaseTracker: React.FC<ReleaseTrackerProps> = ({ onOpenDocument }
             <tbody className="divide-y divide-[var(--border-soft)]">
               {versionIssues.map((issue) => (
                 <tr key={issue.key} className="hover:bg-[var(--panel-alt)] transition-colors">
-                  <td className="py-3 px-4 font-mono font-bold text-blue-700">
+                  <td className="py-3 px-4 font-mono font-bold text-[var(--blue)]">
                     {issue.key}
                   </td>
                   <td className="py-3 px-4">

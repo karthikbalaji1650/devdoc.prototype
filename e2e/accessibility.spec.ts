@@ -64,6 +64,29 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     await page.waitForTimeout(800);
     expect(await scan(page)).toEqual([]);
   });
+
+  test('coder', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Coder' }).first().click();
+    await page.waitForTimeout(500);
+    expect(await scan(page)).toEqual([]);
+  });
+
+  test('release master', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Release Master' }).first().click();
+    await page.waitForTimeout(500);
+    expect(await scan(page)).toEqual([]);
+  });
+
+  // Not scanned: the Reviewers Log, Incident Tracker and Gantt planner
+  // screens. They're only reachable through the legacy "hub" view
+  // (src/components/hub/LandingHub.tsx), which nothing in the live app
+  // navigates to any more - AppSidebar has no link to it - so they are
+  // currently unreachable from the UI. See the accessibility follow-up
+  // note in the commit that added this test for the flag.
 });
 
 test.describe('dialogs are keyboard accessible', () => {
