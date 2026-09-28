@@ -9,6 +9,7 @@
 import type { DocumentModel } from '../types/document';
 import { generateGoogleDocsHtml } from './googleDocsExporter';
 import { getGoogleAccessToken } from '../services/googleAuthService';
+import { fetchWithTimeout } from '../services/fetchWithTimeout';
 
 const DRIVE_UPLOAD_URL =
   'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink';
@@ -33,13 +34,16 @@ export async function exportToGoogleDoc(docModel: DocumentModel): Promise<string
     `${html}\r\n` +
     `--${BOUNDARY}--`;
 
-  const response = await fetch(DRIVE_UPLOAD_URL, {
+  // A large document can take a while to upload; not retried, since
+  // retrying a partially-succeeded upload could create a duplicate Doc.
+  const response = await fetchWithTimeout(DRIVE_UPLOAD_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': `multipart/related; boundary=${BOUNDARY}`,
     },
     body,
+    timeoutMs: 30_000,
   });
 
   if (!response.ok) {

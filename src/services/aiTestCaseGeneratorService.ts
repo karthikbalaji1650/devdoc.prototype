@@ -1,6 +1,7 @@
 import type { TestCaseItem, TestSuiteItem } from '../types/operations';
 import type { DocumentModel } from '../types/document';
 import { getStoredAiConfig } from './aiService';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 export interface AiTestGenerationOptions {
   moduleName?: string;
@@ -252,13 +253,14 @@ Respond ONLY in valid JSON matching this schema:
 }`;
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
-      })
+      }),
+      timeoutMs: 45_000,
     });
 
     if (!response.ok) {
@@ -319,7 +321,7 @@ Specs:
 ${context}`;
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -329,7 +331,8 @@ ${context}`;
         model,
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: "json_object" }
-      })
+      }),
+      timeoutMs: 45_000,
     });
 
     if (!response.ok) {

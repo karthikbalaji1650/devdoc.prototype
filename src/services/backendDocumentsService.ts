@@ -5,6 +5,7 @@
 // broken app — see documentsStoreService.ts for how these are used.
 import type { DocumentModel } from '../types/document';
 import { isBackendConfigured } from './backendAuthService';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 function baseUrl(): string {
   return (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
@@ -13,7 +14,8 @@ function baseUrl(): string {
 export async function fetchBackendDocuments(): Promise<DocumentModel[]> {
   if (!isBackendConfigured()) return [];
   try {
-    const res = await fetch(`${baseUrl()}/api/documents`, { credentials: 'include' });
+    // A read: safe to retry once on a hiccup instead of just giving up.
+    const res = await fetchWithTimeout(`${baseUrl()}/api/documents`, { credentials: 'include', retries: 1 });
     if (!res.ok) return [];
     const { documents } = await res.json();
     return Array.isArray(documents) ? documents : [];
@@ -27,7 +29,7 @@ export async function fetchBackendDocuments(): Promise<DocumentModel[]> {
 export async function pushDocumentToBackend(doc: DocumentModel): Promise<boolean> {
   if (!isBackendConfigured() || !doc?.metadata?.id) return false;
   try {
-    const res = await fetch(`${baseUrl()}/api/documents/${encodeURIComponent(doc.metadata.id)}`, {
+    const res = await fetchWithTimeout(`${baseUrl()}/api/documents/${encodeURIComponent(doc.metadata.id)}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -42,7 +44,7 @@ export async function pushDocumentToBackend(doc: DocumentModel): Promise<boolean
 export async function deleteDocumentFromBackend(id: string): Promise<boolean> {
   if (!isBackendConfigured() || !id) return false;
   try {
-    const res = await fetch(`${baseUrl()}/api/documents/${encodeURIComponent(id)}`, {
+    const res = await fetchWithTimeout(`${baseUrl()}/api/documents/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       credentials: 'include',
     });

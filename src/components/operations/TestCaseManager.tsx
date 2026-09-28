@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem } from '../../types/operations';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
+import { fetchWithTimeout } from '../../services/fetchWithTimeout';
 import {
   parseRobotOutputXml,
   exportRobotResultsAsJson,
@@ -1474,19 +1475,19 @@ const BackAnnotateModal: React.FC<{
       const bridgeUrl = getStoredFileBridgeUrl();
       const targetName = fileName || `${(targetSuite?.title || 'test_suite').toLowerCase().replace(/[^a-z0-9]/gi, '_')}.robot`;
 
-      let res = await fetch(`${bridgeUrl}/get-file?path=${targetName}`);
+      let res = await fetchWithTimeout(`${bridgeUrl}/get-file?path=${targetName}`, { retries: 1 });
       if (!res.ok) {
-        res = await fetch(`${bridgeUrl}/get-file?path=test-suites/${targetName}`);
+        res = await fetchWithTimeout(`${bridgeUrl}/get-file?path=test-suites/${targetName}`, { retries: 1 });
       }
 
       if (!res.ok) {
-        const listRes = await fetch(`${bridgeUrl}/list-files`);
+        const listRes = await fetchWithTimeout(`${bridgeUrl}/list-files`, { retries: 1 });
         if (listRes.ok) {
           const listData = await listRes.json();
           const files: { name: string; relativePath: string; category: string }[] = listData.files || [];
           const candidate = files.find(f => f.name.endsWith('.robot') || f.name.endsWith('.md')) || files[0];
           if (candidate) {
-            res = await fetch(`${bridgeUrl}/get-file?path=${candidate.relativePath}`);
+            res = await fetchWithTimeout(`${bridgeUrl}/get-file?path=${candidate.relativePath}`, { retries: 1 });
           }
         }
       }

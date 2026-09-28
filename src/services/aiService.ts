@@ -1,4 +1,5 @@
 // AI Rephrase & Engineering Text Enhancement Service
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 export type AiProvider = 'builtin' | 'gemini' | 'openai' | 'ollama';
 
@@ -109,7 +110,9 @@ ${text}
 
 Respond with ONLY the rephrased text. Do not include introductory notes, markdown wrappers like \`\`\`markdown, or extra conversational comments.`;
 
-  const response = await fetch(url, {
+  // Generation can legitimately take a while; not retried, so a slow
+  // response is never billed or generated twice.
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -118,7 +121,8 @@ Respond with ONLY the rephrased text. Do not include introductory notes, markdow
         temperature: 0.3,
         maxOutputTokens: 2048
       }
-    })
+    }),
+    timeoutMs: 45_000,
   });
 
   if (!response.ok) {
@@ -136,12 +140,13 @@ async function callOpenAiApi(text: string, instruction: string, config: AiConfig
   const model = config.model || 'gpt-4o-mini';
   const url = 'https://api.openai.com/v1/chat/completions';
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${config.apiKey}`
     },
+    timeoutMs: 45_000,
     body: JSON.stringify({
       model,
       messages: [
@@ -172,14 +177,16 @@ async function callOllamaApi(text: string, instruction: string, config: AiConfig
   const baseUrl = config.baseUrl || 'http://localhost:11434';
   const model = config.model || 'llama3';
 
-  const response = await fetch(`${baseUrl}/api/generate`, {
+  // Local models can be slow, especially on first load (cold start).
+  const response = await fetchWithTimeout(`${baseUrl}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       prompt: `[INST] You are a technical documentation assistant. ${instruction}\n\nInput:\n${text}\n\nReturn ONLY the improved text: [/INST]`,
       stream: false
-    })
+    }),
+    timeoutMs: 60_000,
   });
 
   if (!response.ok) {

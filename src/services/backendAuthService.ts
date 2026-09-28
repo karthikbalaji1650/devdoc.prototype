@@ -3,6 +3,7 @@
 // only used when VITE_API_BASE_URL is set at build time, e.g. when the
 // docker-compose `api` service is deployed alongside the frontend.
 import type { UserProfile } from '../types/auth';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 export function isBackendConfigured(): boolean {
   return Boolean(import.meta.env.VITE_API_BASE_URL);
@@ -48,7 +49,7 @@ async function readError(res: Response): Promise<string> {
 /** Throws with the server's own message (invalid credentials, network
  * failure, ...) — the caller shows it as-is. */
 export async function loginWithBackend(email: string, password: string): Promise<UserProfile> {
-  const res = await fetch(`${baseUrl()}/api/auth/login`, {
+  const res = await fetchWithTimeout(`${baseUrl()}/api/auth/login`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -62,7 +63,7 @@ export async function loginWithBackend(email: string, password: string): Promise
 /** Best-effort: the local session is cleared either way by authService.logout(). */
 export async function logoutBackend(): Promise<void> {
   try {
-    await fetch(`${baseUrl()}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    await fetchWithTimeout(`${baseUrl()}/api/auth/logout`, { method: 'POST', credentials: 'include' });
   } catch {
     // offline or the API is unreachable — nothing more to do here
   }

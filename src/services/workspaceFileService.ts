@@ -1,5 +1,6 @@
 import type { DocumentModel } from '../types/document';
 import { saveAs } from 'file-saver';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 /** Dynamic helper to resolve file-bridge URL (port 8081) */
 export function getStoredFileBridgeUrl(): string {
@@ -140,7 +141,7 @@ export async function pushFileToVsCodeWorkspace(
 ): Promise<boolean> {
   const bridgeUrl = getStoredFileBridgeUrl();
   try {
-    const res = await fetch(`${bridgeUrl}${endpoint}`, {
+    const res = await fetchWithTimeout(`${bridgeUrl}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename, content }),
