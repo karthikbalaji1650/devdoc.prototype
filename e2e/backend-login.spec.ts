@@ -76,3 +76,40 @@ test('real backend: the right password signs in, and logout revokes the session 
   const meAfterLogout = await page.request.get(`http://localhost:${API_PORT}/api/auth/me`);
   expect(meAfterLogout.status()).toBe(401);
 });
+
+test('real backend: a document saved in one browser is picked up by another, signed-in separately', async ({ browser }) => {
+  const title = `Shared from A ${Date.now()}`;
+
+  const contextA = await browser.newContext();
+  const pageA = await contextA.newPage();
+  await pageA.goto(`http://localhost:${FRONTEND_PORT}`);
+  await pageA.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
+  await pageA.getByPlaceholder('Enter your password').fill(users[0].password);
+  await pageA.getByRole('button', { name: /sign in to platform/i }).click();
+  await pageA.getByRole('button', { name: 'Document Editor' }).first().click();
+  await pageA.getByRole('button', { name: /New Document/ }).click();
+  const titleInput = pageA.getByText('Document Title', { exact: true }).first().locator('xpath=following::input[1]');
+  await expect(titleInput).toBeVisible();
+  await titleInput.fill(title);
+  // The push to the API is fire-and-forget from the frontend's point of
+  // view; give it a moment to land before the second browser looks for it.
+  await expect.poll(async () => {
+    const res = await pageA.request.get(`http://localhost:${API_PORT}/api/documents`);
+    const { documents } = await res.json();
+    return documents.some((d: { metadata: { title: string } }) => d.metadata.title === title);
+  }, { timeout: 5000 }).toBe(true);
+  await contextA.close();
+
+  // A second browser, signed in separately, with nothing in its own
+  // localStorage — it should only see the document because it pulled
+  // it from the shared backend, not because it shares storage with A.
+  const contextB = await browser.newContext();
+  const pageB = await contextB.newPage();
+  await pageB.goto(`http://localhost:${FRONTEND_PORT}`);
+  await pageB.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
+  await pageB.getByPlaceholder('Enter your password').fill(users[0].password);
+  await pageB.getByRole('button', { name: /sign in to platform/i }).click();
+  await pageB.getByRole('button', { name: 'Document Editor' }).first().click();
+  await expect(pageB.getByText(title, { exact: true })).toBeVisible({ timeout: 5000 });
+  await contextB.close();
+});

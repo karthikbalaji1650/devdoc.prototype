@@ -1,6 +1,7 @@
 import type { DocumentModel } from '../types/document';
 import { safeSetItem } from './safeStorage';
 import { deleteHistory } from './versionHistoryService';
+import { deleteDocumentFromBackend, fetchBackendDocuments, pushDocumentToBackend } from './backendDocumentsService';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
 const LEGACY_SINGLE_DOC_KEY = 'devdoc_studio_current_doc_v1';
@@ -84,12 +85,17 @@ export function getDocument(id: string): DocumentModel | null {
   return readStore()[id]?.doc ?? null;
 }
 
-/** Returns false when the document could not be persisted (storage full). */
+/** Returns false when the document could not be persisted (storage full).
+ * When a backend (server/) is configured, the save is also pushed there
+ * in the background — this local write is never blocked or delayed by
+ * the network, and its return value reflects local storage only. */
 export function saveDocument(doc: DocumentModel): boolean {
   if (!doc?.metadata?.id) return false;
   const store = readStore();
   store[doc.metadata.id] = { doc, updatedAt: new Date().toISOString() };
-  return writeStore(store);
+  const ok = writeStore(store);
+  void pushDocumentToBackend(doc);
+  return ok;
 }
 
 export function deleteDocument(id: string): void {
@@ -114,6 +120,7 @@ export function moveDocumentToBin(doc: DocumentModel): void {
   });
   writeBin(bin);
   deleteDocument(doc.metadata.id);
+  void deleteDocumentFromBackend(doc.metadata.id);
 }
 
 export function moveSectionToBin(doc: DocumentModel, section: DocumentModel['sections'][number], sectionIndex: number): void {
@@ -163,4 +170,26 @@ export function permanentlyDeleteFromDocBin(entryId: string): void {
 
 export function generateDocumentId(): string {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Pulls in documents that exist on the backend (server/) but not yet
+ * in this browser — e.g. one a colleague saved from a different
+ * machine — so two browsers sharing an API converge on the same set
+ * of documents. This is additive only: it never overwrites a document
+ * already stored here, so an unsynced local edit is never clobbered by
+ * an older server copy. A no-op (resolves 0) when no backend is
+ * configured. Returns how many new documents were pulled in. */
+export async function syncFromBackend(): Promise<number> {
+  const remote = await fetchBackendDocuments();
+  if (remote.length === 0) return 0;
+  const store = readStore();
+  let added = 0;
+  for (const doc of remote) {
+    const id = doc?.metadata?.id;
+    if (!id || store[id]) continue;
+    store[id] = { doc, updatedAt: new Date().toISOString() };
+    added++;
+  }
+  if (added > 0) writeStore(store);
+  return added;
 }

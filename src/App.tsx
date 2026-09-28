@@ -15,7 +15,7 @@ import { AiSettingsModal } from './components/ai/AiSettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { AppSidebar } from './components/AppSidebar';
 import { DocumentsListPage } from './components/documents/DocumentsListPage';
-import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin } from './services/documentsStoreService';
+import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin, syncFromBackend } from './services/documentsStoreService';
 import { DocBinModal } from './components/documents/DocBinModal';
 import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
 import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService';
@@ -133,6 +133,18 @@ export const App: React.FC = () => {
       safeSetItem(STORAGE_KEY, JSON.stringify(doc), { notify: false });
     }, 400)
   );
+
+  // Pulls in documents a colleague saved from another browser, when a
+  // backend (server/) is configured — a no-op otherwise. Additive only
+  // (see syncFromBackend), so it can never clobber unsynced local work.
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    syncFromBackend().then((added) => {
+      if (!cancelled && added > 0) setDocumentListVersion((v) => v + 1);
+    });
+    return () => { cancelled = true; };
+  }, [currentUser]);
 
   useEffect(() => {
     if (!activeDocumentId) return;

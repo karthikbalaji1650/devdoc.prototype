@@ -169,3 +169,37 @@ describe('Doc Bin — sections', () => {
     expect(store.listDocBin()).toHaveLength(1); // stays in the bin, not lost
   });
 });
+
+vi.mock('./backendDocumentsService', () => ({
+  fetchBackendDocuments: vi.fn(async () => []),
+  pushDocumentToBackend: vi.fn(async () => false),
+  deleteDocumentFromBackend: vi.fn(async () => false),
+}));
+
+describe('syncFromBackend', () => {
+  const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
+
+  it('adds documents that exist on the backend but not locally', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('local-only', { title: 'Mine' }));
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
+      makeDoc('local-only', { title: 'Should not overwrite' }),
+      makeDoc('from-colleague', { title: "Colleague's doc" }),
+    ]);
+
+    const added = await s.syncFromBackend();
+
+    expect(added).toBe(1);
+    expect(s.getDocument('local-only')?.metadata.title).toBe('Mine'); // not clobbered
+    expect(s.getDocument('from-colleague')?.metadata.title).toBe("Colleague's doc");
+  });
+
+  it('is a no-op when the backend has nothing new (or is not configured)', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([]);
+    expect(await s.syncFromBackend()).toBe(0);
+    expect(s.listDocuments()).toHaveLength(0);
+  });
+});
