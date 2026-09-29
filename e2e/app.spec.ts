@@ -193,3 +193,35 @@ test.describe('lazy screens', () => {
     });
   }
 });
+
+test.describe('first-run welcome guide', () => {
+  test('shows once on a fresh browser, mentions Data Management for an admin, and stays dismissed after reload', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/'); // runs signInAs's one-time init script (marks the guide as already seen)
+    await page.evaluate(() => localStorage.removeItem('devdoc_studio_welcome_seen_v1'));
+    await page.reload(); // the guard in signInAs's init script means it won't re-set the flag this time
+    const dialog = page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Data Management is yours to watch')).toBeVisible();
+
+    await dialog.getByRole('button', { name: /Got it/ }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ })).toHaveCount(0);
+  });
+
+  test('does not mention Data Management for a non-admin, and Help reopens it', async ({ page }) => {
+    await signInAs(page, 'firmware-lead');
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('devdoc_studio_welcome_seen_v1'));
+    await page.reload();
+    const dialog = page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Data Management is yours to watch')).toHaveCount(0);
+    await dialog.getByRole('button', { name: /Got it/ }).click();
+
+    await page.getByRole('button', { name: 'Help' }).click();
+    await expect(page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ })).toBeVisible();
+  });
+});

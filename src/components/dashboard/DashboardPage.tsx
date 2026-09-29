@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock,
   UploadCloud,
+  HelpCircle,
 } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
@@ -15,6 +16,8 @@ import { buildTrackedDocuments, countTracked, findDocumentByNumber, type Tracked
 import { isAdmin } from '../../services/permissions';
 import { getLatestDriveExport } from '../../services/googleDriveStatusService';
 import { AppSidebar } from '../AppSidebar';
+import { WelcomeModal } from '../onboarding/WelcomeModal';
+import { hasSeenWelcome, markWelcomeSeen } from '../../services/onboardingService';
 
 interface DashboardPageProps {
   user: UserProfile;
@@ -62,6 +65,7 @@ const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; lab
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout, onOpenDocuments, onOpenDocument }) => {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(() => !hasSeenWelcome());
   const [chartHover, setChartHover] = useState<'approved' | 'in-review' | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +130,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setWelcomeOpen(true)}
+              className="ui-button ui-button-icon"
+              title="Show the welcome guide again"
+              aria-label="Help"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
             <div ref={notifRef} className="relative">
               <button
                 type="button"
@@ -351,6 +364,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           </div>
         </main>
       </div>
+      {welcomeOpen && (
+        <WelcomeModal
+          user={user}
+          onClose={() => { markWelcomeSeen(); setWelcomeOpen(false); }}
+        />
+      )}
     </div>
   );
 };

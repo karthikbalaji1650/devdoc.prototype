@@ -51,7 +51,12 @@ test.afterAll(() => {
   frontendProc?.kill();
 });
 
+function skipWelcomeGuide(page: import('@playwright/test').Page) {
+  return page.addInitScript(() => localStorage.setItem('devdoc_studio_welcome_seen_v1', '1'));
+}
+
 test('real backend: wrong password is rejected with the server\'s own message', async ({ page }) => {
+  await skipWelcomeGuide(page);
   await page.goto(`http://localhost:${FRONTEND_PORT}`);
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill('definitely-wrong');
@@ -60,6 +65,7 @@ test('real backend: wrong password is rejected with the server\'s own message', 
 });
 
 test('real backend: the right password signs in, and logout revokes the session server-side', async ({ page }) => {
+  await skipWelcomeGuide(page);
   await page.goto(`http://localhost:${FRONTEND_PORT}`);
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill(users[0].password);
@@ -82,6 +88,7 @@ test('real backend: a document saved in one browser is picked up by another, sig
 
   const contextA = await browser.newContext();
   const pageA = await contextA.newPage();
+  await skipWelcomeGuide(pageA);
   await pageA.goto(`http://localhost:${FRONTEND_PORT}`);
   await pageA.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await pageA.getByPlaceholder('Enter your password').fill(users[0].password);
@@ -105,6 +112,7 @@ test('real backend: a document saved in one browser is picked up by another, sig
   // it from the shared backend, not because it shares storage with A.
   const contextB = await browser.newContext();
   const pageB = await contextB.newPage();
+  await skipWelcomeGuide(pageB);
   await pageB.goto(`http://localhost:${FRONTEND_PORT}`);
   await pageB.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await pageB.getByPlaceholder('Enter your password').fill(users[0].password);

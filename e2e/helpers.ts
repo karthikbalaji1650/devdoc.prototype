@@ -8,7 +8,10 @@ const USERS: Record<Role, { id: string; name: string; title: string; initials: s
   'firmware-lead': { id: 'usr-03', name: 'Judia Lumina', title: 'Firmware Lead', initials: 'JL' },
 };
 
-/** Starts the app already signed in (once per browser context, so reloads keep their data). */
+/** Starts the app already signed in (once per browser context, so reloads keep their data).
+ * Marks the first-run welcome guide as already seen, so it doesn't cover
+ * the screen and block every other test's clicks - tests that actually
+ * exercise the welcome guide clear that flag themselves. */
 export async function signInAs(page: Page, role: Role = 'admin'): Promise<void> {
   const u = USERS[role];
   await page.addInitScript(([user, userRole]) => {
@@ -18,6 +21,7 @@ export async function signInAs(page: Page, role: Role = 'admin'): Promise<void> 
       user: { ...user, email: `${user.id}@example.com`, department: 'Engineering', role: userRole, avatarBg: 'x' },
       token: 'e2e', loginTime: new Date().toISOString(), isAuthenticated: true,
     }));
+    localStorage.setItem('devdoc_studio_welcome_seen_v1', '1');
   }, [u, role] as const);
 }
 
