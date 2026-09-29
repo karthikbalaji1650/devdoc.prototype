@@ -81,8 +81,8 @@ jobs:
         working-directory: server
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Browser and accessibility tests
         run: npm run test:e2e

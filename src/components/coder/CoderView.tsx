@@ -218,7 +218,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
               </div>
               <p className="text-[11px] text-slate-500 flex items-center gap-2">
                 <span>Connecting to:</span>
-                <code className="text-blue-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">{vscodeUrl}</code>
+                <code className="text-[var(--blue)] bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">{vscodeUrl}</code>
               </p>
             </div>
           )}
@@ -233,7 +233,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
                 <p className="text-base font-bold text-slate-900">Cannot reach VS Code server</p>
                 <p className="text-sm text-slate-600 mt-1 max-w-md">
                   The code-server instance at{' '}
-                  <code className="text-blue-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">{vscodeUrl}</code>{' '}
+                  <code className="text-[var(--blue)] bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">{vscodeUrl}</code>{' '}
                   is not reachable. Ensure the code-server process or Docker container is running.
                 </p>
               </div>
