@@ -124,6 +124,25 @@ describe('Doc Bin — documents', () => {
     expect(store.listDocBin().map((e) => e.documentId)).toEqual(['second', 'first']);
     vi.useRealTimers();
   });
+
+  it('permanently deleting a document also purges its (already soft-deleted) backend copy', async () => {
+    const backend = await import('./backendDocumentsService');
+    const doc = makeDoc('a');
+    store.saveDocument(doc);
+    store.moveDocumentToBin(doc);
+    store.permanentlyDeleteFromDocBin(store.listDocBin()[0].id);
+    expect(backend.purgeDocumentFromBackend).toHaveBeenCalledWith('a');
+  });
+
+  it('permanently deleting a section does not attempt to purge anything on the backend', async () => {
+    const backend = await import('./backendDocumentsService');
+    const doc = makeDoc('a', {}, [makeSection('s1'), makeSection('s2')]);
+    store.saveDocument(doc);
+    store.moveSectionToBin(doc, doc.sections[0], 0);
+    vi.mocked(backend.purgeDocumentFromBackend).mockClear();
+    store.permanentlyDeleteFromDocBin(store.listDocBin()[0].id);
+    expect(backend.purgeDocumentFromBackend).not.toHaveBeenCalled();
+  });
 });
 
 describe('Doc Bin — sections', () => {
@@ -174,6 +193,7 @@ vi.mock('./backendDocumentsService', () => ({
   fetchBackendDocuments: vi.fn(async () => []),
   pushDocumentToBackend: vi.fn(async () => false),
   deleteDocumentFromBackend: vi.fn(async () => false),
+  purgeDocumentFromBackend: vi.fn(async () => false),
 }));
 
 describe('syncFromBackend', () => {

@@ -136,5 +136,28 @@ export function documentsRouter(db: Db): Router {
     res.status(204).end();
   });
 
+  // Permanently removes a document, including one already soft-deleted -
+  // this is what the frontend's Doc Bin "permanently delete" calls, since
+  // the plain DELETE above only hides it. Same author-or-admin rule as a
+  // normal delete: purging isn't a separate, more locked-down permission.
+  router.delete('/:id/purge', async (req, res) => {
+    const user = toAuthUser(req.user!);
+    const { rows } = await db.query<DocRow>(
+      'SELECT id, author, status, document_json, updated_at FROM documents WHERE id = $1',
+      [req.params.id],
+    );
+    const existing = rows[0];
+    if (!existing) {
+      res.status(404).json({ error: 'Document not found.' });
+      return;
+    }
+    if (!canDeleteDocument(user, existing)) {
+      res.status(403).json({ error: 'You can only delete documents you authored.' });
+      return;
+    }
+    await db.query('DELETE FROM documents WHERE id = $1', [req.params.id]);
+    res.status(204).end();
+  });
+
   return router;
 }

@@ -104,3 +104,31 @@ describe('deleteDocumentFromBackend', () => {
     expect(await deleteDocumentFromBackend('doc-1')).toBe(false);
   });
 });
+
+describe('purgeDocumentFromBackend', () => {
+  beforeEach(() => vi.mocked(isBackendConfigured).mockReturnValue(true));
+
+  it('DELETEs the /purge endpoint for the id', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const { purgeDocumentFromBackend } = await load();
+    expect(await purgeDocumentFromBackend('doc-1')).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:4000/api/documents/doc-1/purge');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('treats an already-gone document (404) as successfully purged', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
+    const { purgeDocumentFromBackend } = await load();
+    expect(await purgeDocumentFromBackend('doc-1')).toBe(true);
+  });
+
+  it('returns false on a permission error, network failure, or when not configured', async () => {
+    const { purgeDocumentFromBackend } = await load();
+    fetchMock.mockResolvedValue(new Response(null, { status: 403 }));
+    expect(await purgeDocumentFromBackend('doc-1')).toBe(false);
+    vi.mocked(isBackendConfigured).mockReturnValue(false);
+    expect(await purgeDocumentFromBackend('doc-1')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // the second call never reached fetch
+  });
+});

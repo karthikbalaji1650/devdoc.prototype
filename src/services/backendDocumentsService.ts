@@ -53,3 +53,19 @@ export async function deleteDocumentFromBackend(id: string): Promise<boolean> {
     return false;
   }
 }
+
+/** Permanently removes a document from the server, including its
+ * soft-deleted copy - what permanentlyDeleteFromDocBin calls, since a
+ * plain delete (above) only hides it there too. */
+export async function purgeDocumentFromBackend(id: string): Promise<boolean> {
+  if (!isBackendConfigured() || !id) return false;
+  try {
+    const res = await fetchWithTimeout(`${baseUrl()}/api/documents/${encodeURIComponent(id)}/purge`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    return res.ok || res.status === 404;
+  } catch {
+    return false;
+  }
+}

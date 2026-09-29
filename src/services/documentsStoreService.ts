@@ -1,7 +1,7 @@
 import type { DocumentModel } from '../types/document';
 import { safeSetItem } from './safeStorage';
 import { deleteHistory } from './versionHistoryService';
-import { deleteDocumentFromBackend, fetchBackendDocuments, pushDocumentToBackend } from './backendDocumentsService';
+import { deleteDocumentFromBackend, fetchBackendDocuments, pushDocumentToBackend, purgeDocumentFromBackend } from './backendDocumentsService';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
 const LEGACY_SINGLE_DOC_KEY = 'devdoc_studio_current_doc_v1';
@@ -164,7 +164,13 @@ export function restoreFromDocBin(entryId: string): DocumentModel | null {
 export function permanentlyDeleteFromDocBin(entryId: string): void {
   const bin = readBin();
   const entry = bin.find((item) => item.id === entryId);
-  if (entry?.itemType === 'document') deleteHistory(entry.documentId);
+  if (entry?.itemType === 'document') {
+    deleteHistory(entry.documentId);
+    // The document was already soft-deleted on the backend when it was
+    // moved to the bin; this actually removes that copy too, rather than
+    // leaving a soft-deleted row there forever with no local trace of it.
+    void purgeDocumentFromBackend(entry.documentId);
+  }
   writeBin(bin.filter((item) => item.id !== entryId));
 }
 

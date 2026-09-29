@@ -131,3 +131,44 @@ describe('DELETE /api/documents/:id', () => {
     expect((await agent.delete('/api/documents/does-not-exist')).status).toBe(404);
   });
 });
+
+describe('DELETE /api/documents/:id/purge', () => {
+  it('actually removes the row, even one already soft-deleted', async () => {
+    const asAuthor = await signedIn(author);
+    await asAuthor.put('/api/documents/a').send(doc('a'));
+    await asAuthor.delete('/api/documents/a'); // soft-delete first, matching the real Doc Bin flow
+    const purge = await asAuthor.delete('/api/documents/a/purge');
+    expect(purge.status).toBe(204);
+    const { rows } = await db.query('SELECT * FROM documents WHERE id = $1', ['a']);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('works on a document that was never soft-deleted first', async () => {
+    const asAuthor = await signedIn(author);
+    await asAuthor.put('/api/documents/a').send(doc('a'));
+    expect((await asAuthor.delete('/api/documents/a/purge')).status).toBe(204);
+    const { rows } = await db.query('SELECT * FROM documents WHERE id = $1', ['a']);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('refuses to let a non-author purge it', async () => {
+    const asAuthor = await signedIn(author);
+    await asAuthor.put('/api/documents/a').send(doc('a'));
+    const asOther = await signedIn(other);
+    expect((await asOther.delete('/api/documents/a/purge')).status).toBe(403);
+    const { rows } = await db.query('SELECT * FROM documents WHERE id = $1', ['a']);
+    expect(rows).toHaveLength(1); // still there
+  });
+
+  it('lets an admin purge any document', async () => {
+    const asAuthor = await signedIn(author);
+    await asAuthor.put('/api/documents/a').send(doc('a'));
+    const asAdmin = await signedIn(admin);
+    expect((await asAdmin.delete('/api/documents/a/purge')).status).toBe(204);
+  });
+
+  it('404s for an id that was never created', async () => {
+    const agent = await signedIn(author);
+    expect((await agent.delete('/api/documents/does-not-exist/purge')).status).toBe(404);
+  });
+});
