@@ -196,6 +196,26 @@ vi.mock('./backendDocumentsService', () => ({
   purgeDocumentFromBackend: vi.fn(async () => false),
 }));
 
+describe('saveDocument — skipBackendPush', () => {
+  const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
+
+  it('does not push when skipBackendPush is set, but still saves locally', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    const doc = makeDoc('a', { title: 'Seeded sample' });
+    expect(s.saveDocument(doc, { skipBackendPush: true })).toBe(true);
+    expect(s.getDocument('a')?.metadata.title).toBe('Seeded sample');
+    expect(backend.pushDocumentToBackend).not.toHaveBeenCalled();
+  });
+
+  it('pushes as normal when the option is not given', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('a'));
+    expect(backend.pushDocumentToBackend).toHaveBeenCalled();
+  });
+});
+
 describe('syncFromBackend', () => {
   const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
   // Mirrors the server's wire shape (see backendDocumentsService.SyncedDocument).

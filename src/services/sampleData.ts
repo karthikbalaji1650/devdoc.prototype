@@ -21,7 +21,7 @@ export function seedSampleDocumentsIfNeeded(): boolean {
   if (!alreadyThere) {
     const doc = JSON.parse(JSON.stringify(sampleADRDoc));
     doc.metadata.status = 'IN_REVIEW';
-    seeded = saveDocument(doc);
+    seeded = saveDocument(doc, { skipBackendPush: true });
   }
   safeSetItem(SEEDED_KEY, '1', { notify: false });
   return seeded;

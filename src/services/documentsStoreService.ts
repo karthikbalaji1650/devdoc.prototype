@@ -88,13 +88,20 @@ export function getDocument(id: string): DocumentModel | null {
 /** Returns false when the document could not be persisted (storage full).
  * When a backend (server/) is configured, the save is also pushed there
  * in the background — this local write is never blocked or delayed by
- * the network, and its return value reflects local storage only. */
-export function saveDocument(doc: DocumentModel): boolean {
+ * the network, and its return value reflects local storage only.
+ *
+ * `skipBackendPush` is for the local demo-sample seed (see
+ * sampleData.ts): that seed runs on every fresh browser, before sign-in
+ * has happened, so pushing it would either 401 (no session yet) or,
+ * once signed in, plant a fake document in a real shared backend for
+ * every new visitor — neither of which is wanted for a sample that
+ * exists purely to make the browser-only demo self-contained. */
+export function saveDocument(doc: DocumentModel, opts: { skipBackendPush?: boolean } = {}): boolean {
   if (!doc?.metadata?.id) return false;
   const store = readStore();
   store[doc.metadata.id] = { doc, updatedAt: new Date().toISOString() };
   const ok = writeStore(store);
-  void pushDocumentToBackend(doc);
+  if (!opts.skipBackendPush) void pushDocumentToBackend(doc);
   return ok;
 }
 
