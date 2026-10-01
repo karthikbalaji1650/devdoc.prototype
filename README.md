@@ -62,8 +62,15 @@ manually verified.
 ## Docker
 
 `docker compose up` starts Postgres, the optional API (`server/`) and
-the web app together. See [server/README.md](server/README.md) for
-the API on its own, and the demo accounts it seeds.
+the web app together, already wired to each other — no extra steps
+needed. See [server/README.md](server/README.md) for the API on its
+own, and the demo accounts it seeds.
+
+CI builds and publishes both images on every push to `main`, tagged
+`latest` and with the commit SHA:
+`ghcr.io/karthikbalaji1650/devdoc.prototype-web` and `-api`. Actually
+running one somewhere (a server, a cloud platform) is still a separate
+step — nothing is deployed automatically yet, only built.
 
 ## Project layout
 
