@@ -1,6 +1,20 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import type { Db } from '../db.js';
 import { SESSION_COOKIE, createSession, destroySession, userForSession, verifyPassword } from '../auth.js';
+
+// Nothing throttled repeated password guesses before this - a real gap
+// found in review, not a theoretical one. Counts by IP; successful
+// logins don't count against the limit, so a mistyped password once
+// doesn't penalise someone who then signs in correctly.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many sign-in attempts. Try again in a few minutes.' },
+});
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -13,7 +27,7 @@ const COOKIE_OPTS = {
 export function authRouter(db: Db): Router {
   const router = Router();
 
-  router.post('/login', async (req, res) => {
+  router.post('/login', loginLimiter, async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     if (!email || !password) {

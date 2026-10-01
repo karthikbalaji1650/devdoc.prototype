@@ -81,6 +81,11 @@ CI builds and publishes both images on every push to `main`, tagged
 running one somewhere (a server, a cloud platform) is still a separate
 step — nothing is deployed automatically yet, only built.
 
+## Security
+
+[SECURITY.md](SECURITY.md) has the latest internal security review:
+what was checked, what was fixed, and what's an accepted or open gap.
+
 ## Project layout
 
 - `src/` — the frontend (this README's project)
