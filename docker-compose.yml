@@ -44,6 +44,11 @@ services:
       - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
       - CORS_ORIGINS=http://localhost:5173
       - NODE_ENV=production
+      # Optional: set in your shell or a root .env before `docker compose up`
+      # to let the frontend's AI rephrase feature use this server as a key-
+      # holding proxy instead of a per-browser key. Unset by default.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
   # ----------------------------------------------------
   # 2. DocCraft Studio & Operations Web Application

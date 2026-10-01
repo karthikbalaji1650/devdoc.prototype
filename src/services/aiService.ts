@@ -1,5 +1,6 @@
 // AI Rephrase & Engineering Text Enhancement Service
 import { fetchWithTimeout } from './fetchWithTimeout';
+import { isBackendConfigured } from './backendAuthService';
 
 export type AiProvider = 'builtin' | 'gemini' | 'openai' | 'ollama';
 
@@ -79,9 +80,22 @@ export async function rephraseText(
 ): Promise<string> {
   const config = getStoredAiConfig();
   const toneObj = REPHRASE_TONES.find(t => t.id === tone) || REPHRASE_TONES[0];
-  const systemPrompt = customInstruction 
+  const systemPrompt = customInstruction
     ? `${toneObj.prompt}\nAdditional instruction: ${customInstruction}`
     : toneObj.prompt;
+
+  // Prefer the backend proxy (server/) when it's configured and the user
+  // hasn't entered their own key: the request is made with a key that
+  // lives only on the server, never in this browser. If it fails for any
+  // reason, fall through exactly as if the proxy didn't exist - with no
+  // personal key set, that already lands on the offline heuristic below.
+  if ((config.provider === 'gemini' || config.provider === 'openai') && !config.apiKey && isBackendConfigured()) {
+    try {
+      return await callBackendAiProxy(config.provider, originalText, systemPrompt);
+    } catch {
+      // fall through
+    }
+  }
 
   if (config.provider === 'gemini' && config.apiKey) {
     return callGeminiApi(originalText, systemPrompt, config);
@@ -93,6 +107,25 @@ export async function rephraseText(
 
   // Fallback to built-in smart engineering rephrase heuristic
   return simulateSmartRephrase(originalText, tone, customInstruction);
+}
+
+// 0. Backend proxy (server/) — see the comment in rephraseText for when
+// this is used instead of calling the provider directly from the browser.
+async function callBackendAiProxy(provider: 'gemini' | 'openai', text: string, instruction: string): Promise<string> {
+  const base = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
+  const response = await fetchWithTimeout(`${base}/api/ai/rephrase`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, text, instruction }),
+    timeoutMs: 45_000,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `AI proxy returned status ${response.status}`);
+  }
+  const data = await response.json();
+  return cleanOutput(data.text || text);
 }
 
 // 1. Google Gemini API integration
