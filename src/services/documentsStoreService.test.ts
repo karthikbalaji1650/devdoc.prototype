@@ -198,14 +198,17 @@ vi.mock('./backendDocumentsService', () => ({
 
 describe('syncFromBackend', () => {
   const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
+  // Mirrors the server's wire shape (see backendDocumentsService.SyncedDocument).
+  const synced = (id: string, updatedAt: string, overrides: Parameters<typeof makeDoc>[1] = {}) =>
+    ({ ...makeDoc(id, overrides), updatedAt });
 
   it('adds documents that exist on the backend but not locally', async () => {
     const backend = await import('./backendDocumentsService');
     const s = await fresh();
     s.saveDocument(makeDoc('local-only', { title: 'Mine' }));
     vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      makeDoc('local-only', { title: 'Should not overwrite' }),
-      makeDoc('from-colleague', { title: "Colleague's doc" }),
+      synced('local-only', '2026-01-01T00:00:00.000Z', { title: 'Should not overwrite' }), // older than the local save below
+      synced('from-colleague', '2026-01-01T00:00:00.000Z', { title: "Colleague's doc" }),
     ]);
 
     const added = await s.syncFromBackend();
@@ -221,5 +224,57 @@ describe('syncFromBackend', () => {
     vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([]);
     expect(await s.syncFromBackend()).toBe(0);
     expect(s.listDocuments()).toHaveLength(0);
+  });
+
+  it('pulls an update when the server copy is demonstrably newer than the local one', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('a', { title: 'Old title' })); // store records its own save time as "now"
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
+      synced('a', '2099-01-01T00:00:00.000Z', { title: 'Updated elsewhere' }), // far in the future: unambiguously newer
+    ]);
+
+    expect(await s.syncFromBackend()).toBe(1);
+    expect(s.getDocument('a')?.metadata.title).toBe('Updated elsewhere');
+  });
+
+  it('snapshots the local copy before replacing it, so the pull can be undone', async () => {
+    const { listSnapshots } = await import('./versionHistoryService');
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('a', { title: 'Before sync' }));
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
+      synced('a', '2099-01-01T00:00:00.000Z', { title: 'After sync' }),
+    ]);
+
+    await s.syncFromBackend();
+
+    const snaps = listSnapshots('a');
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0].doc.metadata.title).toBe('Before sync');
+  });
+
+  it('does not pull an update when the server copy is not newer (an unpushed local edit is never clobbered)', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('a', { title: 'My unsynced edit' })); // e.g. made while offline, push never reached the server
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
+      synced('a', '2000-01-01T00:00:00.000Z', { title: 'Stale server copy' }), // well before the local save above
+    ]);
+
+    expect(await s.syncFromBackend()).toBe(0);
+    expect(s.getDocument('a')?.metadata.title).toBe('My unsynced edit');
+  });
+
+  it('does not pull an update with no usable timestamp', async () => {
+    const backend = await import('./backendDocumentsService');
+    const s = await fresh();
+    s.saveDocument(makeDoc('a', { title: 'Mine' }));
+    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
+      { ...makeDoc('a', { title: 'No timestamp' }), updatedAt: '' },
+    ]);
+
+    expect(await s.syncFromBackend()).toBe(0);
+    expect(s.getDocument('a')?.metadata.title).toBe('Mine');
   });
 });

@@ -7,11 +7,16 @@ import type { DocumentModel } from '../types/document';
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 
+/** A document as the server returns it: the usual shape plus when it was
+ * last saved there, so the caller can tell an update apart from a
+ * document it already has (see documentsStoreService.syncFromBackend). */
+export type SyncedDocument = DocumentModel & { updatedAt: string };
+
 function baseUrl(): string {
   return (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
 }
 
-export async function fetchBackendDocuments(): Promise<DocumentModel[]> {
+export async function fetchBackendDocuments(): Promise<SyncedDocument[]> {
   if (!isBackendConfigured()) return [];
   try {
     // A read: safe to retry once on a hiccup instead of just giving up.

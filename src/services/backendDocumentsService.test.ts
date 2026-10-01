@@ -30,8 +30,8 @@ describe('when no backend is configured', () => {
 describe('fetchBackendDocuments', () => {
   beforeEach(() => vi.mocked(isBackendConfigured).mockReturnValue(true));
 
-  it('returns the documents from the server', async () => {
-    const doc = makeDoc('a');
+  it('returns the documents from the server, including the updatedAt syncFromBackend needs', async () => {
+    const doc = { ...makeDoc('a'), updatedAt: '2026-01-01T00:00:00.000Z' };
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ documents: [doc] }), { status: 200 }));
     const { fetchBackendDocuments } = await load();
     await expect(fetchBackendDocuments()).resolves.toEqual([doc]);

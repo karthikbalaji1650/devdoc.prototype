@@ -82,6 +82,21 @@ describe('PUT /api/documents/:id (create and update)', () => {
 });
 
 describe('GET /api/documents', () => {
+  it('includes an updatedAt per document, so a client can tell an update apart from one it already has', async () => {
+    const agent = await signedIn(author);
+    await agent.put('/api/documents/a').send(doc('a'));
+    const res = await agent.get('/api/documents');
+    expect(typeof res.body.documents[0].updatedAt).toBe('string');
+    expect(new Date(res.body.documents[0].updatedAt).getTime()).not.toBeNaN();
+  });
+
+  it('GET /api/documents/:id includes the same updatedAt field', async () => {
+    const agent = await signedIn(author);
+    await agent.put('/api/documents/a').send(doc('a'));
+    const res = await agent.get('/api/documents/a');
+    expect(typeof res.body.document.updatedAt).toBe('string');
+  });
+
   it('a non-admin only sees in-progress documents', async () => {
     const asAuthor = await signedIn(author);
     await asAuthor.put('/api/documents/a').send(doc('a', { status: 'DRAFT' }));

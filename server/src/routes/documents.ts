@@ -48,7 +48,11 @@ export function documentsRouter(db: Db): Router {
     const { rows } = await db.query<DocRow>(
       'SELECT id, author, status, document_json, updated_at FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC',
     );
-    const visible = rows.filter((r) => isVisible(user, r)).map((r) => r.document_json);
+    // updatedAt lets the client tell a document it already has apart from
+    // one that changed on the server since - without it, the frontend can
+    // only add documents it's missing, never pull an update to one it
+    // already has (see syncFromBackend on the frontend).
+    const visible = rows.filter((r) => isVisible(user, r)).map((r) => ({ ...r.document_json, updatedAt: r.updated_at }));
     res.json({ documents: visible });
   });
 
@@ -63,7 +67,7 @@ export function documentsRouter(db: Db): Router {
       res.status(404).json({ error: 'Document not found.' });
       return;
     }
-    res.json({ document: row.document_json });
+    res.json({ document: { ...row.document_json, updatedAt: row.updated_at } });
   });
 
   router.put('/:id', async (req, res) => {

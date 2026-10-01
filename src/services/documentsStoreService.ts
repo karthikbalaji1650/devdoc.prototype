@@ -1,6 +1,6 @@
 import type { DocumentModel } from '../types/document';
 import { safeSetItem } from './safeStorage';
-import { deleteHistory } from './versionHistoryService';
+import { deleteHistory, recordSnapshot } from './versionHistoryService';
 import { deleteDocumentFromBackend, fetchBackendDocuments, pushDocumentToBackend, purgeDocumentFromBackend } from './backendDocumentsService';
 
 const STORE_KEY = 'devdoc_studio_documents_v1';
@@ -178,24 +178,43 @@ export function generateDocumentId(): string {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Pulls in documents that exist on the backend (server/) but not yet
- * in this browser — e.g. one a colleague saved from a different
- * machine — so two browsers sharing an API converge on the same set
- * of documents. This is additive only: it never overwrites a document
- * already stored here, so an unsynced local edit is never clobbered by
- * an older server copy. A no-op (resolves 0) when no backend is
- * configured. Returns how many new documents were pulled in. */
+/** Pulls in documents from the backend (server/): new ones this browser
+ * doesn't have yet, and - unlike a purely additive sync - updates to
+ * ones it already does, so a colleague's later edit on another device
+ * actually arrives here. A pulled update only replaces the local copy
+ * when the server's own save timestamp is demonstrably newer than this
+ * browser's; an edit made here that never reached the server (offline,
+ * or the push failed) keeps the local timestamp ahead of the server's
+ * stale one, so it's never clobbered by syncing. The local copy being
+ * replaced is snapshotted first (version history), so a sync that
+ * wasn't wanted can still be undone from there. Still not true
+ * conflict resolution: if both sides changed the same document since
+ * they last agreed, whichever save landed on the server more recently
+ * wins. A no-op (resolves 0) when no backend is configured.
+ *
+ * Called once per sign-in / page load (see App.tsx), before any
+ * document is open in the editor - if that ever changes, the active
+ * document would need excluding here to avoid pulling a copy out from
+ * under someone mid-edit. */
 export async function syncFromBackend(): Promise<number> {
   const remote = await fetchBackendDocuments();
   if (remote.length === 0) return 0;
   const store = readStore();
-  let added = 0;
-  for (const doc of remote) {
+  let changed = 0;
+  for (const synced of remote) {
+    const { updatedAt: remoteUpdatedAt, ...doc } = synced;
     const id = doc?.metadata?.id;
-    if (!id || store[id]) continue;
-    store[id] = { doc, updatedAt: new Date().toISOString() };
-    added++;
+    if (!id) continue;
+    const local = store[id];
+    if (!local) {
+      store[id] = { doc, updatedAt: new Date().toISOString() };
+      changed++;
+    } else if (remoteUpdatedAt && remoteUpdatedAt > local.updatedAt) {
+      recordSnapshot(local.doc, 'Before syncing a newer version from another device');
+      store[id] = { doc, updatedAt: remoteUpdatedAt };
+      changed++;
+    }
   }
-  if (added > 0) writeStore(store);
-  return added;
+  if (changed > 0) writeStore(store);
+  return changed;
 }
