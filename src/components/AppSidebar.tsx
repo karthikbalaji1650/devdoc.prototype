@@ -94,7 +94,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   onNavigate,
   onLogout,
 }) => {
-  const [expanded, setExpanded] = useState(true);
+  // Defaults to collapsed (icon-only) on a narrow viewport: expanded by
+  // default left almost no room for content on a phone (the sidebar
+  // alone took most of the screen width, pushing everything else into
+  // a sliver that needed horizontal scrolling to read). The user can
+  // still toggle either way with the button below.
+  const [expanded, setExpanded] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768);
 
   return (
     <aside className={`relative z-40 h-full shrink-0 select-none transition-[width] duration-200 ${expanded ? 'w-64' : 'w-14'}`}>
@@ -132,6 +137,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onNavigate(item.app, item.opsTab)}
+                aria-label={!expanded ? item.label : undefined}
+                title={!expanded ? item.label : undefined}
                 className={`w-full flex items-center gap-3 ${expanded ? 'px-2.5' : 'justify-center px-2'} py-2.5 text-left transition-colors border border-transparent ${
                   active
                     ? 'bg-[#131313] text-[#ededed] border-l-2 border-l-[#4ade80] border-r border-[#242424]'

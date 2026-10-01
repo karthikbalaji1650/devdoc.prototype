@@ -46,18 +46,27 @@ together.
 
 ### Supported browsers
 
-The browser suite runs on all three engines below, in CI on every
-push and pull request. These are the minimum versions checked; the
-app likely works on somewhat older ones, but only these are verified.
+The browser suite runs on the engines below, in CI on every push and
+pull request, pinned to the versions Playwright 1.63 itself bundles
+and tests against - not just "whatever is current when CI happens to
+run". The app likely works on somewhat older versions too, but these
+are the ones actually verified.
 
-| Browser | Engine | Verified via |
+| Browser | Engine, minimum tested version | Verified via |
 |---|---|---|
-| Chrome / Edge (current) | Chromium | Playwright `chromium` |
-| Firefox (current) | Gecko | Playwright `firefox` |
-| Safari (current) | WebKit | Playwright `webkit` |
+| Chrome / Edge | Chromium 153 | Playwright `chromium` |
+| Firefox | Gecko 155 | Playwright `firefox` |
+| Safari | WebKit 26.6 | Playwright `webkit` |
 
-Mobile browsers are not covered by this suite and have not been
-manually verified.
+**Mobile:** this is primarily a desktop engineering tool (dense
+editors, tables), and making every screen fully responsive is out of
+scope here. There's a small smoke check (`e2e/mobile-smoke.spec.ts`,
+on Mobile Chrome and Mobile Safari emulation) covering the one thing
+that mattered in practice: the navigation sidebar now defaults to its
+already-existing collapsed (icon-only) mode below a 768px-wide
+viewport, instead of eating most of the screen the way it used to.
+Beyond that, individual screens have not been audited for mobile
+layout and may not work well.
 
 ## Docker
 
