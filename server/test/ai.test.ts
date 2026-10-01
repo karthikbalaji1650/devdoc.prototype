@@ -111,3 +111,56 @@ describe('POST /api/ai/rephrase', () => {
     expect(res.status).toBe(502);
   });
 });
+
+describe('POST /api/ai/generate-test-cases', () => {
+  it('requires auth', async () => {
+    expect((await request(app).post('/api/ai/generate-test-cases').send({ provider: 'gemini', context: 'x' })).status).toBe(401);
+  });
+
+  it('rejects an invalid provider or missing context', async () => {
+    const agent = await signedIn();
+    expect((await agent.post('/api/ai/generate-test-cases').send({ provider: 'carrier-pigeon', context: 'x' })).status).toBe(400);
+    expect((await agent.post('/api/ai/generate-test-cases').send({ provider: 'gemini', context: '' })).status).toBe(400);
+  });
+
+  it('reports 501 when the server has no key for that provider', async () => {
+    const agent = await signedIn();
+    const res = await agent.post('/api/ai/generate-test-cases').send({ provider: 'openai', context: 'spec text' });
+    expect(res.status).toBe(501);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns the generated suite JSON from Gemini, as-is for the client to assign ids to', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    const suite = { suiteTitle: 'Firmware Suite', suiteDescription: 'Desc', module: 'Firmware Core', testCases: [{ customId: 'TC-1', title: 'Boots' }] };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(suite) }] } }],
+    }), { status: 200 }));
+    const agent = await signedIn();
+    const res = await agent.post('/api/ai/generate-test-cases').send({ provider: 'gemini', context: 'spec text' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(suite);
+  });
+
+  it('returns the generated suite JSON from OpenAI', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const suite = { suiteTitle: 'API Suite', suiteDescription: 'Desc', module: 'REST API', testCases: [] };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(suite) } }],
+    }), { status: 200 }));
+    const agent = await signedIn();
+    const res = await agent.post('/api/ai/generate-test-cases').send({ provider: 'openai', context: 'spec text' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(suite);
+  });
+
+  it('502s when the provider response is not valid JSON', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'not json' }] } }],
+    }), { status: 200 }));
+    const agent = await signedIn();
+    const res = await agent.post('/api/ai/generate-test-cases').send({ provider: 'gemini', context: 'spec text' });
+    expect(res.status).toBe(502);
+  });
+});

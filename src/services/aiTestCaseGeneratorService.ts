@@ -1,6 +1,7 @@
 import type { TestCaseItem, TestSuiteItem } from '../types/operations';
 import type { DocumentModel } from '../types/document';
 import { getStoredAiConfig } from './aiService';
+import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 
 export interface AiTestGenerationOptions {
@@ -59,6 +60,18 @@ ${verificationSection}
 CODE DIFFS & API CHANGES:
 ${diffsSection}
   `.trim();
+
+  // Prefer the backend proxy (server/) when it's configured and the user
+  // hasn't entered their own key - see the matching comment in
+  // aiService.ts's rephraseText for why. Any failure falls through to
+  // the client-side paths below, same as if the proxy didn't exist.
+  if ((config.provider === 'gemini' || config.provider === 'openai') && !config.apiKey && isBackendConfigured()) {
+    try {
+      return await generateWithBackendProxy(config.provider, fullContext, docTitle, docNumber, docId, options);
+    } catch {
+      // fall through
+    }
+  }
 
   if (config.provider === 'gemini' && config.apiKey) {
     return generateWithGemini(fullContext, docTitle, docNumber, docId, options, config);
@@ -208,6 +221,58 @@ ${tc3CustomId.replace(/-/g, '_')}_Malformed_Payload_Rejection
     robotCode: tc3Robot,
     createdAt: new Date().toISOString()
   });
+
+  return { suite, testCases };
+}
+
+// 1b. Backend proxy (server/) - the server does the provider call and
+// JSON parsing; this just assigns ids and merges the same defaults the
+// direct Gemini/OpenAI paths below use, matching their mapping.
+async function generateWithBackendProxy(
+  provider: 'gemini' | 'openai',
+  context: string,
+  docTitle: string,
+  docNumber: string,
+  docId: string,
+  options: AiTestGenerationOptions
+): Promise<{ suite: TestSuiteItem; testCases: TestCaseItem[] }> {
+  const base = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
+  const response = await fetchWithTimeout(`${base}/api/ai/generate-test-cases`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, context }),
+    timeoutMs: 45_000,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `AI proxy returned status ${response.status}`);
+  }
+  const parsed = await response.json();
+
+  const suiteId = `suite-${Date.now()}`;
+  const suite: TestSuiteItem = {
+    id: suiteId,
+    title: parsed.suiteTitle || `${docTitle} Test Suite`,
+    description: parsed.suiteDescription || `Generated from ${docNumber}`,
+    module: parsed.module || options.moduleName || 'Firmware Core',
+    taDocId: docId,
+    taDocNumber: docNumber,
+    createdAt: new Date().toISOString()
+  };
+  const testCases: TestCaseItem[] = (parsed.testCases || []).map((tc: any, idx: number) => ({
+    id: `tc-${Date.now()}-${idx + 1}`,
+    suiteId,
+    customId: tc.customId || `TC-${docNumber.replace(/[^A-Z0-9]/gi, '')}-00${idx + 1}`,
+    title: tc.title,
+    preconditions: tc.preconditions || 'Target hardware active',
+    steps: tc.steps || [],
+    expectedResult: tc.expectedResult,
+    priority: tc.priority || 'P2',
+    type: tc.type || 'Automated',
+    robotCode: tc.robotCode,
+    createdAt: new Date().toISOString()
+  }));
 
   return { suite, testCases };
 }
