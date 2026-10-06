@@ -817,7 +817,7 @@ const TestCasesView: React.FC<{
                                   ))}
                                 </div>
                               </div>
-                              {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200">{tc.expectedResult}</p></div>}
+                              {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="status-success p-2 rounded border">{tc.expectedResult}</p></div>}
                               {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
                             </div>
                           )}
@@ -872,6 +872,7 @@ const RunDetailView: React.FC<{
   onUpdate: (run: TestRunItem) => void; onClose: () => void;
 }> = ({ run, suites, onUpdate, onClose }) => {
   const [activeTab, setActiveTab] = useState<RunDetailTab>('results');
+  const [expandedResultCaseId, setExpandedResultCaseId] = useState<string|null>(null);
   const suite       = suites.find(s => s.id === run.suiteId);
   const caseResults = run.caseResults || [];
   const total       = run.passedCount + run.failedCount + run.blockedCount + (run.skippedCount ?? 0) + (run.untestedCount ?? 0);
@@ -980,20 +981,53 @@ const RunDetailView: React.FC<{
                     <div className="col-span-1">ID</div><div className="col-span-5">Title</div>
                     <div className="col-span-2">Labels</div><div className="col-span-2">Assigned</div><div className="col-span-2">Status</div>
                   </div>
-                  {secResults.map(r=>(
-                    <div key={r.caseId} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-200 last:border-0 items-center hover:bg-slate-50">
-                      <div className="col-span-1 text-[10px] font-mono text-[var(--success)]">{r.customId}</div>
-                      <div className="col-span-5 text-xs text-blue-700 truncate">{r.title}</div>
-                      <div className="col-span-2 flex flex-wrap gap-1">{(r.labels||[]).slice(0,1).map(l=><span key={l} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{l}</span>)}</div>
-                      <div className="col-span-2 text-[11px] text-slate-500 truncate">{r.assignedTo||'—'}</div>
-                      <div className="col-span-2">
-                        <select value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
-                          className={`w-full text-[10px] font-bold px-2 py-1 rounded border outline-none cursor-pointer bg-white ${STATUS_COLORS[r.status]}`}>
-                          {ALL_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
+                  {secResults.map(r=>{
+                    const tc = (suite?.testCases||[]).find(t=>t.id===r.caseId);
+                    const isExpanded = expandedResultCaseId === r.caseId;
+                    return (
+                    <div key={r.caseId} className="border-b border-slate-200 last:border-0">
+                      <div className="grid grid-cols-12 gap-2 px-3 py-2 items-center hover:bg-slate-50 cursor-pointer"
+                        onClick={()=>setExpandedResultCaseId(isExpanded?null:r.caseId)}>
+                        <div className="col-span-1 text-[10px] font-mono text-[var(--success)]">{r.customId}</div>
+                        <div className="col-span-5 text-xs text-blue-700 truncate">{r.title}</div>
+                        <div className="col-span-2 flex flex-wrap gap-1">{(r.labels||[]).slice(0,1).map(l=><span key={l} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{l}</span>)}</div>
+                        <div className="col-span-2 text-[11px] text-slate-500 truncate">{r.assignedTo||'—'}</div>
+                        <div className="col-span-2" onClick={e=>e.stopPropagation()}>
+                          <select value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
+                            className={`w-full text-[10px] font-bold px-2 py-1 rounded border outline-none cursor-pointer bg-white ${STATUS_COLORS[r.status]}`}>
+                            {ALL_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
                       </div>
+                      {isExpanded && tc && (
+                        <div className="px-4 pb-4 pt-2 bg-slate-100 border-t border-slate-200 space-y-3 text-xs">
+                          <div className="grid grid-cols-3 gap-3 py-2 border-b border-slate-200">
+                            {[{ label:'Type',value:tc.type},{label:'Priority',value:tc.priority},{label:'Estimate',value:tc.estimateMin?`${tc.estimateMin} min`:'N/A'},
+                              {label:'Automation Candidate',value:tc.automationCandidate?'Yes':'No'},{label:'References',value:(tc.references||[]).join(', ')||'None'},
+                            ].map(m=>(
+                              <div key={m.label}><span className="text-[10px] font-bold text-slate-500 block">{m.label}</span><span className="text-slate-800">{m.value}</span></div>
+                            ))}
+                          </div>
+                          {tc.preconditions && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Preconditions</span><p className="text-slate-800 bg-white p-2 rounded border border-slate-200 shadow-xs">{tc.preconditions}</p></div>}
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 block mb-1.5">Test Steps</span>
+                            <div className="space-y-1.5">
+                              {tc.steps.map(st=>(
+                                <div key={st.step} className="grid grid-cols-12 gap-2 bg-white p-2 rounded border border-slate-200 shadow-xs">
+                                  <span className="col-span-1 text-[var(--success)] font-bold text-[10px]">Step {st.step}</span>
+                                  <span className="col-span-6 text-slate-800">{st.action}</span>
+                                  <span className="col-span-5 text-slate-500 italic">{st.expected}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="status-success p-2 rounded border">{tc.expectedResult}</p></div>}
+                          {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
