@@ -173,7 +173,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
       <div className="flex-1 flex overflow-hidden">
         {/* Settings Sub-Tab Panel */}
         <aside className="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 select-none shadow-xs">
-          <div className="px-4 py-4 border-b border-slate-200">
+          <div className="h-24 px-4 border-b border-slate-200 flex items-center">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Settings</p>
           </div>
           <nav className="p-3 space-y-0.5 flex-1">

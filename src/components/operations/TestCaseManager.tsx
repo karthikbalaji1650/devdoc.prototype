@@ -1734,7 +1734,7 @@ const LeftPanel: React.FC<{
 
   return (
     <div className="w-56 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col">
-      <div className="p-4 border-b border-slate-200">
+      <div className="h-24 px-4 border-b border-slate-200 flex flex-col justify-center">
         <div className="flex items-center gap-2 mb-1">
           <FlaskConical className="w-4 h-4 text-teal-600"/>
           <span className="text-xs font-bold text-[var(--success)] uppercase tracking-wider">Test Management</span>
@@ -1951,7 +1951,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+        <div className="h-24 flex items-center gap-3 px-5 border-b border-slate-200 bg-white flex-shrink-0">
           {onBackToHub && (
             <button onClick={onBackToHub} className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-medium">
               <ChevronLeft className="w-4 h-4"/> Back
