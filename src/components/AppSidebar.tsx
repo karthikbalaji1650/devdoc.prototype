@@ -139,10 +139,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 onClick={() => onNavigate(item.app, item.opsTab)}
                 aria-label={!expanded ? item.label : undefined}
                 title={!expanded ? item.label : undefined}
-                className={`w-full flex items-center gap-3 ${expanded ? 'px-2.5' : 'justify-center px-2'} py-2.5 text-left transition-colors border border-transparent ${
+                className={`w-full flex items-center gap-3 ${expanded ? 'px-2.5' : 'justify-center px-2'} py-2.5 text-left transition-colors border-l-2 border-y border-r ${
                   active
-                    ? 'bg-[#131313] text-[#ededed] border-l-2 border-l-[#4ade80] border-r border-[#242424]'
-                    : 'text-[#8a8a8a] hover:text-[#ededed] hover:bg-[#131313] border-[#1a1a1a]'
+                    ? 'bg-[#131313] text-[#ededed] border-l-[#4ade80] border-y-[#242424] border-r-[#242424]'
+                    : 'text-[#8a8a8a] hover:text-[#ededed] hover:bg-[#131313] border-l-transparent border-y-[#1a1a1a] border-r-[#1a1a1a]'
                 }`}
               >
                 <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#4ade80]' : 'text-[#8a8a8a]'}`} />
