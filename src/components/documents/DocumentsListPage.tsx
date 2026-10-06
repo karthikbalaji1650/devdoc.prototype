@@ -38,7 +38,7 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
       <AppSidebar user={user} compact activeView="doccraft" onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between shrink-0">
+        <div className="h-16 px-6 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-lg font-bold text-[var(--text)]">Documents</h1>
             <p className="text-xs text-[var(--text-dim)] mt-0.5">
