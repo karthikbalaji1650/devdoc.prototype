@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem } from '../../types/operations';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
@@ -24,7 +24,7 @@ import {
   CheckCircle2, XCircle, MinusCircle, SkipForward, RefreshCw,
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
-  HelpCircle,
+  HelpCircle, ImagePlus,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -68,6 +68,59 @@ const StatusBadge: React.FC<{ status: TestCaseStatus; small?: boolean }> = ({ st
     {STATUS_ICON[status]}{status}
   </span>
 );
+
+const EvidenceDropzone: React.FC<{
+  image?: string; imageName?: string;
+  onUpload: (file: File) => void; onRemove: () => void;
+}> = ({ image, imageName, onUpload, onRemove }) => {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file such as JPG, PNG, GIF, or WebP.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Evidence images must be smaller than 10 MB.');
+      return;
+    }
+    onUpload(file);
+  };
+
+  return (
+    <div>
+      {image ? (
+        <div className="flex items-start gap-3 p-2 bg-white rounded border border-slate-200 shadow-xs">
+          <img src={image} alt={imageName || 'Evidence screenshot'} className="h-20 w-28 rounded border border-slate-200 object-cover bg-white shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-slate-500 truncate">{imageName}</p>
+            <div className="flex gap-3 mt-1.5">
+              <button type="button" onClick={() => inputRef.current?.click()} className="text-[10px] font-semibold text-blue-700 hover:underline">Replace</button>
+              <button type="button" onClick={onRemove} className="text-[10px] font-semibold text-rose-600 hover:underline">Remove</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+          onClick={() => inputRef.current?.click()}
+          role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+          className={`flex flex-col items-center justify-center gap-1 p-4 rounded border-2 border-dashed cursor-pointer transition-colors ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-slate-300 bg-white hover:border-slate-400'}`}
+        >
+          <ImagePlus className="w-4 h-4 text-slate-400" />
+          <p className="text-[10px] text-slate-500">Drop a screenshot here, or click to browse</p>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
+    </div>
+  );
+};
 
 const RunProgressBar: React.FC<{ run: TestRunItem }> = ({ run }) => {
   const total = run.passedCount + run.failedCount + run.blockedCount + (run.skippedCount ?? 0) + (run.untestedCount ?? 0);
@@ -625,6 +678,23 @@ const TestCasesView: React.FC<{
       ? { ...s, testCases: (s.testCases || []).map(tc =>
           tc.id === caseId ? { ...tc, isFlagged: !tc.isFlagged } : tc) } : s));
   };
+  const handleUploadEvidence = (caseId: string, file: File) => {
+    if (!selectedSuite) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      onUpdateSuites(suites.map(s => s.id === selectedSuite.id
+        ? { ...s, testCases: (s.testCases || []).map(tc =>
+            tc.id === caseId ? { ...tc, evidenceImage: reader.result as string, evidenceImageName: file.name } : tc) } : s));
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleRemoveEvidence = (caseId: string) => {
+    if (!selectedSuite) return;
+    onUpdateSuites(suites.map(s => s.id === selectedSuite.id
+      ? { ...s, testCases: (s.testCases || []).map(tc =>
+          tc.id === caseId ? { ...tc, evidenceImage: undefined, evidenceImageName: undefined } : tc) } : s));
+  };
 
   const sections = selectedSuite?.sections || [];
 
@@ -818,6 +888,14 @@ const TestCasesView: React.FC<{
                                 </div>
                               </div>
                               {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="status-success p-2 rounded border">{tc.expectedResult}</p></div>}
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-500 block mb-1">Proof / Reference Screenshot</span>
+                                <EvidenceDropzone
+                                  image={tc.evidenceImage} imageName={tc.evidenceImageName}
+                                  onUpload={file => handleUploadEvidence(tc.id, file)}
+                                  onRemove={() => handleRemoveEvidence(tc.id)}
+                                />
+                              </div>
                               {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
                             </div>
                           )}
@@ -870,10 +948,28 @@ const TestCasesView: React.FC<{
 const RunDetailView: React.FC<{
   run: TestRunItem; suites: TestSuiteItem[];
   onUpdate: (run: TestRunItem) => void; onClose: () => void;
-}> = ({ run, suites, onUpdate, onClose }) => {
+  onUpdateSuites: (s: TestSuiteItem[]) => void;
+}> = ({ run, suites, onUpdate, onClose, onUpdateSuites }) => {
   const [activeTab, setActiveTab] = useState<RunDetailTab>('results');
   const [expandedResultCaseId, setExpandedResultCaseId] = useState<string|null>(null);
   const suite       = suites.find(s => s.id === run.suiteId);
+  const handleUploadEvidence = (caseId: string, file: File) => {
+    if (!suite) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      onUpdateSuites(suites.map(s => s.id === suite.id
+        ? { ...s, testCases: (s.testCases || []).map(tc =>
+            tc.id === caseId ? { ...tc, evidenceImage: reader.result as string, evidenceImageName: file.name } : tc) } : s));
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleRemoveEvidence = (caseId: string) => {
+    if (!suite) return;
+    onUpdateSuites(suites.map(s => s.id === suite.id
+      ? { ...s, testCases: (s.testCases || []).map(tc =>
+          tc.id === caseId ? { ...tc, evidenceImage: undefined, evidenceImageName: undefined } : tc) } : s));
+  };
   const caseResults = run.caseResults || [];
   const total       = run.passedCount + run.failedCount + run.blockedCount + (run.skippedCount ?? 0) + (run.untestedCount ?? 0);
   const passedPct   = total > 0 ? Math.round((run.passedCount / total) * 100) : 0;
@@ -1022,6 +1118,14 @@ const RunDetailView: React.FC<{
                             </div>
                           </div>
                           {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="status-success p-2 rounded border">{tc.expectedResult}</p></div>}
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 block mb-1">Proof / Reference Screenshot</span>
+                            <EvidenceDropzone
+                              image={tc.evidenceImage} imageName={tc.evidenceImageName}
+                              onUpload={file => handleUploadEvidence(tc.id, file)}
+                              onRemove={() => handleRemoveEvidence(tc.id)}
+                            />
+                          </div>
                           {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
                         </div>
                       )}
@@ -1087,15 +1191,16 @@ const TestRunsView: React.FC<{
   onDeleteRun: (id: string) => void; onShowToast?: (msg: string) => void;
   lastRunResults: { run: TestRunItem; results: ParsedRobotTestResult[]; suiteName: string } | null;
   onProcessXml: (xml: string) => void; onDownloadResultJson: () => void; onExportRunReport: () => void;
+  onUpdateSuites: (s: TestSuiteItem[]) => void;
 }> = ({ runs, suites, milestones, onAddRun, onUpdateRun, onDeleteRun,
-        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport }) => {
+        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites }) => {
   const [showAddModal,  setShowAddModal]  = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string|null>(null);
   const [showXmlModal,  setShowXmlModal]  = useState(false);
   const [inputXml,      setInputXml]      = useState(SAMPLE_ROBOT_XML);
 
   const selectedRun = runs.find(r => r.id === selectedRunId);
-  if (selectedRun) return <RunDetailView run={selectedRun} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)}/>;
+  if (selectedRun) return <RunDetailView run={selectedRun} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}/>;
 
   const openRuns      = runs.filter(r => r.status === 'In Progress');
   const completedRuns = runs.filter(r => r.status !== 'In Progress');
@@ -2020,6 +2125,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onProcessXml={handleProcessXml}
               onDownloadResultJson={handleDownloadResultJson}
               onExportRunReport={handleExportRunReport}
+              onUpdateSuites={setSuites}
             />
           )}
           {view==='milestones' && (

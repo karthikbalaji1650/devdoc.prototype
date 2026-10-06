@@ -98,6 +98,8 @@ export interface TestCaseItem {
   isDeleted?: boolean;
   createdAt: string;
   status?: TestCaseStatus;
+  evidenceImage?: string; // data: URI screenshot, proof the expected outcome was observed
+  evidenceImageName?: string;
 }
 
 export interface TestSection {
