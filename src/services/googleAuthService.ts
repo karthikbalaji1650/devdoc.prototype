@@ -8,7 +8,41 @@
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const TOKEN_STORAGE_KEY = 'devdoc_google_access_token_v1';
+const CLIENT_ID_STORAGE_KEY = 'devdoc_google_client_id_v1';
 const SCRIPT_LOAD_TIMEOUT_MS = 10_000;
+
+/** Thrown by getClientId() when there's nothing configured anywhere -
+ * its own type so callers (the export button) can tell "needs a Client
+ * ID" apart from every other failure and offer to collect one, instead
+ * of just showing a generic "Export failed". */
+export class GoogleClientIdMissingError extends Error {
+  constructor() {
+    super('Google export is not configured: no Client ID set.');
+    this.name = 'GoogleClientIdMissingError';
+  }
+}
+
+export function getStoredClientId(): string | null {
+  try {
+    return localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** A Client ID entered this way takes priority over VITE_GOOGLE_CLIENT_ID
+ * (lets anyone try the feature without rebuilding the app), and clears
+ * any cached token client / access token - both were only ever valid
+ * for whichever Client ID was in effect when they were issued. */
+export function saveStoredClientId(clientId: string): void {
+  localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId.trim());
+  tokenClient = null;
+  clearGoogleAuth();
+}
+
+export function isGoogleExportConfigured(): boolean {
+  return Boolean(getStoredClientId() || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined));
+}
 
 interface StoredToken {
   accessToken: string;
@@ -48,11 +82,9 @@ declare global {
 let tokenClient: GoogleTokenClient | null = null;
 
 function getClientId(): string {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+  const clientId = getStoredClientId() || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined);
   if (!clientId) {
-    throw new Error(
-      'Google export is not configured: VITE_GOOGLE_CLIENT_ID is missing. Add it to your .env.local file.'
-    );
+    throw new GoogleClientIdMissingError();
   }
   return clientId;
 }
@@ -107,11 +139,14 @@ export async function getGoogleAccessToken(): Promise<string> {
   const cached = loadStoredToken();
   if (cached) return cached;
 
+  // Checked before waiting on Google's script: no point waiting on a
+  // network round trip just to fail on a missing Client ID anyway.
+  const clientId = getClientId();
   await waitForGoogleIdentityServices();
 
   if (!tokenClient) {
     tokenClient = window.google!.accounts.oauth2.initTokenClient({
-      client_id: getClientId(),
+      client_id: clientId,
       scope: SCOPE,
       callback: () => {},
     });

@@ -25,7 +25,8 @@ import type { DocumentModel } from '../types/document';
 import type { UserProfile } from '../types/auth';
 import { TEMPLATE_REGISTRY } from '../templates';
 import { exportToGoogleDoc } from '../exporters/googleDocsExport';
-import { GoogleAuthCancelledError } from '../services/googleAuthService';
+import { GoogleAuthCancelledError, GoogleClientIdMissingError } from '../services/googleAuthService';
+import { GoogleClientIdModal } from './google/GoogleClientIdModal';
 import { recordDriveExport } from '../services/googleDriveStatusService';
 import { exportDocToVsCodeSpecs } from '../services/workspaceFileService';
 
@@ -66,6 +67,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [isExportingGoogleDoc, setIsExportingGoogleDoc] = useState(false);
   const [googleDocsError, setGoogleDocsError] = useState<string | null>(null);
+  const [showGoogleClientIdModal, setShowGoogleClientIdModal] = useState(false);
   const templateName = TEMPLATE_REGISTRY.find(template => template.id === document.metadata.templateType)?.name
     || document.metadata.templateType.replace('-', ' ');
 
@@ -128,6 +130,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
       if (err instanceof GoogleAuthCancelledError) {
         // User closed the sign-in popup or denied access — not an error worth surfacing loudly.
         console.info('Google Docs export cancelled by user.');
+      } else if (err instanceof GoogleClientIdMissingError) {
+        setShowGoogleClientIdModal(true);
       } else {
         console.error('Failed to export to Google Docs:', err);
         const message = err instanceof Error ? err.message : 'Failed to export to Google Docs.';
@@ -533,6 +537,16 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           </div>
         )}
       </div>
+
+      {showGoogleClientIdModal && (
+        <GoogleClientIdModal
+          onClose={() => setShowGoogleClientIdModal(false)}
+          onSaved={() => {
+            setShowGoogleClientIdModal(false);
+            handleGoogleDocsExport();
+          }}
+        />
+      )}
     </header>
   );
 };

@@ -81,11 +81,28 @@ describe('getGoogleAccessToken', () => {
     await expect(getGoogleAccessToken()).resolves.toBe('kept');
   });
 
-  it('explains how to fix a missing client id', async () => {
+  it('reports a dedicated error when no client id is configured anywhere', async () => {
     vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
     installFakeGoogle(() => {});
-    const { getGoogleAccessToken } = await load();
-    await expect(getGoogleAccessToken()).rejects.toThrow(/VITE_GOOGLE_CLIENT_ID is missing/);
+    const { getGoogleAccessToken, GoogleClientIdMissingError } = await load();
+    await expect(getGoogleAccessToken()).rejects.toBeInstanceOf(GoogleClientIdMissingError);
+  });
+
+  it('uses a client id the user entered at runtime, even with no build-time one set', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
+    const { configs } = installFakeGoogle((c) => c.callback({ access_token: 'tok-1', expires_in: 3600 }));
+    const { getGoogleAccessToken, saveStoredClientId } = await load();
+    saveStoredClientId('user-entered-id.apps.googleusercontent.com');
+    await expect(getGoogleAccessToken()).resolves.toBe('tok-1');
+    expect(configs[0].client_id).toBe('user-entered-id.apps.googleusercontent.com');
+  });
+
+  it('prefers a runtime-entered client id over the build-time one', async () => {
+    const { configs } = installFakeGoogle((c) => c.callback({ access_token: 'tok-1', expires_in: 3600 }));
+    const { getGoogleAccessToken, saveStoredClientId } = await load();
+    saveStoredClientId('override-id');
+    await getGoogleAccessToken();
+    expect(configs[0].client_id).toBe('override-id');
   });
 
   it('reports a cancelled sign-in when access is denied', async () => {
@@ -123,5 +140,41 @@ describe('clearGoogleAuth', () => {
     clearGoogleAuth();
     await getGoogleAccessToken();
     expect(clients[0].requestAccessToken).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('isGoogleExportConfigured', () => {
+  it('is false with nothing set anywhere', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
+    const { isGoogleExportConfigured } = await load();
+    expect(isGoogleExportConfigured()).toBe(false);
+  });
+
+  it('is true from the build-time env var alone', async () => {
+    const { isGoogleExportConfigured } = await load();
+    expect(isGoogleExportConfigured()).toBe(true);
+  });
+
+  it('is true once a runtime client id is saved, even with no build-time one', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
+    const { isGoogleExportConfigured, saveStoredClientId } = await load();
+    expect(isGoogleExportConfigured()).toBe(false);
+    saveStoredClientId('an-id');
+    expect(isGoogleExportConfigured()).toBe(true);
+  });
+});
+
+describe('saveStoredClientId', () => {
+  it('discards any cached token and token client, since both were only valid for the previous client id', async () => {
+    const { clients, configs } = installFakeGoogle((c) => c.callback({ access_token: 'tok-1', expires_in: 3600 }));
+    const { getGoogleAccessToken, saveStoredClientId } = await load();
+    await getGoogleAccessToken(); // caches a token under the build-time client id
+
+    saveStoredClientId('a-different-id');
+    await getGoogleAccessToken();
+
+    expect(configs).toHaveLength(2); // a fresh token client was created, not the cached one reused
+    expect(configs[1].client_id).toBe('a-different-id');
+    expect(clients[1].requestAccessToken).toHaveBeenCalledTimes(1); // asked again, the old token wasn't reused
   });
 });
