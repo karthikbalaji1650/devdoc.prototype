@@ -171,6 +171,19 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // beforeunload fires before pagehide/visibilitychange, so this is the one
+  // chance to warn about an edit still sitting in the debounce window (under
+  // 400ms old) - everything older than that has already been flushed.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!autosaverRef.current.hasPending()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
   // Browser storage is full or blocked: tell the user their latest edits
   // are NOT being saved (rate-limited so autosave retries don't spam).
   useEffect(() => {
