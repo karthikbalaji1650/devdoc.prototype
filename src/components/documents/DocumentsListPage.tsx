@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Plus, ChevronRight, Trash2, ArchiveRestore } from 'lucide-react';
+import { FileText, Plus, ChevronRight, Trash2, ArchiveRestore, Search } from 'lucide-react';
 import type { DocumentModel, DocStatus } from '../../types/document';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
@@ -33,6 +33,14 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
   user, documents, scopeLabel, onClearFilter, notStoredNote, onOpen, onCreate, onDelete, onRestore, onNavigate, onLogout,
 }) => {
   const [docBinOpen, setDocBinOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const q = searchQuery.trim().toLowerCase();
+  const filteredDocuments = q
+    ? documents.filter((doc) =>
+        (doc.metadata.title || '').toLowerCase().includes(q) ||
+        (doc.metadata.docNumber || '').toLowerCase().includes(q) ||
+        (doc.metadata.author || '').toLowerCase().includes(q))
+    : documents;
   return (
     <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
       <AppSidebar user={user} compact activeView="doccraft" onNavigate={onNavigate} onLogout={onLogout} />
@@ -51,6 +59,17 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-faint)]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search documents..."
+              aria-label="Search documents"
+              className="w-56 border border-[var(--border)] bg-[var(--panel-alt)] pl-8 pr-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-faint)] outline-none focus:border-[var(--blue)]"
+            />
+          </div>
           <button type="button" onClick={() => setDocBinOpen(true)} className="flex items-center gap-1.5 border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]">
             <ArchiveRestore className="h-3.5 w-3.5" /> Doc Bin
           </button>
@@ -74,9 +93,14 @@ export const DocumentsListPage: React.FC<DocumentsListPageProps> = ({
               <p className="text-sm text-[var(--text-dim)]">No documents yet.</p>
               <p className="text-xs text-[var(--text-faint)] mt-1">Click "New Document" to start one.</p>
             </div>
+          ) : q && filteredDocuments.length === 0 ? (
+            <div className="border border-dashed border-[var(--border)] rounded-xl p-12 text-center">
+              <Search className="w-8 h-8 text-[var(--text-faint)] mx-auto mb-3" />
+              <p className="text-sm text-[var(--text-dim)]">No documents match "{searchQuery.trim()}".</p>
+            </div>
           ) : (
             <div className="border border-[var(--border)] rounded-xl overflow-hidden divide-y divide-[var(--border)] empty:hidden">
-              {documents.map((doc) => {
+              {filteredDocuments.map((doc) => {
                 const ss = STATUS_STYLES[doc.metadata.status] ?? STATUS_STYLES.DRAFT;
                 return (
                   <div
