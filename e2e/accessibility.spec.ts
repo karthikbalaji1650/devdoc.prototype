@@ -81,12 +81,29 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     expect(await scan(page)).toEqual([]);
   });
 
-  // Not scanned: the Reviewers Log, Incident Tracker and Gantt planner
-  // screens. They're only reachable through the legacy "hub" view
-  // (src/components/hub/LandingHub.tsx), which nothing in the live app
-  // navigates to any more - AppSidebar has no link to it - so they are
-  // currently unreachable from the UI. See the accessibility follow-up
-  // note in the commit that added this test for the flag.
+  test('incident tracker', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Incident Tracker' }).first().click();
+    await expect(page.getByRole('heading', { name: /Incident Reporting/i })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+  });
+
+  test('reviewers log', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Reviewers Log' }).first().click();
+    await expect(page.getByRole('heading', { name: /Document Reviewers Log/i })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+  });
+
+  test('gantt', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Gantt', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: /Project & Task Management/i })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+  });
 });
 
 test.describe('dialogs are keyboard accessible', () => {

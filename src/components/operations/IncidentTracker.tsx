@@ -109,7 +109,7 @@ export const IncidentTracker: React.FC<IncidentTrackerProps> = ({ onExportToDocC
         <button
           type="button"
           onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-xs transition-colors self-start sm:self-auto"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-semibold shadow-xs transition-colors self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Report New Incident</span>
@@ -134,6 +134,7 @@ export const IncidentTracker: React.FC<IncidentTrackerProps> = ({ onExportToDocC
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-slate-600">Severity:</span>
             <select
+              aria-label="Filter by severity"
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
               className="bg-white border border-slate-300 text-slate-800 rounded-lg px-2.5 py-1 text-xs focus:outline-none shadow-xs"
@@ -149,6 +150,7 @@ export const IncidentTracker: React.FC<IncidentTrackerProps> = ({ onExportToDocC
           <div className="flex items-center gap-1.5">
             <span className="text-slate-600">Status:</span>
             <select
+              aria-label="Filter by status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="bg-white border border-slate-300 text-slate-800 rounded-lg px-2.5 py-1 text-xs focus:outline-none shadow-xs"
@@ -199,7 +201,7 @@ export const IncidentTracker: React.FC<IncidentTrackerProps> = ({ onExportToDocC
                       </div>
                     </td>
 
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-cyan-700 font-medium">
+                    <td className="py-3.5 px-4 font-mono text-[11px] text-[var(--blue)] font-medium">
                       {inc.affectedSystem}
                     </td>
 

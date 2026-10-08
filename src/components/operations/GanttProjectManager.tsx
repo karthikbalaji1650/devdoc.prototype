@@ -210,7 +210,7 @@ export const GanttProjectManager: React.FC = () => {
             </div>
 
             <div className="text-[11px] text-slate-500 font-mono">
-              Current Date: <strong className="text-emerald-700 font-bold">Sprint Day 14 (Code Freeze)</strong>
+              Current Date: <strong className="text-[var(--success)] font-bold">Sprint Day 14 (Code Freeze)</strong>
             </div>
           </div>
 
@@ -241,7 +241,7 @@ export const GanttProjectManager: React.FC = () => {
                       {/* Left: Task Summary & JIRA Key */}
                       <div className="col-span-4 pr-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-blue-600 text-[11px]">{task.jiraKey}</span>
+                          <span className="font-mono font-bold text-[var(--blue)] text-[11px]">{task.jiraKey}</span>
                           <span className="font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors" title={task.title}>
                             {task.title}
                           </span>
@@ -251,7 +251,7 @@ export const GanttProjectManager: React.FC = () => {
                           <span>•</span>
                           <span className="text-slate-600">{task.category}</span>
                           <span>•</span>
-                          <span className="font-mono text-emerald-700 font-bold">{task.progressPercent}%</span>
+                          <span className="font-mono text-[var(--success)] font-bold">{task.progressPercent}%</span>
                         </div>
                       </div>
 
@@ -317,7 +317,7 @@ export const GanttProjectManager: React.FC = () => {
                   {colTasks.map((t) => (
                     <div key={t.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 hover:border-blue-300 transition-colors shadow-2xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-blue-600 text-[11px]">{t.jiraKey}</span>
+                        <span className="font-mono font-bold text-[var(--blue)] text-[11px]">{t.jiraKey}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
                           {t.category}
                         </span>
@@ -325,7 +325,7 @@ export const GanttProjectManager: React.FC = () => {
                       <p className="font-semibold text-slate-800 leading-snug">{t.title}</p>
                       <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
                         <span>{t.assignee}</span>
-                        <span className="font-mono text-emerald-700 font-bold">{t.progressPercent}%</span>
+                        <span className="font-mono text-[var(--success)] font-bold">{t.progressPercent}%</span>
                       </div>
                     </div>
                   ))}

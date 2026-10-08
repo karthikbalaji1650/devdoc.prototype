@@ -230,7 +230,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Reviewer</span>
@@ -264,7 +264,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
               type="button"
               onClick={() => setActiveTab('matrix')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                activeTab === 'matrix' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'matrix' ? 'bg-emerald-700 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <TableIcon className="w-3.5 h-3.5" />
@@ -274,7 +274,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
               type="button"
               onClick={() => setActiveTab('embed-sheet')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                activeTab === 'embed-sheet' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'embed-sheet' ? 'bg-emerald-700 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Globe className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
                 <tbody className="divide-y divide-slate-200">
                   {filteredLogs.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-blue-700">
+                      <td className="py-3.5 px-4 font-mono font-bold text-[var(--blue)]">
                         {item.docNumber}
                       </td>
 
@@ -379,6 +379,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
 
                       <td className="py-3.5 px-4">
                         <select
+                          aria-label={`Review status for ${item.docTitle || item.docNumber}`}
                           value={item.reviewStatus}
                           onChange={(e) => handleStatusChange(item.id, e.target.value as any)}
                           className={`text-[11px] font-bold rounded-lg px-2.5 py-1 border focus:outline-none cursor-pointer ${
@@ -495,7 +496,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs"
+                    className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-semibold shadow-xs"
                   >
                     Save URL
                   </button>
@@ -641,7 +642,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs"
+                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-semibold shadow-xs"
                 >
                   Save Reviewer Entry
                 </button>
