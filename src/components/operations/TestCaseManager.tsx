@@ -199,6 +199,65 @@ const TestCaseLibraryModal: React.FC<{
   );
 };
 
+/** A quick-pick dropdown next to "+ Add Case": search the library and
+ * click an entry to drop it straight into the current suite, without the
+ * checkbox-and-confirm flow the full Import from Library modal needs for
+ * picking several at once. */
+const LoadPreviousTestCaseDropdown: React.FC<{ onPick: (tc: TestCaseItem) => void }> = ({ onPick }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDownOutside);
+    return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
+  }, [open]);
+
+  const results = open ? searchLibrary(query) : [];
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-1 text-[var(--blue)] hover:underline font-medium">
+        <Library className="w-3.5 h-3.5" /> Load Previous Test Case
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden text-left">
+          <div className="p-2 border-b border-slate-200">
+            <input
+              autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by ID or description..."
+              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {results.length === 0 ? (
+              <p className="px-3 py-4 text-[11px] text-slate-500 text-center">
+                {query ? 'No matches.' : 'Nothing saved yet - use "Save to Library" on a test case first.'}
+              </p>
+            ) : results.map((tc) => (
+              <button
+                key={tc.id} type="button"
+                onClick={() => { onPick(tc); setOpen(false); setQuery(''); }}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-[var(--success)] font-semibold shrink-0">{tc.customId}</span>
+                  <span className="text-xs font-semibold text-slate-900 truncate">{tc.title}</span>
+                </div>
+                {tc.preconditions && <p className="text-[10px] text-slate-500 truncate mt-0.5">{tc.preconditions}</p>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const RunProgressBar: React.FC<{ run: TestRunItem }> = ({ run }) => {
   const total = run.passedCount + run.failedCount + run.blockedCount + (run.skippedCount ?? 0) + (run.untestedCount ?? 0);
   if (total === 0) return <div className="w-full bg-slate-200 h-2.5 rounded-full" />;
@@ -1005,7 +1064,7 @@ const TestCasesView: React.FC<{
                         </div>
                       );
                     })}
-                    <div className="px-4 py-2 text-xs"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button></div>
+                    <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
                   </div>
                 )}
               </div>
@@ -1033,7 +1092,7 @@ const TestCasesView: React.FC<{
                   </div>
                 </div>
               ))}
-              <div className="px-4 py-2 text-xs"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button></div>
+              <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
             </div>
           )}
         </div>
