@@ -6,6 +6,12 @@ import { fetchWithTimeout } from '../../services/fetchWithTimeout';
 import { loadSuites, saveSuites, loadRuns, saveRuns, loadMilestones, saveMilestones } from '../../services/testManagementStoreService';
 import { searchLibrary, saveToLibrary, removeFromLibrary } from '../../services/testCaseLibraryService';
 import {
+  saveToLibrary as saveSuiteToLibrary,
+  removeFromLibrary as removeSuiteFromLibrary,
+  searchLibrary as searchSuiteLibrary,
+  instantiateSuiteFromLibrary,
+} from '../../services/testSuiteLibraryService';
+import {
   parseRobotOutputXml,
   exportRobotResultsAsJson,
   parseRobotScriptText,
@@ -203,6 +209,65 @@ const TestCaseLibraryModal: React.FC<{
  * click an entry to drop it straight into the current suite, without the
  * checkbox-and-confirm flow the full Import from Library modal needs for
  * picking several at once. */
+const SuiteLibraryModal: React.FC<{
+  onLoad: (suite: TestSuiteItem) => void;
+  onClose: () => void;
+}> = ({ onLoad, onClose }) => {
+  const [query, setQuery] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
+  const results = React.useMemo(() => searchSuiteLibrary(query), [query, refreshTick]);
+
+  const handleRemove = (title: string) => {
+    removeSuiteFromLibrary(title);
+    setRefreshTick((n) => n + 1);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Load Suite from Library</h2>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 pb-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search saved suites by title, module, or description..."
+              className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 shadow-xs"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 space-y-1.5">
+          {results.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-8">
+              {query ? 'No saved suites match that search.' : 'Nothing saved yet - open a suite and click "Save Suite to Library" to reuse it later.'}
+            </p>
+          ) : results.map((s) => (
+            <div key={s.id} className="flex items-start gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+              <button type="button" onClick={() => onLoad(s)} className="min-w-0 flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="text-xs font-semibold text-slate-900 truncate">{s.title}</span>
+                  <span className="text-[10px] text-slate-400 shrink-0">{(s.testCases || []).length} cases</span>
+                </div>
+                {s.description && <p className="text-[11px] text-slate-500 truncate mt-0.5">{s.description}</p>}
+              </button>
+              <button type="button" onClick={() => handleRemove(s.title)} className="p-1 text-slate-400 hover:text-rose-600 shrink-0" title="Remove from library">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="p-5 pt-3">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-sm">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LoadPreviousTestCaseDropdown: React.FC<{ onPick: (tc: TestCaseItem) => void }> = ({ onPick }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -778,6 +843,7 @@ const TestCasesView: React.FC<{
   const [searchQ, setSearchQ]               = useState('');
   const [showDeletedCases, setShowDeletedCases] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [showSuiteLibraryModal, setShowSuiteLibraryModal] = useState(false);
 
   const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const cases = (selectedSuite?.testCases || []).filter(tc =>
@@ -851,6 +917,18 @@ const TestCasesView: React.FC<{
     onShowToast(`✅ Imported ${entries.length} test case${entries.length === 1 ? '' : 's'} from the library.`);
     setShowLibraryModal(false);
   };
+  const handleSaveSuiteToLibrary = () => {
+    if (!selectedSuite) return;
+    saveSuiteToLibrary(selectedSuite);
+    onShowToast(`📚 Saved suite "${selectedSuite.title}" to the reusable library.`);
+  };
+  const handleLoadSuiteFromLibrary = (template: TestSuiteItem) => {
+    const instance = instantiateSuiteFromLibrary(template);
+    onUpdateSuites([...suites, instance]);
+    onSelectSuite(instance.id);
+    onShowToast(`✅ Loaded suite "${instance.title}" from the library.`);
+    setShowSuiteLibraryModal(false);
+  };
 
   const sections = selectedSuite?.sections || [];
 
@@ -868,6 +946,9 @@ const TestCasesView: React.FC<{
           <button onClick={() => setShowLibraryModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold shadow-xs">
             <Library className="w-3.5 h-3.5" /> Import from Library
           </button>
+          <button onClick={() => setShowSuiteLibraryModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold shadow-xs">
+            <Folder className="w-3.5 h-3.5" /> Load Suite from Library
+          </button>
           <button onClick={onShowBackAnnotateModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors">
             <RefreshCw className="w-3.5 h-3.5" /> Back-Annotate (VS Code)
           </button>
@@ -880,6 +961,9 @@ const TestCasesView: React.FC<{
             </button>
             <button onClick={() => onExportRobotSuite(selectedSuite)} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold">
               <FileCode2 className="w-3.5 h-3.5" /> Export .robot
+            </button>
+            <button onClick={handleSaveSuiteToLibrary} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold">
+              <BookmarkPlus className="w-3.5 h-3.5" /> Save Suite to Library
             </button>
           </>}
           <button onClick={onExportProtocolExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] hover:border-[var(--blue)] text-[var(--blue)] border border-[var(--border)] rounded-lg text-xs font-semibold shadow-xs transition-colors">
@@ -1103,6 +1187,9 @@ const TestCasesView: React.FC<{
       )}
       {showLibraryModal && (
         <TestCaseLibraryModal onImport={handleImportFromLibrary} onClose={() => setShowLibraryModal(false)} />
+      )}
+      {showSuiteLibraryModal && (
+        <SuiteLibraryModal onLoad={handleLoadSuiteFromLibrary} onClose={() => setShowSuiteLibraryModal(false)} />
       )}
     </div>
   );
