@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem } from '../../types/operations';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
+import { loadSuites, saveSuites, loadRuns, saveRuns, loadMilestones, saveMilestones } from '../../services/testManagementStoreService';
+import { searchLibrary, saveToLibrary, removeFromLibrary } from '../../services/testCaseLibraryService';
 import {
   parseRobotOutputXml,
   exportRobotResultsAsJson,
@@ -24,7 +26,7 @@ import {
   CheckCircle2, XCircle, MinusCircle, SkipForward, RefreshCw,
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
-  HelpCircle, ImagePlus,
+  HelpCircle, ImagePlus, Library, BookmarkPlus,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -118,6 +120,81 @@ const EvidenceDropzone: React.FC<{
         </div>
       )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
+    </div>
+  );
+};
+
+const TestCaseLibraryModal: React.FC<{
+  onImport: (entries: TestCaseItem[]) => void;
+  onClose: () => void;
+}> = ({ onImport, onClose }) => {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [refreshTick, setRefreshTick] = useState(0);
+  const results = React.useMemo(() => searchLibrary(query), [query, refreshTick]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleRemove = (customId: string) => {
+    removeFromLibrary(customId);
+    setRefreshTick((n) => n + 1);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Import from Library</h2>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 pb-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search saved test cases by ID or description..."
+              className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 shadow-xs"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 space-y-1.5">
+          {results.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-8">
+              {query ? 'No saved test cases match that search.' : 'Nothing saved yet - open a test case and click "Save to Library" to reuse it later.'}
+            </p>
+          ) : results.map((tc) => (
+            <label key={tc.id} className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${selected.has(tc.id) ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+              <input type="checkbox" checked={selected.has(tc.id)} onChange={() => toggle(tc.id)} className="mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-[var(--success)] font-semibold shrink-0">{tc.customId}</span>
+                  <span className="text-xs font-semibold text-slate-900 truncate">{tc.title}</span>
+                </div>
+                {tc.preconditions && <p className="text-[11px] text-slate-500 truncate mt-0.5">{tc.preconditions}</p>}
+              </div>
+              <button type="button" onClick={(e) => { e.preventDefault(); handleRemove(tc.customId); }} className="p-1 text-slate-400 hover:text-rose-600 shrink-0" title="Remove from library">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-3 p-5 pt-3">
+          <button
+            onClick={() => onImport(results.filter((tc) => selected.has(tc.id)))}
+            disabled={selected.size === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold btn-primary disabled:opacity-50"
+          >
+            Import{selected.size > 0 ? ` (${selected.size})` : ''}
+          </button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-sm">Cancel</button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -641,6 +718,7 @@ const TestCasesView: React.FC<{
   const [editingCase, setEditingCase]       = useState<TestCaseItem | null>(null);
   const [searchQ, setSearchQ]               = useState('');
   const [showDeletedCases, setShowDeletedCases] = useState(false);
+  const [showLibraryModal, setShowLibraryModal] = useState(false);
 
   const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const cases = (selectedSuite?.testCases || []).filter(tc =>
@@ -695,6 +773,25 @@ const TestCasesView: React.FC<{
       ? { ...s, testCases: (s.testCases || []).map(tc =>
           tc.id === caseId ? { ...tc, evidenceImage: undefined, evidenceImageName: undefined } : tc) } : s));
   };
+  const handleSaveCaseToLibrary = (tc: TestCaseItem) => {
+    saveToLibrary(tc);
+    onShowToast(`📚 Saved "${tc.customId}" to the reusable library.`);
+  };
+  const handleImportFromLibrary = (entries: TestCaseItem[]) => {
+    if (!selectedSuite || entries.length === 0) return;
+    const now = new Date().toISOString();
+    const imported = entries.map((tc, i) => ({
+      ...tc,
+      id: `tc-${Date.now()}-${i}`,
+      suiteId: selectedSuite.id,
+      createdAt: now,
+      isDeleted: false,
+    }));
+    onUpdateSuites(suites.map(s => s.id === selectedSuite.id
+      ? { ...s, testCases: [...(s.testCases || []), ...imported] } : s));
+    onShowToast(`✅ Imported ${entries.length} test case${entries.length === 1 ? '' : 's'} from the library.`);
+    setShowLibraryModal(false);
+  };
 
   const sections = selectedSuite?.sections || [];
 
@@ -708,6 +805,9 @@ const TestCasesView: React.FC<{
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={onShowAiModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs">
             <Bot className="w-3.5 h-3.5" /> Generate via AI
+          </button>
+          <button onClick={() => setShowLibraryModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold shadow-xs">
+            <Library className="w-3.5 h-3.5" /> Import from Library
           </button>
           <button onClick={onShowBackAnnotateModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors">
             <RefreshCw className="w-3.5 h-3.5" /> Back-Annotate (VS Code)
@@ -897,6 +997,9 @@ const TestCasesView: React.FC<{
                                 />
                               </div>
                               {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
+                              <button type="button" onClick={() => handleSaveCaseToLibrary(tc)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold">
+                                <BookmarkPlus className="w-3.5 h-3.5" /> Save to Library
+                              </button>
                             </div>
                           )}
                         </div>
@@ -938,6 +1041,9 @@ const TestCasesView: React.FC<{
       {(showAddCase||editingCase)&&selectedSuite&&(
         <AddCaseModal suiteId={selectedSuite.id} initial={editingCase||undefined}
           onSave={handleSaveCase} onClose={()=>{setShowAddCase(false);setEditingCase(null);}}/>
+      )}
+      {showLibraryModal && (
+        <TestCaseLibraryModal onImport={handleImportFromLibrary} onClose={() => setShowLibraryModal(false)} />
       )}
     </div>
   );
@@ -1915,10 +2021,16 @@ const LeftPanel: React.FC<{
 // ── Main TestCaseManager Component ─────────────────────────────────────────────
 const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNavigateToDocCraft, currentDocument }) => {
   const [view,                   setView]                   = useState<MainView>('test-cases');
-  const [suites,                 setSuites]                 = useState<TestSuiteItem[]>(INITIAL_SUITES);
-  const [runs,                   setRuns]                   = useState<TestRunItem[]>(INITIAL_RUNS);
-  const [milestones,             setMilestones]             = useState<MilestoneItem[]>(INITIAL_MILESTONES);
-  const [selectedSuiteId,        setSelectedSuiteId]        = useState<string|null>(INITIAL_SUITES[0]?.id||null);
+  const [suites,                 setSuites]                 = useState<TestSuiteItem[]>(() => loadSuites() ?? INITIAL_SUITES);
+  const [runs,                   setRuns]                   = useState<TestRunItem[]>(() => loadRuns() ?? INITIAL_RUNS);
+  const [milestones,             setMilestones]             = useState<MilestoneItem[]>(() => loadMilestones() ?? INITIAL_MILESTONES);
+  const [selectedSuiteId,        setSelectedSuiteId]        = useState<string|null>(() => (loadSuites() ?? INITIAL_SUITES)[0]?.id || null);
+
+  // Test Management had no persistence at all before this - a refresh wiped
+  // every suite, test case, run and milestone back to the sample data.
+  useEffect(() => { saveSuites(suites); }, [suites]);
+  useEffect(() => { saveRuns(runs); }, [runs]);
+  useEffect(() => { saveMilestones(milestones); }, [milestones]);
   const [showAiModal,            setShowAiModal]            = useState(false);
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
