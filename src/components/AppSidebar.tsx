@@ -87,13 +87,6 @@ const NAV_ITEMS = [
     opsTab: 'reviewers' as OperationsTab,
   },
   {
-    id: 'gantt',
-    label: 'Gantt',
-    icon: Calendar,
-    app: 'operations' as AppView,
-    opsTab: 'gantt' as OperationsTab,
-  },
-  {
     id: 'settings',
     label: 'Settings',
     icon: Settings,
