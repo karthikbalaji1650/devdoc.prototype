@@ -56,20 +56,6 @@ export interface ReviewerLogItem {
   spreadsheetRowIdx?: number;
 }
 
-export interface GanttTaskItem {
-  id: string;
-  jiraKey: string;
-  title: string;
-  assignee: string;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
-  priority: 'High' | 'Highest' | 'Medium' | 'Low';
-  startDay: number; // Day offset relative to sprint start (0-28)
-  durationDays: number; // e.g. 5 days
-  progressPercent: number; // 0 - 100%
-  category: 'Firmware' | 'REST API' | 'QA & Testing' | 'DevOps & CI/CD' | 'Security';
-  dependencies?: string[]; // IDs of tasks this depends on
-}
-
 // Option 5: AI Test Case Management (TestRail Alternative)
 export interface TestCaseStep {
   step: number;

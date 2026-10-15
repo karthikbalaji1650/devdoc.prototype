@@ -13,7 +13,6 @@ import {
   PanelLeftOpen,
   ShieldAlert,
   ClipboardCheck,
-  Calendar,
 } from 'lucide-react';
 import type { UserProfile } from '../types/auth';
 import type { AppView, OperationsTab } from '../types/appState';
@@ -85,13 +84,6 @@ const NAV_ITEMS = [
     icon: ClipboardCheck,
     app: 'operations' as AppView,
     opsTab: 'reviewers' as OperationsTab,
-  },
-  {
-    id: 'gantt',
-    label: 'Gantt',
-    icon: Calendar,
-    app: 'operations' as AppView,
-    opsTab: 'gantt' as OperationsTab,
   },
   {
     id: 'settings',
