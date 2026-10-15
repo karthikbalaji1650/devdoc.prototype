@@ -73,10 +73,10 @@ VALUES (
     ),
     (
         'usr-03',
-        'Judia Lumina',
-        'judia.lumina@sanmina.com',
+        'Sahith Pattu',
+        'sahith.pattu@sanmina.com',
         '$2b$12$BQIuT1ww9MkDytXfjN2mzu/YajotxDvzxLVwuLsTPvBdXvLPFxADC',
-        'Team lead',
+        'Technical Head',
         'SW engineering',
         'firmware-lead',
         'from-emerald-600 to-teal-600',
