@@ -44,14 +44,6 @@ const NAV_ITEMS = [
     opsTab: undefined as OperationsTab | undefined,
   },
   {
-    id: 'data-management',
-    label: 'Data Management',
-    icon: Database,
-    app: 'data-management' as AppView,
-    opsTab: undefined as OperationsTab | undefined,
-    adminOnly: true,
-  },
-  {
     id: 'coder',
     label: 'Coder',
     icon: Code2,

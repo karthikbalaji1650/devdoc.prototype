@@ -16,6 +16,8 @@ import {
   ChevronRight,
   Info,
   Upload,
+  ShieldAlert,
+  Clock
 } from 'lucide-react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
@@ -26,6 +28,8 @@ import {
   type AiConfig,
   type AiProvider,
 } from '../../services/aiService';
+import { getStorageUsage } from '../../services/safeStorage';
+import { getSessionAuditLog } from '../../services/sessionAuditService';
 
 /* ─── Props ─── */
 interface SettingsPageProps {
@@ -43,7 +47,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ElementType; desc: str
   { id: 'ai',            label: 'AI Assistant',   icon: Bot,      desc: 'Provider, keys & model' },
   { id: 'notifications', label: 'Notifications',  icon: Bell,     desc: 'Alerts & toasts' },
   { id: 'appearance',    label: 'Appearance',     icon: Palette,  desc: 'Theme & layout' },
-  { id: 'data',          label: 'Data & Storage', icon: Database, desc: 'Export & clear cache' },
+  { id: 'data',          label: 'System & Storage', icon: Database, desc: 'Backups & Audits' },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -110,6 +114,18 @@ function InfoBanner({ text }: { text: string }) {
       <span>{text}</span>
     </div>
   );
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDuration(loginIso: string, logoutIso: string | null): string {
+  const end = logoutIso ? new Date(logoutIso).getTime() : Date.now();
+  const minutes = Math.max(0, Math.round((end - new Date(loginIso).getTime()) / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 /* ─── Main Component ─── */
@@ -401,10 +417,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
               </section>
             )}
 
-            {/* DATA & STORAGE */}
+            {/* SYSTEM & STORAGE */}
             {activeTab === 'data' && (
               <section className="space-y-6">
-                <SectionHeader icon={Database} title="Data & Storage" desc="Manage locally stored app data, export a backup, or reset the workspace." />
+                <SectionHeader icon={Database} title="System & Storage" desc="Manage locally stored app data, workspace connectivity, and session audits." />
+
+                {/* Storage Health Indicator */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Local Storage Usage</Label>
+                    <span className="text-xs font-bold text-slate-900">{Math.round(getStorageUsage().fraction * 100)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuenow={Math.round(getStorageUsage().fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
+                    <div
+                      className={`h-full transition-all ${getStorageUsage().fraction >= 0.9 ? 'bg-rose-500' : getStorageUsage().fraction >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(100, getStorageUsage().fraction * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 italic">
+                    Estimated browser storage limit: ~5 MB. {getStorageUsage().fraction >= 0.7 ? 'Warning: Storage nearly full. Please export a backup and clear space.' : 'Storage health is optimal.'}
+                  </p>
+                </div>
 
                 {/* VS Code Server URL setting */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
@@ -443,50 +476,84 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   </div>
                 </div>
 
+                {/* Maintenance Actions */}
                 <div className="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-xs">
                   {/* Export */}
                   <div className="flex items-center justify-between px-5 py-4">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">Export All Local Data</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">Download a JSON backup of all locally stored data.</div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                        <Download className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Export All Local Data</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">Download a JSON backup of all locally stored data.</div>
+                      </div>
                     </div>
                     <button type="button" onClick={handleExportData}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors shrink-0 shadow-2xs">
-                      <Download className="w-3.5 h-3.5" />Export
+                      Export
                     </button>
                   </div>
                   {/* Clear */}
                   <div className="flex items-center justify-between px-5 py-4">
-                    <div>
-                      <div className="text-xs font-bold text-rose-600">Clear All Local Data</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">Wipes all stored documents, settings, and session. You will be logged out.</div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
+                        <Trash2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-rose-600">Clear All Local Data</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">Wipes all stored documents, settings, and session. You will be logged out.</div>
+                      </div>
                     </div>
                     <button type="button" onClick={handleClearLocalStorage}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition-colors shrink-0 shadow-2xs">
-                      <Trash2 className="w-3.5 h-3.5" />Clear
+                      Clear
                     </button>
                   </div>
                 </div>
 
-                {/* Storage key browser */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
-                  <Label>Local Storage Keys</Label>
-                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                    {Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)!).map((key) => {
-                      const raw = localStorage.getItem(key) ?? '';
-                      const bytes = new Blob([raw]).size;
-                      return (
-                        <div key={key} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-200">
-                          <span className="text-[11px] font-mono text-slate-800 truncate max-w-[70%]">{key}</span>
-                          <span className="text-[10px] text-slate-500 font-mono shrink-0">
-                            {bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {localStorage.length === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-4">No local storage data found.</p>
-                    )}
+                {/* Session Audit Log */}
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">User Session Audit Log</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-100">
+                        <tr>
+                          <th className="px-5 py-2 font-bold">User</th>
+                          <th className="px-3 py-2 font-bold">Role</th>
+                          <th className="px-3 py-2 font-bold">Login</th>
+                          <th className="px-3 py-2 font-bold">Logout</th>
+                          <th className="px-3 py-2 font-bold">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {getSessionAuditLog().map((s) => (
+                          <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-5 py-2.5 font-semibold text-slate-800">{s.userName}</td>
+                            <td className="px-3 py-2.5 text-slate-500 capitalize">{s.role.replace('-', ' ')}</td>
+                            <td className="px-3 py-2.5 text-slate-500 font-mono">{formatTimestamp(s.loginTime)}</td>
+                            <td className="px-3 py-2.5 font-mono">
+                              {s.logoutTime ? (
+                                <span className="text-slate-500">{formatTimestamp(s.logoutTime)}</span>
+                              ) : (
+                                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                  <Clock className="w-3 h-3" /> Active
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-slate-500 font-mono">{formatDuration(s.loginTime, s.logoutTime)}</td>
+                          </tr>
+                        ))}
+                        {getSessionAuditLog().length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-6 text-center text-xs text-slate-400">No session activity recorded yet.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </section>

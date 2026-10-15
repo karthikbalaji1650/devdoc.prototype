@@ -1,11 +1,10 @@
-export type AppView = 
+export type AppView =
   | 'login'
   | 'dashboard'
   | 'hub'
   | 'doccraft'
   | 'operations'
   | 'coder'
-  | 'data-management'
   | 'settings';
 
 export type OperationsTab =

@@ -45,7 +45,6 @@ const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage').
 const LandingHub = lazy(() => import('./components/hub/LandingHub').then((m) => ({ default: m.LandingHub })));
 const OperationsLayout = lazy(() => import('./components/operations/OperationsLayout').then((m) => ({ default: m.OperationsLayout })));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const DataManagementPage = lazy(() => import('./components/data/DataManagementPage').then((m) => ({ default: m.DataManagementPage })));
 const CoderView = lazy(() => import('./components/coder/CoderView').then((m) => ({ default: m.CoderView })));
 
 const PageLoading: React.FC = () => (
