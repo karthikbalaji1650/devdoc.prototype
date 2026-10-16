@@ -190,7 +190,7 @@ export const App: React.FC = () => {
     const onStorageError = () => {
       if (Date.now() - lastShown < 30000) return;
       lastShown = Date.now();
-      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Data Management.');
+      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Settings → System & Storage.');
       setTimeout(() => setToastMessage(null), 8000);
     };
     window.addEventListener(STORAGE_ERROR_EVENT, onStorageError);

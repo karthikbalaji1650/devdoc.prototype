@@ -19,8 +19,14 @@ const loginLimiter = rateLimit({
 const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax' as const,
-  // Secure cookies require HTTPS; the dev/CI setup runs over plain HTTP.
-  secure: process.env.NODE_ENV === 'production',
+  // Secure cookies require HTTPS - independent of NODE_ENV. A
+  // production-mode build can still run over plain HTTP (this repo's
+  // own docker-compose demo, localhost only): conflating the two broke
+  // login there, since the browser silently drops a Secure cookie
+  // issued over HTTP, right after a login response that looked fine.
+  // Set COOKIE_SECURE=true only for a real deployment actually served
+  // over HTTPS.
+  secure: process.env.COOKIE_SECURE === 'true',
   maxAge: 12 * 60 * 60 * 1000,
 };
 

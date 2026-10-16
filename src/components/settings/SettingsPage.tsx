@@ -428,7 +428,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                     <Label>Local Storage Usage</Label>
                     <span className="text-xs font-bold text-slate-900">{Math.round(getStorageUsage().fraction * 100)}%</span>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuenow={Math.round(getStorageUsage().fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-label="Local storage used" aria-valuenow={Math.round(getStorageUsage().fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
                     <div
                       className={`h-full transition-all ${getStorageUsage().fraction >= 0.9 ? 'bg-rose-500' : getStorageUsage().fraction >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                       style={{ width: `${Math.min(100, getStorageUsage().fraction * 100)}%` }}
@@ -501,7 +501,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                         <Trash2 className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-rose-600">Clear All Local Data</div>
+                        <div className="text-xs font-bold text-[var(--danger)]">Clear All Local Data</div>
                         <div className="text-[11px] text-slate-500 mt-0.5">Wipes all stored documents, settings, and session. You will be logged out.</div>
                       </div>
                     </div>

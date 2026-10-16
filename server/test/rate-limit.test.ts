@@ -15,6 +15,10 @@ async function freshApp() {
 }
 
 describe('login rate limiting', () => {
+  // Each test drives 9-11 real bcrypt (cost 12) verifications - already
+  // close to the default 5s test timeout on its own, and tips over it
+  // when the full suite runs several files' worth of bcrypt work
+  // concurrently. A slower machine, not a slower test; give it room.
   it('blocks further attempts after repeated failures, but the limit itself does not misfire early', async () => {
     const app = await freshApp();
     const user = TEST_USERS[0];
@@ -28,7 +32,7 @@ describe('login rate limiting', () => {
     const blocked = await request(app).post('/api/auth/login').send({ email: user.email, password: user.password });
     expect(blocked.status).toBe(429);
     expect(blocked.body.error).toMatch(/too many/i);
-  });
+  }, 15000);
 
   it('does not count a successful login against the limit', async () => {
     const app = await freshApp();
@@ -39,5 +43,5 @@ describe('login rate limiting', () => {
     }
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password: user.password });
     expect(res.status).toBe(200); // the 10th attempt, correct this time, still gets through
-  });
+  }, 15000);
 });

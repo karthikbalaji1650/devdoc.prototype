@@ -73,10 +73,9 @@ test.describe('version history', () => {
 });
 
 test.describe('permissions', () => {
-  test('a non-admin does not see Data Management and cannot delete a document they did not write', async ({ page }) => {
+  test('a non-admin cannot delete a document they did not write', async ({ page }) => {
     await signInAs(page, 'firmware-lead');
     await seedDocuments(page, [{ id: 'd1', title: 'Someone Elses Doc', docNumber: 'D-1', author: ADMIN }]);
-    await expect(page.getByRole('button', { name: 'Data Management' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Document Editor' }).first().click();
     await page.getByRole('button', { name: /Move .* to Doc Bin/ }).click();
     await expect(page.getByText(/only delete documents you authored/i)).toBeVisible();
@@ -181,7 +180,7 @@ test.describe('crash recovery', () => {
 });
 
 test.describe('lazy screens', () => {
-  for (const name of ['Data Management', 'Settings', 'Test Management', 'Release Master']) {
+  for (const name of ['Settings', 'Test Management', 'Release Master']) {
     test(`${name} loads on demand without errors`, async ({ page }) => {
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
@@ -195,14 +194,14 @@ test.describe('lazy screens', () => {
 });
 
 test.describe('first-run welcome guide', () => {
-  test('shows once on a fresh browser, mentions Data Management for an admin, and stays dismissed after reload', async ({ page }) => {
+  test('shows once on a fresh browser, mentions admin-only visibility for an admin, and stays dismissed after reload', async ({ page }) => {
     await signInAs(page);
     await page.goto('/'); // runs signInAs's one-time init script (marks the guide as already seen)
     await page.evaluate(() => localStorage.removeItem('devdoc_studio_welcome_seen_v1'));
     await page.reload(); // the guard in signInAs's init script means it won't re-set the flag this time
     const dialog = page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText('Data Management is yours to watch')).toBeVisible();
+    await expect(dialog.getByText('You can see everything, as an admin')).toBeVisible();
 
     await dialog.getByRole('button', { name: /Got it/ }).click();
     await expect(dialog).toBeHidden();
@@ -211,14 +210,14 @@ test.describe('first-run welcome guide', () => {
     await expect(page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ })).toHaveCount(0);
   });
 
-  test('does not mention Data Management for a non-admin, and Help reopens it', async ({ page }) => {
+  test('does not mention admin-only visibility for a non-admin, and Help reopens it', async ({ page }) => {
     await signInAs(page, 'firmware-lead');
     await page.goto('/');
     await page.evaluate(() => localStorage.removeItem('devdoc_studio_welcome_seen_v1'));
     await page.reload();
     const dialog = page.getByRole('dialog', { name: /Welcome to DevDoc Studio/ });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText('Data Management is yours to watch')).toHaveCount(0);
+    await expect(dialog.getByText('You can see everything, as an admin')).toHaveCount(0);
     await dialog.getByRole('button', { name: /Got it/ }).click();
 
     await page.getByRole('button', { name: 'Help' }).click();
