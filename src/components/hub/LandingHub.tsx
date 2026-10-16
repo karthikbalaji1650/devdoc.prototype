@@ -257,13 +257,7 @@ export const LandingHub: React.FC<LandingHubProps> = ({
                   >
                     📋 <strong className="text-slate-900">Option 3: Reviewers Log</strong> & Sheets
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onLaunchApp('operations', 'gantt')}
-                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-purple-500 text-left text-slate-700 hover:text-purple-700 transition-colors"
-                  >
-                    📊 <strong className="text-slate-900">Option 4: Tasks & Gantt</strong> Chart
-                  </button>
+
                 </div>
               </div>
 
