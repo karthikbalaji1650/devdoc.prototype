@@ -8,7 +8,6 @@ import { AppSidebar } from '../AppSidebar';
 import { IncidentTracker } from './IncidentTracker';
 import { ReleaseTracker } from './ReleaseTracker';
 import { ReviewersLog } from './ReviewersLog';
-import { GanttProjectManager } from './GanttProjectManager';
 import { TestCaseManager } from './TestCaseManager';
 
 interface OperationsLayoutProps {
@@ -51,9 +50,6 @@ export const OperationsLayout: React.FC<OperationsLayoutProps> = ({
         )}
         {activeTab === 'reviewers' && (
           <ReviewersLog currentDocument={currentDocument} onOpenDocCraft={() => onLaunchDocCraft()} />
-        )}
-        {activeTab === 'gantt' && (
-          <GanttProjectManager />
         )}
         {activeTab === 'test-cases' && (
           <TestCaseManager

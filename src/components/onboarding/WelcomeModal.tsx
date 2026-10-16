@@ -27,8 +27,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
   const steps = isAdmin(user)
     ? [...STEPS, {
         icon: Database,
-        title: 'Data Management is yours to watch',
-        body: "As an admin you can see every document, back up or clear all local data, and review the session audit log - it's under Data Management in the sidebar.",
+        title: 'You can see everything, as an admin',
+        body: "You see every document, not just your own. Back up or clear local data, and review the session audit log, under Settings → System & Storage.",
       }]
     : STEPS;
 

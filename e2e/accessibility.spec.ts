@@ -49,10 +49,11 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     expect(await scan(page)).toEqual([]);
   });
 
-  test('data management', async ({ page }) => {
+  test('settings: system & storage', async ({ page }) => {
     await signInAs(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Data Management' }).first().click();
+    await page.getByRole('button', { name: 'Settings' }).first().click();
+    await page.getByRole('button', { name: /System & Storage/i }).click();
     await expect(page.getByRole('progressbar', { name: /storage used/i })).toBeVisible();
     expect(await scan(page)).toEqual([]);
   });
@@ -97,13 +98,6 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     expect(await scan(page)).toEqual([]);
   });
 
-  test('gantt', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Gantt', exact: true }).first().click();
-    await expect(page.getByRole('heading', { name: /Project & Task Management/i })).toBeVisible();
-    expect(await scan(page)).toEqual([]);
-  });
 });
 
 test.describe('dialogs are keyboard accessible', () => {

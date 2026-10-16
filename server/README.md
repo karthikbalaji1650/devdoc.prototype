@@ -22,10 +22,16 @@ screen to check the password against this API instead.
   can no longer be bypassed from DevTools. Delete is a soft delete
   (`deleted_at`), matching the app's own Doc Bin convention.
 
-**Not yet wired up:** the frontend only calls the `auth` endpoints so
-far. Documents still live in the browser (autosave, version history,
-Doc Bin, etc. are all unchanged). Pointing the document store at this
-API — so two users actually share documents — is the next step.
+- `POST /api/test-exec/scripts`, `POST /api/test-exec/runs`,
+  `GET /api/test-exec/runs/:jobId` — a **mock** remote test execution
+  backend, standing in for a real remote Test PC that doesn't exist
+  yet. Push a suite's Robot Framework script, start a run, poll for
+  results (randomized pass/fail, in-memory state - nothing here is
+  real hardware). Used by the "Run Test" / "Execute Automated Tests"
+  buttons in Test Management when this backend is configured. See
+  `src/services/remoteExecutionService.ts` on the frontend and
+  `src/testExec.ts` here for the real contract, which a future real
+  Test PC integration can be pointed at with no client-side changes.
 
 ## Running it
 

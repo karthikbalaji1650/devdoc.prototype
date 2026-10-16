@@ -16,6 +16,10 @@ import type { UserProfile } from '../../types/auth';
 import { AppSidebar } from '../AppSidebar';
 
 /* ─── Helper to resolve VS Code Server URL dynamically ─── */
+// Defaults to the same-origin /vscode/ reverse proxy (nginx.conf.template),
+// not a direct http://host:8080 - a cross-origin iframe there is blocked by
+// this app's own Content-Security-Policy (frame-src), and a raw port often
+// isn't even reachable in a real deployment the way the proxied path is.
 export const getStoredVscodeUrl = (): string => {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('devdoc_vscode_url');
@@ -23,8 +27,8 @@ export const getStoredVscodeUrl = (): string => {
   }
   const envUrl = import.meta.env.VITE_VSCODE_URL;
   if (envUrl && envUrl.trim()) return envUrl.trim();
-  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-  return `http://${host}:8080`;
+  if (typeof window !== 'undefined' && window.location.origin) return `${window.location.origin}/vscode/`;
+  return '/vscode/';
 };
 
 const ENVIRONMENT_LABEL = 'codercom/code-server (Claude 3.7 Sonnet)';
@@ -86,8 +90,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
   };
 
   const handleResetDefaultUrl = () => {
-    const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-    const defaultUrl = `http://${host}:8080`;
+    const defaultUrl = typeof window !== 'undefined' && window.location.origin ? `${window.location.origin}/vscode/` : '/vscode/';
     setInputUrl(defaultUrl);
     setVscodeUrl(defaultUrl);
     localStorage.removeItem('devdoc_vscode_url');
@@ -134,7 +137,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
                   type="text"
                   value={inputUrl}
                   onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="http://localhost:8080"
+                  placeholder="/vscode/ (same-origin proxy, avoids CSP)"
                   className="text-xs font-mono text-slate-900 bg-white border border-slate-300 rounded px-2 py-0.5 w-60 focus:outline-none focus:border-blue-500 shadow-2xs"
                   autoFocus
                 />

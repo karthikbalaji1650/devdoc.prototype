@@ -27,7 +27,7 @@ import { seedSampleDocumentsIfNeeded } from './services/sampleData';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
 import { getStoredReviewersLog } from './services/reviewersLogService';
 import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
-import { canEditDocument, canDeleteDocument, canAccessDataManagement, isAdmin, visibleDocumentsFor } from './services/permissions';
+import { canEditDocument, canDeleteDocument, isAdmin, visibleDocumentsFor } from './services/permissions';
 
 import { saveAs } from 'file-saver';
 import { 
@@ -45,7 +45,6 @@ const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage').
 const LandingHub = lazy(() => import('./components/hub/LandingHub').then((m) => ({ default: m.LandingHub })));
 const OperationsLayout = lazy(() => import('./components/operations/OperationsLayout').then((m) => ({ default: m.OperationsLayout })));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const DataManagementPage = lazy(() => import('./components/data/DataManagementPage').then((m) => ({ default: m.DataManagementPage })));
 const CoderView = lazy(() => import('./components/coder/CoderView').then((m) => ({ default: m.CoderView })));
 
 const PageLoading: React.FC = () => (
@@ -191,7 +190,7 @@ export const App: React.FC = () => {
     const onStorageError = () => {
       if (Date.now() - lastShown < 30000) return;
       lastShown = Date.now();
-      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Data Management.');
+      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Settings → System & Storage.');
       setTimeout(() => setToastMessage(null), 8000);
     };
     window.addEventListener(STORAGE_ERROR_EVENT, onStorageError);
@@ -646,38 +645,6 @@ export const App: React.FC = () => {
     );
   }
 
-  if (currentApp === 'data-management') {
-    // Requirement #8: database/data management is admin-only. The
-    // sidebar already hides this link for non-admins; this guard
-    // covers direct navigation too.
-    if (!canAccessDataManagement(currentUser)) {
-      return (
-        <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] font-sans overflow-hidden">
-          <AppSidebar user={currentUser} activeView="dashboard" onNavigate={handleLaunchApp} onLogout={handleLogout} />
-          <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <ShieldAlert className="w-8 h-8 text-[var(--amber)]" />
-            <p className="text-sm text-[var(--text-dim)]">Data Management is restricted to admins.</p>
-            <button
-              type="button"
-              onClick={() => handleLaunchApp('dashboard')}
-              className="text-xs font-semibold text-[var(--blue)] hover:underline"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <Suspense fallback={<PageLoading />}>
-        <DataManagementPage
-          user={currentUser}
-          onNavigate={handleLaunchApp}
-          onLogout={handleLogout}
-        />
-      </Suspense>
-    );
-  }
 
   // 5b. Render Coder (VS Code + Cline Agent embedded iframe)
   if (currentApp === 'coder') {

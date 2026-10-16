@@ -1,18 +1,16 @@
-export type AppView = 
+export type AppView =
   | 'login'
   | 'dashboard'
   | 'hub'
   | 'doccraft'
   | 'operations'
   | 'coder'
-  | 'data-management'
   | 'settings';
 
-export type OperationsTab = 
+export type OperationsTab =
   | 'incidents'
   | 'releases'
   | 'reviewers'
-  | 'gantt'
   | 'test-cases';
 
 export interface DockerContainerStatus {

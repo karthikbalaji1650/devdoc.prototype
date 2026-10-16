@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import type { Db } from '../src/db.js';
@@ -15,6 +15,38 @@ describe('POST /api/auth/login', () => {
     expect(res.body.user).toMatchObject({ id: 'usr-01', name: 'Manivannan Thangavel', role: 'admin' });
     expect(res.body.user.password_hash).toBeUndefined();
     expect(res.headers['set-cookie']?.[0]).toMatch(/devdoc_sid=.+HttpOnly/);
+  });
+
+  // Regression: the session cookie used to be Secure whenever
+  // NODE_ENV=production, which this project's own docker-compose demo
+  // sets - but that demo runs over plain HTTP, so the browser accepted
+  // the cookie on login then silently dropped it on the next request,
+  // breaking sign-in right after it looked like it worked.
+  //
+  // auth.ts computes COOKIE_OPTS once at module load, so the env var
+  // has to be stubbed *before* a fresh import, same pattern as
+  // rate-limit.test.ts and testExec.test.ts use for their own
+  // module-level state.
+  describe('the Secure cookie attribute', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('is not set by default - needed for plain-HTTP deployments like the docker-compose demo', async () => {
+      vi.stubEnv('COOKIE_SECURE', '');
+      vi.resetModules();
+      const { createApp: freshCreateApp } = await import('../src/app.js');
+      const app = freshCreateApp(db);
+      const res = await request(app).post('/api/auth/login').send({ email: TEST_USERS[0].email, password: TEST_USERS[0].password });
+      expect(res.headers['set-cookie']?.[0]).not.toMatch(/Secure/);
+    });
+
+    it('is set when COOKIE_SECURE=true, for a real HTTPS deployment', async () => {
+      vi.stubEnv('COOKIE_SECURE', 'true');
+      vi.resetModules();
+      const { createApp: freshCreateApp } = await import('../src/app.js');
+      const app = freshCreateApp(db);
+      const res = await request(app).post('/api/auth/login').send({ email: TEST_USERS[0].email, password: TEST_USERS[0].password });
+      expect(res.headers['set-cookie']?.[0]).toMatch(/Secure/);
+    });
   });
 
   it('matches email case-insensitively', async () => {

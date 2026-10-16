@@ -1,0 +1,111 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { TestSuiteItem } from '../types/operations';
+
+async function load() {
+  vi.resetModules();
+  return import('./remoteExecutionService');
+}
+
+const fetchMock = vi.fn();
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock);
+  vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:4000/');
+});
+afterEach(() => { fetchMock.mockReset(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+const suite: TestSuiteItem = {
+  id: 's1', title: 'RTC Suite', description: '', module: 'Firmware', createdAt: '2026-01-01',
+  testCases: [{
+    id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Drift check', preconditions: '', steps: [],
+    expectedResult: 'OK', priority: 'P2', type: 'Automated', createdAt: '2026-01-01',
+  }],
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status });
+}
+
+describe('isRemoteExecutionConfigured', () => {
+  it('tracks VITE_API_BASE_URL, same as the rest of the optional backend', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const { isRemoteExecutionConfigured } = await load();
+    expect(isRemoteExecutionConfigured()).toBe(false);
+  });
+
+  it('is true once VITE_API_BASE_URL is set', async () => {
+    const { isRemoteExecutionConfigured } = await load();
+    expect(isRemoteExecutionConfigured()).toBe(true);
+  });
+});
+
+describe('pushScript', () => {
+  it('posts the assembled robot text to /api/test-exec/scripts', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+    const { pushScript } = await load();
+    await pushScript(suite);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:4000/api/test-exec/scripts');
+    const body = JSON.parse(init.body);
+    expect(body.suiteId).toBe('s1');
+    expect(body.suiteTitle).toBe('RTC Suite');
+    expect(body.robotCode).toContain('TC-001');
+  });
+
+  it('throws the server\'s own error message on failure', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'robotCode is required.' }, 400));
+    const { pushScript } = await load();
+    await expect(pushScript(suite)).rejects.toThrow('robotCode is required.');
+  });
+});
+
+describe('startRun', () => {
+  it('posts suiteId and returns the jobId', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'job-123' }));
+    const { startRun } = await load();
+    await expect(startRun('s1')).resolves.toBe('job-123');
+  });
+});
+
+describe('pollRunStatus', () => {
+  it('returns running while the mock job is still in progress', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ status: 'running' }));
+    const { pollRunStatus } = await load();
+    await expect(pollRunStatus('job-123')).resolves.toEqual({ status: 'running' });
+  });
+
+  it('returns results once completed', async () => {
+    const results = { _schema: 'devdoc-robot-results-v1', suiteTitle: 'RTC Suite', executedAt: '2026-01-01', environment: 'Mock', summary: { total: 1, passed: 1, failed: 0, skipped: 0 }, results: [] };
+    fetchMock.mockResolvedValue(jsonResponse({ status: 'completed', results }));
+    const { pollRunStatus } = await load();
+    await expect(pollRunStatus('job-123')).resolves.toEqual({ status: 'completed', results });
+  });
+});
+
+describe('runRemoteExecution', () => {
+  it('pushes, starts, polls (on the injected short interval), and reports completion', async () => {
+    const results = { _schema: 'devdoc-robot-results-v1', suiteTitle: 'RTC Suite', executedAt: '2026-01-01', environment: 'Mock', summary: { total: 1, passed: 1, failed: 0, skipped: 0 }, results: [] };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: true })) // push
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job-123' })) // start
+      .mockResolvedValueOnce(jsonResponse({ status: 'running' })) // first poll
+      .mockResolvedValueOnce(jsonResponse({ status: 'completed', results })); // second poll
+
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    await runRemoteExecution(suite, (u) => updates.push(u), { pollIntervalMs: 1 });
+
+    expect(updates[0]).toEqual({ state: 'running' });
+    expect(updates[1]).toEqual({ state: 'completed', results });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('reports a failure via onUpdate instead of throwing, if pushing the script fails', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'suiteId is required.' }, 400));
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    await runRemoteExecution(suite, (u) => updates.push(u), { pollIntervalMs: 1 });
+
+    expect(updates).toEqual([{ state: 'error', message: 'suiteId is required.' }]);
+  });
+});
