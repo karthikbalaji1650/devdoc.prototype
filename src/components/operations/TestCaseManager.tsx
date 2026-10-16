@@ -4,6 +4,8 @@ import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
 import { loadSuites, saveSuites, loadRuns, saveRuns, loadMilestones, saveMilestones } from '../../services/testManagementStoreService';
+import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
+import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary } from '../../services/testCaseLibraryService';
 import {
   saveToLibrary as saveSuiteToLibrary,
@@ -834,8 +836,9 @@ const TestCasesView: React.FC<{
   onImportProtocolExcel: (file: File) => void;
   onShowAiModal: () => void;
   onShowBackAnnotateModal: () => void;
+  onRunTest: (suite: TestSuiteItem) => void;
 }> = ({ suites, selectedSuiteId, onSelectSuite, onUpdateSuites, onShowToast,
-        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal }) => {
+        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest }) => {
   const [collapseAll, setCollapseAll]       = useState(false);
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
   const [showAddCase, setShowAddCase]       = useState(false);
@@ -952,7 +955,7 @@ const TestCasesView: React.FC<{
           <button onClick={onShowBackAnnotateModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors">
             <RefreshCw className="w-3.5 h-3.5" /> Back-Annotate (VS Code)
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs">
+          <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5" /> Run Test
           </button>
           {selectedSuite && <>
@@ -1438,14 +1441,16 @@ const RunDetailView: React.FC<{
 
 // ── Test Runs View ─────────────────────────────────────────────────────────────
 const TestRunsView: React.FC<{
-  runs: TestRunItem[]; suites: TestSuiteItem[]; milestones: MilestoneItem[];
+  runs: TestRunItem[]; suites: TestSuiteItem[]; milestones: MilestoneItem[]; selectedSuiteId: string | null;
   onAddRun: (run: TestRunItem) => void; onUpdateRun: (run: TestRunItem) => void;
   onDeleteRun: (id: string) => void; onShowToast?: (msg: string) => void;
   lastRunResults: { run: TestRunItem; results: ParsedRobotTestResult[]; suiteName: string } | null;
   onProcessXml: (xml: string) => void; onDownloadResultJson: () => void; onExportRunReport: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
-}> = ({ runs, suites, milestones, onAddRun, onUpdateRun, onDeleteRun,
-        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites }) => {
+  onRunTest: (suite: TestSuiteItem) => void;
+}> = ({ runs, suites, milestones, selectedSuiteId, onAddRun, onUpdateRun, onDeleteRun,
+        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites, onRunTest }) => {
+  const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const [showAddModal,  setShowAddModal]  = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string|null>(null);
   const [showXmlModal,  setShowXmlModal]  = useState(false);
@@ -1495,7 +1500,7 @@ const TestRunsView: React.FC<{
           <button onClick={()=>setShowAddModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-xs">
             <Plus className="w-3.5 h-3.5"/> Add Test Run
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs">
+          <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5"/> Execute Automated Tests
           </button>
         </div>
@@ -2295,13 +2300,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   };
 
   const handleExportRobotSuite = async (suite: TestSuiteItem) => {
-    const cases = (suite.testCases || []).filter(tc => tc.type === 'Automated' || tc.automationCandidate);
-    const lines = [`*** Settings ***\nDocumentation     ${suite.title}\nLibrary           RequestsLibrary\n\n*** Test Cases ***`];
-    cases.forEach(tc => {
-      const code = tc.robotCode || `${tc.customId}_${tc.title.replace(/\s+/g, '_')}\n    [Tags]    ${tc.priority}    ${(tc.labels || []).join('    ')}\n    Log    Test: ${tc.title}`;
-      lines.push('\n' + code);
-    });
-    const content = lines.join('\n');
+    const content = buildRobotSuiteText(suite);
     const cleanTitle = (suite.title || 'robot_suite').toLowerCase().replace(/[^a-z0-9]/gi, '_');
     const filename = `${cleanTitle}.robot`;
 
@@ -2318,6 +2317,69 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     } else {
       showToast(`✅ Downloaded "${filename}".`);
     }
+  };
+
+  // Both "Run Test" (Test Cases toolbar) and "Execute Automated Tests"
+  // (Test Runs toolbar) call this, scoped to the currently selected
+  // suite. Pushes the suite's script to the remote execution backend
+  // (a mock today - see server/src/testExec.ts), shows an "In Progress"
+  // run immediately, then updates it in place once results sync back.
+  const handleRunTest = (suite: TestSuiteItem) => {
+    if (!isRemoteExecutionConfigured()) {
+      showToast('⚠️ Remote execution needs a backend - see server/README.md.');
+      return;
+    }
+
+    const runId = `run-${Date.now()}`;
+    const placeholderRun: TestRunItem = {
+      id: runId,
+      name: `${suite.title} Remote Execution Run`,
+      suiteId: suite.id,
+      environment: 'Remote Test PC',
+      status: 'In Progress',
+      passedCount: 0,
+      failedCount: 0,
+      blockedCount: 0,
+      executedAt: new Date().toISOString(),
+    };
+    setRuns(prev => [placeholderRun, ...prev]);
+    setView('runs');
+    showToast('🚀 Run started — this can take a while; results sync automatically.');
+
+    runRemoteExecution(suite, (update: RemoteExecutionUpdate) => {
+      if (update.state === 'error') {
+        setRuns(prev => prev.map(r => r.id === runId ? { ...r, status: 'Failed' } : r));
+        showToast(`❌ Remote execution failed: ${update.message}`);
+        return;
+      }
+      if (update.state === 'completed') {
+        const parsedResults: ParsedRobotTestResult[] = update.results.results;
+        const caseResults: TestRunCaseResult[] = parsedResults.map((r, i) => ({
+          caseId: `tc-${i}`, customId: r.customId, title: r.title,
+          status: (r.status === 'PASS' ? 'Passed' : r.status === 'SKIP' ? 'Skipped' : 'Failed') as TestCaseStatus,
+        }));
+        const updatedRun: TestRunItem = {
+          ...placeholderRun,
+          status: update.results.summary.failed === 0 ? 'Completed' : 'Failed',
+          passedCount: update.results.summary.passed,
+          failedCount: update.results.summary.failed,
+          blockedCount: update.results.summary.skipped,
+          caseResults,
+        };
+        setRuns(prev => prev.map(r => r.id === runId ? updatedRun : r));
+        setLastRunResults({ run: updatedRun, results: parsedResults, suiteName: suite.title });
+
+        // Unlike the XML-import path (handleProcessXml), this back-annotates
+        // the suite's own test case statuses too, since it's the same data.
+        setSuites(prev => prev.map(s => {
+          if (s.id !== suite.id) return s;
+          const { updatedSuite } = backAnnotateTestSuite(s, [], parsedResults);
+          return updatedSuite;
+        }));
+
+        showToast(`✅ Run complete — ${update.results.summary.passed} passed, ${update.results.summary.failed} failed.`);
+      }
+    });
   };
 
   const handleExportProtocolExcel = async () => {
@@ -2371,11 +2433,12 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onImportProtocolExcel={handleImportProtocolExcel}
               onShowAiModal={()=>setShowAiModal(true)}
               onShowBackAnnotateModal={()=>setShowBackAnnotateModal(true)}
+              onRunTest={handleRunTest}
             />
           )}
           {view==='runs' && (
             <TestRunsView
-              runs={runs} suites={suites} milestones={milestones}
+              runs={runs} suites={suites} milestones={milestones} selectedSuiteId={selectedSuiteId}
               onAddRun={r=>setRuns(prev=>[...prev,r])}
               onUpdateRun={r=>setRuns(prev=>prev.map(x=>x.id===r.id?r:x))}
               onDeleteRun={id=>setRuns(prev=>prev.filter(r=>r.id!==id))}
@@ -2384,6 +2447,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onDownloadResultJson={handleDownloadResultJson}
               onExportRunReport={handleExportRunReport}
               onUpdateSuites={setSuites}
+              onRunTest={handleRunTest}
             />
           )}
           {view==='milestones' && (

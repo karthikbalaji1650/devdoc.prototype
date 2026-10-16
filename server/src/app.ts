@@ -6,6 +6,7 @@ import { withSession } from './middleware.js';
 import { authRouter } from './routes/auth.js';
 import { documentsRouter } from './routes/documents.js';
 import { aiRouter } from './routes/ai.js';
+import { testExecRouter } from './routes/testExec.js';
 
 export interface AppOptions {
   /** Origins allowed to send credentialed requests (the Vite dev server, the deployed frontend). */
@@ -25,6 +26,7 @@ export function createApp(db: Db, opts: AppOptions = {}): Express {
   app.use('/api/auth', authRouter(db));
   app.use('/api/documents', documentsRouter(db));
   app.use('/api/ai', aiRouter());
+  app.use('/api/test-exec', testExecRouter());
 
   return app;
 }
