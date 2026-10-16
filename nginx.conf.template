@@ -15,13 +15,16 @@ server {
     # substitution to just this one variable, so nginx's own $host,
     # $http_upgrade etc. below are left alone). Empty when unset: the app
     # still runs, just without that origin allow-listed.
+    # frame-src includes 'self' for the Coder screen's embedded code-server
+    # - reached via the same-origin /vscode/ proxy below, never a direct
+    # cross-origin port, so no extra origin needs allow-listing here.
     # Known, remaining gap: a custom Ollama URL (not the localhost default
     # already listed) still isn't covered - it's configured per-browser in
     # Settings, with nowhere server-side to read it from at container start.
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header X-Frame-Options "DENY" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://generativelanguage.googleapis.com https://api.openai.com http://localhost:11434 ${BACKEND_ORIGIN}; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://generativelanguage.googleapis.com https://api.openai.com http://localhost:11434 ${BACKEND_ORIGIN}; frame-src 'self' https://accounts.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
 
     # Reverse-proxy ALL /vscode/* traffic to code-server.
     # This must be declared before the catch-all location / so that
