@@ -97,13 +97,6 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     expect(await scan(page)).toEqual([]);
   });
 
-  test('gantt', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Gantt', exact: true }).first().click();
-    await expect(page.getByRole('heading', { name: /Project & Task Management/i })).toBeVisible();
-    expect(await scan(page)).toEqual([]);
-  });
 });
 
 test.describe('dialogs are keyboard accessible', () => {

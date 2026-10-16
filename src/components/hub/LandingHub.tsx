@@ -230,7 +230,7 @@ export const LandingHub: React.FC<LandingHubProps> = ({
                     Engineering Operations & Release Hub
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Integrated management suite featuring sidebar navigation for Incident Reporting, JIRA Release Tracking, Document Reviewers Log with Google Spreadsheet sync, and interactive Gantt Charts.
+                    Integrated management suite featuring sidebar navigation for Incident Reporting, JIRA Release Tracking, and Document Reviewers Log with Google Spreadsheet sync.
                   </p>
                 </div>
 
@@ -257,7 +257,6 @@ export const LandingHub: React.FC<LandingHubProps> = ({
                   >
                     📋 <strong className="text-slate-900">Option 3: Reviewers Log</strong> & Sheets
                   </button>
-
                 </div>
               </div>
 
