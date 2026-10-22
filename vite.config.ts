@@ -16,8 +16,17 @@ export default defineConfig({
       '/vscode': {
         target: 'http://localhost:8080',
         ws: true,
-        changeOrigin: true,
+        // Keep the browser's Host (port included): code-server 403s the
+        // websocket when Origin and Host don't match, leaving a blank workbench.
+        changeOrigin: false,
         rewrite: (path) => path.replace(/^\/vscode/, ''),
+        configure: (proxy) => {
+          const keepHost = (proxyReq: { setHeader(k: string, v: string): void }, req: { headers: Record<string, string | string[] | undefined> }) => {
+            if (typeof req.headers.host === 'string') proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+          };
+          proxy.on('proxyReq', keepHost);
+          proxy.on('proxyReqWs', keepHost);
+        },
       },
     },
   },

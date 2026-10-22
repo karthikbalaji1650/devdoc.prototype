@@ -40,7 +40,10 @@ server {
         proxy_set_header Connection $connection_upgrade;
 
         # Forward real client info
-        proxy_set_header Host $host;
+        # $http_host keeps the port: code-server 403s the websocket unless
+        # Host matches the browser's Origin exactly (blank workbench).
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
