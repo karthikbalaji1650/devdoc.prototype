@@ -1,5 +1,14 @@
 # Security review
 
+> **Note (2026-10-26):** the backend reviewed below (`server/`, Node/Express)
+> has since been replaced by a Python/FastAPI port in `backend/` with the
+> same HTTP contract. The fixes for findings 1 and 2 were carried over:
+> the login rate limit is reproduced exactly (same window, limit, headers
+> and refund-on-success rule), and the API image runs as a non-root user
+> (uid 1000). The port itself has not been through this review; treat
+> the rest of this document as describing the Node backend at the commit
+> named below.
+
 An internal review of DevDoc Studio and its optional backend (`server/`),
 done 2026-10-01 against commit `a45ae77`. This is a code-level review by
 the person building the app, not an independent third-party audit or a

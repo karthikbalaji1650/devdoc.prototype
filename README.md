@@ -5,22 +5,68 @@ editor with templates, live preview and export (DOCX, Google Docs,
 JSON), plus test-case management, release tracking and an admin data
 view. React 19 + Vite + Tailwind 4, TypeScript throughout.
 
-By default the app runs entirely in the browser (mock login, all data
-in localStorage) — no setup needed beyond `npm install`. An optional
-backend in [server/](server/README.md) adds real, server-checked login
-and document sharing across users; see that README to enable it.
+The repo has two halves:
+
+- **[frontend/](frontend/)**: the React app, which needs Node only for its tooling.
+- **[backend/](backend/README.md)**: the Python FastAPI API, which adds real server-checked login, shared documents, an AI key proxy and remote test execution.
+
+By default the frontend runs entirely in the browser (mock login, all data in localStorage); point it at the backend to use the real API.
+
+## Project layout
+
+```
+frontend/            React 19 + Vite + Tailwind 4 + TypeScript
+  src/
+    components/      screens and UI
+    services/        API clients, stores, business logic
+    types/           shared TypeScript types (data models)
+    hooks/ templates/ exporters/
+  e2e/               Playwright browser tests
+  Dockerfile         builds the app, served by nginx (nginx.conf.template)
+backend/             Python 3.12 + FastAPI, managed with uv
+  app/
+    routers/         HTTP layer, one module per route group
+    services/        business logic
+    repositories/    database access (Postgres, plus in-memory for tests)
+    models/          domain records
+    schemas/         request/response models (the API contract)
+    core/ db/        config, HTTP plumbing, connection pool
+  sql/init.sql       Postgres schema + seed data
+  tests/             pytest
+sandbox/             VS Code + Robot Framework container (the Coder screen)
+docs/                API contract, migration report, reference documents
+docker-compose.yml   the full stack
+```
 
 ## Quick start
 
+**Everything in Docker** (Postgres, API, web app, sandbox):
+
 ```
-npm install
-npm run dev          # http://localhost:5173
+docker compose up --build
 ```
 
-Copy `.env.example` to `.env.local` if you want Google Docs export or
-the optional backend (see the comments in that file for both).
+The app is at http://localhost:5173 and the API at http://localhost:8000 (docs at `/docs`). Demo login: `mani.thangavel@sanmina.com` / `devdoc-demo`.
 
-## Scripts
+**Local development with hot reload:**
+
+```
+docker compose up -d postgres-db                  # or any Postgres seeded with backend/sql/init.sql
+
+cd backend                                        # terminal 1
+cp .env.example .env && uv sync
+uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-header
+
+cd frontend                                       # terminal 2
+echo "VITE_API_BASE_URL=http://localhost:8000" >> .env.local
+npm install && npm run dev                        # http://localhost:5173
+```
+
+Leave out `VITE_API_BASE_URL` for the browser-only demo. `frontend/.env.example` covers that and Google Docs export.
+
+## Frontend scripts
+
+Run these from `frontend/`:
 
 | Command | What it does |
 |---|---|
@@ -32,17 +78,18 @@ the optional backend (see the comments in that file for both).
 
 ## Testing
 
-**Unit tests** (`npm test`) cover the services and business logic:
+**Unit tests** (`npm test` in `frontend/`) cover the services and business logic:
 permissions, autosave, storage-quota handling, version history, the
-document store, exporters, and (in `server/`) the API's auth and
-documents routes against an in-memory Postgres.
+document store and exporters. The backend has its own pytest suite
+(`cd backend && uv run pytest`) covering every API route, plus tests
+that run its SQL against a real Postgres.
 
 **Browser tests** (`npm run test:e2e`, Playwright) drive the real app
 in a browser: sign-in, autosave, permissions, the dashboard, storage
 warnings, crash recovery, and an automated accessibility scan (axe,
-WCAG 2 A/AA) of every screen and dialog. One spec additionally starts
-the real API from `server/` to check the frontend and backend
-together.
+WCAG 2 A/AA) of every screen and dialog. Two specs additionally start
+the real API from `backend/` (needs [uv](https://docs.astral.sh/uv/)
+and `uv sync` in `backend/`) to check the frontend and backend together.
 
 ### Supported browsers
 
@@ -70,10 +117,10 @@ layout and may not work well.
 
 ## Docker
 
-`docker compose up` starts Postgres, the optional API (`server/`) and
-the web app together, already wired to each other — no extra steps
-needed. See [server/README.md](server/README.md) for the API on its
-own, and the demo accounts it seeds.
+`docker compose up` starts Postgres, the optional API (`backend/`, on
+port 8000) and the web app together, already wired to each other — no
+extra steps needed. See [backend/README.md](backend/README.md) for the
+API on its own, and the demo accounts it seeds.
 
 CI builds and publishes both images on every push to `main`, tagged
 `latest` and with the commit SHA:
@@ -86,9 +133,3 @@ step — nothing is deployed automatically yet, only built.
 [SECURITY.md](SECURITY.md) has the latest internal security review:
 what was checked, what was fixed, and what's an accepted or open gap.
 
-## Project layout
-
-- `src/` — the frontend (this README's project)
-- `server/` — the optional backend API ([its own README](server/README.md))
-- `e2e/` — Playwright browser tests
-- `init.sql` — Postgres schema and seed data for `server/`

@@ -16,7 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform_admin -d platform_db"]
       interval: 10s
@@ -24,31 +24,30 @@ services:
       retries: 5
 
   # ----------------------------------------------------
-  # 1b. API — real authentication and shared document storage
-  #     (server/). The frontend only calls it when VITE_API_BASE_URL
-  #     is set at build time; without it the app still runs as a
-  #     browser-only demo, unchanged.
+  # 1b. API (FastAPI, backend/) — real authentication and shared
+  #     document storage. The frontend only calls it when
+  #     VITE_API_BASE_URL is set at build time; without it the app
+  #     still runs as a browser-only demo, unchanged.
   # ----------------------------------------------------
   api:
     build:
-      context: ./server
+      context: ./backend
       dockerfile: Dockerfile
     container_name: devdoc-studio-api
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "8000:8000"
     depends_on:
       postgres-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 5
     environment:
-      - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
+      - DATABASE_URL=postgresql://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
       - CORS_ORIGINS=http://localhost:5173
-      - NODE_ENV=production
       # Optional: set in your shell or a root .env before `docker compose up`
       # to let the frontend's AI rephrase feature use this server as a key-
       # holding proxy instead of a per-browser key. Unset by default.
@@ -60,7 +59,7 @@ services:
   # ----------------------------------------------------
   web-app:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         # Defaults to how the api service is reachable from the host (and
@@ -68,7 +67,7 @@ services:
         # docker compose up now produces a frontend that can actually reach
         # the backend, not just one running next to it. Override in your
         # shell or a root .env for a different deployment.
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:4000}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     container_name: devdoc-studio-app
     restart: unless-stopped
     ports:
@@ -82,7 +81,7 @@ services:
       - NODE_ENV=production
       # Same origin as the build arg above, so the CSP (see
       # nginx.conf.template) actually allows the frontend to call it.
-      - BACKEND_ORIGIN=${VITE_API_BASE_URL:-http://localhost:4000}
+      - BACKEND_ORIGIN=${VITE_API_BASE_URL:-http://localhost:8000}
 
   # ----------------------------------------------------
   # 2b. Dev server (hot reload) — opt-in via `--profile dev`,
@@ -92,13 +91,13 @@ services:
   web-app-dev:
     profiles: ["dev"]
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: devdoc-studio-app-dev
     ports:
       - "5174:5173"
     volumes:
-      - .:/app
+      - ./frontend:/app
       # Anonymous volume so the container's own (Linux) node_modules
       # aren't clobbered by the host's bind mount — the host's copy may
       # have macOS/Windows-specific native binaries (esbuild, rollup,
@@ -112,8 +111,8 @@ services:
   # ----------------------------------------------------
   vscode-cline:
     build:
-      context: .
-      dockerfile: Dockerfile.vscode-cline
+      context: ./sandbox
+      dockerfile: Dockerfile
     container_name: devdoc-vscode-cline
     restart: unless-stopped
     ports:
