@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Optional: points the built frontend at the backend in server/, exactly
+# Optional: points the built frontend at the backend in backend/, exactly
 # like running it locally with VITE_API_BASE_URL set. Unset (the
 # default) builds the same browser-only app as always - docker-compose
 # passes this through so `docker compose up` works out of the box.

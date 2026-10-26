@@ -10,7 +10,7 @@ server {
     # Security headers (SRS #13). Scoped to what this app actually loads:
     # Google Identity Services (login) and Drive (export), Google Fonts,
     # the Gemini / OpenAI APIs when AI assist is configured with them, and
-    # the backend API (server/) at BACKEND_ORIGIN - substituted from the
+    # the backend API (backend/) at BACKEND_ORIGIN - substituted from the
     # environment at container start (NGINX_ENVSUBST_FILTER below limits
     # substitution to just this one variable, so nginx's own $host,
     # $http_upgrade etc. below are left alone). Empty when unset: the app

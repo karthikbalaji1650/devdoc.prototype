@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
         TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Server-side sessions for the API (server/): a random id per sign-in,
+-- Server-side sessions for the API (backend/): a random id per sign-in,
 -- deleted on logout, so revoking access takes effect immediately
 -- (unlike a JWT, which stays valid until it expires on its own).
 CREATE TABLE IF NOT EXISTS sessions (

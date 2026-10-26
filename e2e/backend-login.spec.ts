@@ -33,7 +33,9 @@ let frontendProc: ChildProcessWithoutNullStreams;
 let users: { email: string; password: string; name: string }[];
 
 test.beforeAll(async () => {
-  apiProc = spawn('uv', ['run', '--frozen', 'python', '-m', 'tests.e2e_server'], {
+  // The backend venv's python directly (after `uv sync` in backend/), not
+  // `uv run`: killing uv can leave the server orphaned on its port.
+  apiProc = spawn(path.join(REPO_ROOT, 'backend', '.venv', 'bin', 'python'), ['-m', 'tests.e2e_server'], {
     cwd: path.join(REPO_ROOT, 'backend'),
     env: { ...process.env, PORT: String(API_PORT), FRONTEND_ORIGIN: `http://localhost:${FRONTEND_PORT}` },
   });

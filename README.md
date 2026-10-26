@@ -7,8 +7,9 @@ view. React 19 + Vite + Tailwind 4, TypeScript throughout.
 
 By default the app runs entirely in the browser (mock login, all data
 in localStorage) — no setup needed beyond `npm install`. An optional
-backend in [server/](server/README.md) adds real, server-checked login
-and document sharing across users; see that README to enable it.
+Python backend (FastAPI) in [backend/](backend/README.md) adds real,
+server-checked login and document sharing across users; see that README
+to enable it. Node is only needed for the frontend's tooling.
 
 ## Quick start
 
@@ -34,15 +35,16 @@ the optional backend (see the comments in that file for both).
 
 **Unit tests** (`npm test`) cover the services and business logic:
 permissions, autosave, storage-quota handling, version history, the
-document store, exporters, and (in `server/`) the API's auth and
-documents routes against an in-memory Postgres.
+document store and exporters. The backend has its own pytest suite
+(`cd backend && uv run pytest`) covering every API route, plus tests
+that run its SQL against a real Postgres.
 
 **Browser tests** (`npm run test:e2e`, Playwright) drive the real app
 in a browser: sign-in, autosave, permissions, the dashboard, storage
 warnings, crash recovery, and an automated accessibility scan (axe,
-WCAG 2 A/AA) of every screen and dialog. One spec additionally starts
-the real API from `server/` to check the frontend and backend
-together.
+WCAG 2 A/AA) of every screen and dialog. Two specs additionally start
+the real API from `backend/` (needs [uv](https://docs.astral.sh/uv/)
+and `uv sync` in `backend/`) to check the frontend and backend together.
 
 ### Supported browsers
 
@@ -70,10 +72,10 @@ layout and may not work well.
 
 ## Docker
 
-`docker compose up` starts Postgres, the optional API (`server/`) and
-the web app together, already wired to each other — no extra steps
-needed. See [server/README.md](server/README.md) for the API on its
-own, and the demo accounts it seeds.
+`docker compose up` starts Postgres, the optional API (`backend/`, on
+port 8000) and the web app together, already wired to each other — no
+extra steps needed. See [backend/README.md](backend/README.md) for the
+API on its own, and the demo accounts it seeds.
 
 CI builds and publishes both images on every push to `main`, tagged
 `latest` and with the commit SHA:
@@ -89,6 +91,7 @@ what was checked, what was fixed, and what's an accepted or open gap.
 ## Project layout
 
 - `src/` — the frontend (this README's project)
-- `server/` — the optional backend API ([its own README](server/README.md))
+- `backend/` — the optional backend API, Python/FastAPI ([its own README](backend/README.md))
+- `docs/api-contract.md` — the API's HTTP contract
 - `e2e/` — Playwright browser tests
-- `init.sql` — Postgres schema and seed data for `server/`
+- `init.sql` — Postgres schema and seed data for `backend/`
