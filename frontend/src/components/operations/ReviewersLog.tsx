@@ -298,14 +298,23 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
 
       {/* Linked DocCraft Document Banner (Auto-Fetched Title) */}
       {currentDocument && (
-        <div className="bg-gradient-to-r from-blue-50/80 via-white to-emerald-50/50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+        // Dark-theme tokens, not light Tailwind gradient stops: index.css remaps
+        // this banner's text to light colors but has no remap for gradients,
+        // which left light text on a near-white background.
+        <div
+          className="rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+          style={{
+            background: 'linear-gradient(90deg, rgba(62, 199, 255, 0.10), var(--panel) 45%, rgba(43, 255, 176, 0.07))',
+            border: '1px solid var(--border)',
+          }}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 font-mono">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--blue)] font-mono">
                   Active DocCraft Document
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono border border-blue-200">
