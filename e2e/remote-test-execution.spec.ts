@@ -32,8 +32,8 @@ let frontendProc: ChildProcessWithoutNullStreams;
 let users: { email: string; password: string; name: string }[];
 
 test.beforeAll(async () => {
-  apiProc = spawn('npx', ['tsx', 'test/manual-integration-server.ts'], {
-    cwd: path.join(REPO_ROOT, 'server'),
+  apiProc = spawn('uv', ['run', '--frozen', 'python', '-m', 'tests.e2e_server'], {
+    cwd: path.join(REPO_ROOT, 'backend'),
     env: { ...process.env, PORT: String(API_PORT), FRONTEND_ORIGIN: `http://localhost:${FRONTEND_PORT}` },
   });
   const ready = await waitForLine(apiProc, /READY (.+)/);

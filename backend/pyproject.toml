@@ -1,0 +1,40 @@
+[project]
+name = "devdoc-studio-api"
+version = "0.1.0"
+description = "DevDoc Studio API: auth, shared documents, AI proxy and remote test execution."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bcrypt>=4.2",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "respx>=0.22",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "postgres: needs a real Postgres at TEST_DATABASE_URL (skipped otherwise)",
+    "parity: compares a running Node API with a running FastAPI (skipped unless both URLs are set)",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

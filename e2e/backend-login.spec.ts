@@ -3,11 +3,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// This spec proves the frontend and the real API (server/) work
+// This spec proves the frontend and the real API (backend/) work
 // together: unlike the rest of e2e/, which runs the app without
 // VITE_API_BASE_URL (the browser-only demo, per playwright.config.ts),
-// it starts the real Express app on an in-memory Postgres and a
-// second Vite dev server configured to talk to it.
+// it starts the real FastAPI app (backend/tests/e2e_server.py) on
+// in-memory repositories and a second Vite dev server configured to
+// talk to it.
 const API_PORT = 4111;
 const FRONTEND_PORT = 5199;
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,8 +33,8 @@ let frontendProc: ChildProcessWithoutNullStreams;
 let users: { email: string; password: string; name: string }[];
 
 test.beforeAll(async () => {
-  apiProc = spawn('npx', ['tsx', 'test/manual-integration-server.ts'], {
-    cwd: path.join(REPO_ROOT, 'server'),
+  apiProc = spawn('uv', ['run', '--frozen', 'python', '-m', 'tests.e2e_server'], {
+    cwd: path.join(REPO_ROOT, 'backend'),
     env: { ...process.env, PORT: String(API_PORT), FRONTEND_ORIGIN: `http://localhost:${FRONTEND_PORT}` },
   });
   const ready = await waitForLine(apiProc, /READY (.+)/);

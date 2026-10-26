@@ -1,0 +1,75 @@
+# devdoc-studio-api
+
+The DevDoc Studio backend, in Python on FastAPI: server-checked login,
+shared document storage on Postgres, a key-holding AI proxy, and a mock
+remote test-execution service. It replaced the original Node/Express API
+with an identical HTTP contract ([docs/api-contract.md](../docs/api-contract.md)),
+so the React frontend talks to it unchanged.
+
+The frontend still runs without it: leave `VITE_API_BASE_URL` unset and
+DevDoc Studio is the browser-only demo (mock login, localStorage).
+
+## Layout
+
+```
+app/
+  main.py          app factory: routers, middleware, exception handlers, lifespan
+  core/            config, Express-compatible HTTP layer (errors, CORS, body parsing,
+                   routing rules, cookies, rate limiting) and JS-semantics helpers
+  routers/         thin HTTP layer, one module per route group
+  services/        business logic: auth, documents (+ permissions), ai, test_exec
+  repositories/    storage behind Protocols: postgres (production), memory (tests)
+  models/          domain records (User, DocumentRecord, Job, ...)
+  schemas/         Pydantic models describing the wire contract for /openapi.json
+  db/              connection pool, node-postgres-compatible parameter coercion
+tests/             pytest suite; parity/ compares against the old Node API
+```
+
+## Endpoints
+
+| Route | Notes |
+|---|---|
+| `GET /api/health` | `{"ok": true}` |
+| `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | bcrypt check, random session id in an httpOnly `devdoc_sid` cookie, stored in `sessions` so logout revokes it at once. Login is rate-limited: 10 failures per IP per 15 min. |
+| `GET/PUT/DELETE /api/documents[/:id]`, `DELETE /api/documents/:id/purge` | Each route re-checks the frontend's edit/visibility rules server-side. DELETE is a soft delete; purge removes the row. |
+| `GET /api/ai/providers`, `POST /api/ai/rephrase`, `POST /api/ai/generate-test-cases` | Proxies Gemini/OpenAI with server-side keys. |
+| `POST /api/test-exec/scripts`, `POST /api/test-exec/runs`, `GET /api/test-exec/runs/:jobId` | **Mock** remote Test PC with in-memory state and randomized results. |
+
+Interactive docs: `/docs`; schema: `/openapi.json`.
+
+## Running it
+
+With docker-compose, run `docker compose up` from the repo root. It starts Postgres, this API on port 8000, and the web app, already wired together.
+
+Standalone, for development (needs [uv](https://docs.astral.sh/uv/)):
+
+```
+cp .env.example .env      # DATABASE_URL, CORS_ORIGINS, optional AI keys
+uv sync
+uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-header
+```
+
+This needs a Postgres reachable at `DATABASE_URL`, seeded by the repo's
+`init.sql` (docker-compose does this on first start).
+
+## Demo accounts
+
+These are seeded by `init.sql`. All three use the password `devdoc-demo` (local/demo use only).
+
+| Email | Role |
+|---|---|
+| mani.thangavel@sanmina.com | admin |
+| vaishnavi.aasaithambi@sanmina.com | release-manager |
+| sahith.pattu@sanmina.com | firmware-lead |
+
+## Tests
+
+```
+uv run pytest                     # unit + contract tests, in-memory repositories, no database
+uv run ruff check . && uv run ruff format --check .
+TEST_DATABASE_URL=postgresql://...  uv run pytest tests/test_postgres.py   # real SQL; wipes that database
+```
+
+`tests/e2e_server.py` is the API the Playwright specs `e2e/backend-login.spec.ts`
+and `e2e/remote-test-execution.spec.ts` start. It runs on in-memory repositories,
+so no database is needed.
