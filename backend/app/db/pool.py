@@ -19,5 +19,9 @@ def create_pool(database_url: str) -> AsyncConnectionPool:
         database_url,
         open=False,
         configure=_configure,
+        # Verify a pooled connection before use: after a Postgres restart the
+        # idle ones are dead, and node-postgres likewise dropped idle clients
+        # that errored instead of failing the next request with them.
+        check=AsyncConnectionPool.check_connection,
         kwargs={"row_factory": dict_row, "autocommit": True},
     )

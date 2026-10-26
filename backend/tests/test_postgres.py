@@ -1,4 +1,4 @@
-"""The real SQL against a real Postgres, seeded from the repo's init.sql.
+"""The real SQL against a real Postgres, seeded from sql/init.sql.
 
 Skipped unless TEST_DATABASE_URL points at a database this test may wipe:
     TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/devdoc_test uv run pytest -m postgres
@@ -18,7 +18,7 @@ from tests.conftest import test_settings
 pytestmark = pytest.mark.postgres
 
 DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
-INIT_SQL = Path(__file__).resolve().parents[2] / "init.sql"
+INIT_SQL = Path(__file__).resolve().parents[1] / "sql" / "init.sql"
 DEMO_PASSWORD = "devdoc-demo"  # init.sql's seeded password, demo use only
 ADMIN_EMAIL = "mani.thangavel@sanmina.com"
 AUTHOR_EMAIL = "vaishnavi.aasaithambi@sanmina.com"

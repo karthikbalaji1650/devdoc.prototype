@@ -22,6 +22,7 @@ app/
   models/          domain records (User, DocumentRecord, Job, ...)
   schemas/         Pydantic models describing the wire contract for /openapi.json
   db/              connection pool, node-postgres-compatible parameter coercion
+sql/init.sql       Postgres schema + seed data (docker-compose runs it on first start)
 tests/             pytest suite; parity/ compares against the old Node API
 ```
 
@@ -50,11 +51,11 @@ uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-
 ```
 
 This needs a Postgres reachable at `DATABASE_URL`, seeded by the repo's
-`init.sql` (docker-compose does this on first start).
+`sql/init.sql` (docker-compose does this on first start).
 
 ## Demo accounts
 
-These are seeded by `init.sql`. All three use the password `devdoc-demo` (local/demo use only).
+These are seeded by `sql/init.sql`. All three use the password `devdoc-demo` (local/demo use only).
 
 | Email | Role |
 |---|---|

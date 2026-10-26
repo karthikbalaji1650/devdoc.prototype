@@ -1,7 +1,7 @@
 """Parity: the same request sequence against the Node API and FastAPI.
 
 Both servers must be running against *separate* databases seeded from
-init.sql, with NODE_ENV=production on Node and the same CORS_ORIGINS:
+sql/init.sql, with NODE_ENV=production on Node and the same CORS_ORIGINS:
 
     NODE_BASE_URL=http://localhost:4000 FASTAPI_BASE_URL=http://localhost:8000 \
         uv run pytest tests/parity -m parity

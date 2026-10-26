@@ -16,7 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform_admin -d platform_db"]
       interval: 10s
@@ -59,7 +59,7 @@ services:
   # ----------------------------------------------------
   web-app:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         # Defaults to how the api service is reachable from the host (and
@@ -91,13 +91,13 @@ services:
   web-app-dev:
     profiles: ["dev"]
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: devdoc-studio-app-dev
     ports:
       - "5174:5173"
     volumes:
-      - .:/app
+      - ./frontend:/app
       # Anonymous volume so the container's own (Linux) node_modules
       # aren't clobbered by the host's bind mount — the host's copy may
       # have macOS/Windows-specific native binaries (esbuild, rollup,
@@ -111,8 +111,8 @@ services:
   # ----------------------------------------------------
   vscode-cline:
     build:
-      context: .
-      dockerfile: Dockerfile.vscode-cline
+      context: ./sandbox
+      dockerfile: Dockerfile
     container_name: devdoc-vscode-cline
     restart: unless-stopped
     ports:
