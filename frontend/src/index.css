@@ -212,6 +212,15 @@
 .border-slate-200, .border-slate-300, .border-gray-200 { border-color: var(--border) !important; }
 .shadow-xs, .shadow-2xl { box-shadow: none !important; }
 
+/* Their hover variants too: unmapped, these flashed near-white
+   backgrounds and turned text dark slate on hover. Light theme hover
+   meant "a shade darker"; here it means a shade lighter / brighter. */
+.hover\:bg-white:hover, .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover { background-color: var(--panel-alt) !important; }
+.hover\:bg-slate-200:hover { background-color: var(--border-soft) !important; }
+.hover\:text-slate-900:hover, .hover\:text-slate-800:hover,
+.hover\:text-slate-700:hover, .hover\:text-slate-600:hover { color: var(--text) !important; }
+.hover\:border-slate-300:hover, .hover\:border-slate-400:hover { border-color: var(--text-faint) !important; }
+
 [class*="bg-[#0a0a0a]"] { background-color: var(--bg) !important; }
 [class*="bg-[#0d0d0d]"], [class*="bg-[#0f0f0f]"], [class*="bg-[#111111]"] { background-color: var(--panel) !important; }
 [class*="bg-[#121212]"], [class*="bg-[#131313]"], [class*="bg-[#142b1d]"] { background-color: var(--panel-alt) !important; }
