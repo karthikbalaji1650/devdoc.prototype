@@ -58,6 +58,16 @@ server {
         add_header X-Frame-Options "ALLOWALL" always;
     }
 
+    # index.html (also reached via the SPA fallback below) must be
+    # revalidated on every load, or browsers keep a stale copy after a
+    # rebuild - still pointing at the previous build's hashed CSS/JS.
+    # `expires` rather than add_header: an add_header here would stop the
+    # server-level security headers above from being inherited.
+    location = /index.html {
+        root /usr/share/nginx/html;
+        expires -1;
+    }
+
     # React SPA catch-all — serve index.html for any unknown path
     location / {
         root /usr/share/nginx/html;
