@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem } from '../../types/operations';
+import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment } from '../../types/operations';
+import { nextTestCaseId } from '../../services/testCaseIds';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
@@ -34,7 +35,7 @@ import {
   CheckCircle2, XCircle, MinusCircle, SkipForward, RefreshCw,
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
-  HelpCircle, ImagePlus, Library, BookmarkPlus,
+  HelpCircle, ImagePlus, Library, BookmarkPlus, Paperclip, Bug,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -677,16 +678,110 @@ const AddTestRunModal: React.FC<{
 };
 
 
+// ── Test case attachments (screenshots, logs) ──────────────────────────────────
+// Kept inline in browser storage with the rest of the test data, which has a
+// ~5 MB budget overall - hence the per-file cap.
+const MAX_ATTACHMENT_BYTES = 512 * 1024;
+
+const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+const AttachmentList: React.FC<{ attachments: TestCaseAttachment[]; onRemove?: (id: string) => void }> = ({ attachments, onRemove }) => (
+  <ul className="space-y-1">
+    {attachments.map((a) => (
+      <li key={a.id} className="flex items-center gap-2 bg-white px-2 py-1.5 rounded border border-slate-200 text-xs">
+        <Paperclip className="w-3 h-3 text-slate-500 shrink-0" />
+        <a href={a.dataUrl} download={a.name} className="text-[var(--blue)] hover:underline truncate">{a.name}</a>
+        <span className="text-[10px] text-slate-500 shrink-0">{formatBytes(a.size)}</span>
+        {onRemove && (
+          <button type="button" onClick={() => onRemove(a.id)} aria-label={`Remove ${a.name}`} className="ml-auto p-0.5 text-slate-400 hover:text-rose-600 rounded">
+            <X className="w-3 h-3" />
+          </button>
+        )}
+      </li>
+    ))}
+  </ul>
+);
+
+const AttachmentsEditor: React.FC<{ value: TestCaseAttachment[]; onChange: (next: TestCaseAttachment[]) => void }> = ({ value, onChange }) => {
+  const [error, setError] = useState('');
+  const handleFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const tooBig = [...files].filter((f) => f.size > MAX_ATTACHMENT_BYTES).map((f) => f.name);
+    const added = await Promise.all([...files].filter((f) => f.size <= MAX_ATTACHMENT_BYTES).map((file) =>
+      new Promise<TestCaseAttachment>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size,
+          dataUrl: reader.result as string, addedAt: new Date().toISOString(),
+        });
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      })));
+    setError(tooBig.length ? `Not attached (over ${formatBytes(MAX_ATTACHMENT_BYTES)} each): ${tooBig.join(', ')}` : '');
+    if (added.length) onChange([...value, ...added]);
+  };
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && <AttachmentList attachments={value} onRemove={(id) => onChange(value.filter((a) => a.id !== id))} />}
+      <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 cursor-pointer hover:border-blue-400">
+        <Paperclip className="w-3 h-3" /> Attach files
+        <input type="file" multiple className="hidden" aria-label="Attach files"
+          accept="image/*,.log,.txt,.xml,.html,.htm,.json,.csv,.pdf"
+          onChange={(e) => { void handleFiles(e.target.files); e.target.value = ''; }} />
+      </label>
+      <p className="text-[10px] text-slate-500">Screenshots, logs or reports, up to {formatBytes(MAX_ATTACHMENT_BYTES)} each.</p>
+      {error && <p role="alert" className="text-[11px] text-[var(--danger)]">{error}</p>}
+    </div>
+  );
+};
+
+// ── Defect IDs on a failed run result (DDS-SRS-018) ────────────────────────────
+const DefectIdsEditor: React.FC<{ caseLabel: string; defects: string[]; onChange: (next: string[]) => void }> = ({ caseLabel, defects, onChange }) => {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    // Accept several at once ("WH3-1210, #482"); skip blanks and duplicates.
+    const ids = draft.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+    const next = [...defects, ...[...new Set(ids)].filter((id) => !defects.includes(id))];
+    if (next.length !== defects.length) onChange(next);
+    setDraft('');
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {defects.map((id) => (
+        <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-mono font-bold">
+          <Bug className="w-3 h-3" />{id}
+          <button type="button" onClick={() => onChange(defects.filter((d) => d !== id))} aria-label={`Remove ${id} from ${caseLabel}`} className="hover:text-rose-900">
+            <X className="w-2.5 h-2.5" />
+          </button>
+        </span>
+      ))}
+      <input value={draft} onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+        aria-label={`Issue IDs for ${caseLabel}`} placeholder="Issue ID, e.g. WH3-1210"
+        className="w-40 bg-white border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 outline-none focus:border-blue-500" />
+      <button type="button" onClick={add} disabled={!draft.trim()}
+        className="px-2 py-1 rounded border border-slate-300 text-[11px] font-semibold text-slate-700 hover:border-blue-400 disabled:opacity-40">
+        Link issue
+      </button>
+    </div>
+  );
+};
+
 // ── Add / Edit Test Case Modal ─────────────────────────────────────────────────
 const AddCaseModal: React.FC<{
   suiteId: string; initial?: Partial<TestCaseItem>;
+  /** ID a new case gets: the next one in the TC-001, TC-002 ... sequence. */
+  nextCustomId: string;
   onSave: (tc: TestCaseItem) => void; onClose: () => void;
-}> = ({ suiteId, initial, onSave, onClose }) => {
+}> = ({ suiteId, initial, nextCustomId, onSave, onClose }) => {
   const [title, setTitle]     = useState(initial?.title || '');
   const [type, setType]       = useState<'Manual'|'Automated'>(initial?.type || 'Manual');
   const [priority, setPriority] = useState<'P1'|'P2'|'P3'|'P4'>(initial?.priority || 'P3');
   const [preconditions, setPreconditions] = useState(initial?.preconditions || '');
   const [expectedResult, setExpectedResult] = useState(initial?.expectedResult || '');
+  const [postconditions, setPostconditions] = useState(initial?.postconditions || '');
+  const [attachments, setAttachments] = useState<TestCaseAttachment[]>(initial?.attachments || []);
   const [labels, setLabels]   = useState((initial?.labels || []).join(', '));
   const [refs, setRefs]       = useState((initial?.references || []).join(', '));
   const [estMin, setEstMin]   = useState(String(initial?.estimateMin || ''));
@@ -704,9 +799,14 @@ const AddCaseModal: React.FC<{
   const handleSave = () => {
     if (!title.trim()) return;
     onSave({
+      // Keep fields this form doesn't edit (evidence screenshot, Task Bin
+      // state, ...) - they used to be dropped on every edit.
+      ...initial,
       id: initial?.id || `tc-${Date.now()}`,
-      suiteId, customId: initial?.customId || `C${Date.now().toString().slice(-4)}`,
+      suiteId, customId: initial?.customId || nextCustomId,
       title, type, priority, preconditions, expectedResult, steps,
+      postconditions: postconditions.trim() || undefined,
+      attachments: attachments.length ? attachments : undefined,
       labels: labels.split(',').map(l => l.trim()).filter(Boolean),
       references: refs.split(',').map(r => r.trim()).filter(Boolean),
       estimateMin: estMin ? parseInt(estMin) : undefined,
@@ -723,7 +823,10 @@ const AddCaseModal: React.FC<{
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center pt-6 overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl mx-4 mb-10 shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <h2 className="text-base font-bold text-slate-900">{initial?.id ? 'Edit Test Case' : 'Add Test Case'}</h2>
+          <h2 className="text-base font-bold text-slate-900">
+            {initial?.id ? 'Edit Test Case' : 'Add Test Case'}
+            <span className="ml-2 text-xs font-mono font-semibold text-[var(--blue)]">{initial?.customId || nextCustomId}</span>
+          </h2>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -797,6 +900,16 @@ const AddCaseModal: React.FC<{
             <label className="block text-xs font-semibold text-slate-700 mb-1">Expected Outcome</label>
             <textarea value={expectedResult} onChange={e => setExpectedResult(e.target.value)} rows={2}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
+          </div>
+          <div>
+            <label htmlFor="tc-postconditions" className="block text-xs font-semibold text-slate-700 mb-1">Post-conditions</label>
+            <textarea id="tc-postconditions" value={postconditions} onChange={e => setPostconditions(e.target.value)} rows={2}
+              placeholder="State the system must be left in, e.g. NTP restored to the primary server"
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
+          </div>
+          <div>
+            <span className="block text-xs font-semibold text-slate-700 mb-1">Attachments</span>
+            <AttachmentsEditor value={attachments} onChange={setAttachments} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={autoCandidate} onChange={e => setAutoCandidate(e.target.checked)} className="accent-teal-600" />
@@ -1134,6 +1247,7 @@ const TestCasesView: React.FC<{
                                 </div>
                               </div>
                               {tc.expectedResult && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Expected Outcome</span><p className="status-success p-2 rounded border">{tc.expectedResult}</p></div>}
+                              {tc.postconditions && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Post-conditions</span><p className="text-slate-800 bg-white p-2 rounded border border-slate-200 shadow-xs">{tc.postconditions}</p></div>}
                               <div>
                                 <span className="text-[10px] font-bold text-slate-500 block mb-1">Proof / Reference Screenshot</span>
                                 <EvidenceDropzone
@@ -1142,6 +1256,7 @@ const TestCasesView: React.FC<{
                                   onRemove={() => handleRemoveEvidence(tc.id)}
                                 />
                               </div>
+                              {!!tc.attachments?.length && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Attachments ({tc.attachments.length})</span><AttachmentList attachments={tc.attachments} /></div>}
                               {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
                               <button type="button" onClick={() => handleSaveCaseToLibrary(tc)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold">
                                 <BookmarkPlus className="w-3.5 h-3.5" /> Save to Library
@@ -1185,7 +1300,7 @@ const TestCasesView: React.FC<{
         </div>
       ) : <p className="text-slate-500 text-center py-12">Select a test suite.</p>}
       {(showAddCase||editingCase)&&selectedSuite&&(
-        <AddCaseModal suiteId={selectedSuite.id} initial={editingCase||undefined}
+        <AddCaseModal suiteId={selectedSuite.id} initial={editingCase||undefined} nextCustomId={nextTestCaseId(suites)}
           onSave={handleSaveCase} onClose={()=>{setShowAddCase(false);setEditingCase(null);}}/>
       )}
       {showLibraryModal && (
@@ -1240,6 +1355,10 @@ const RunDetailView: React.FC<{
       skippedCount: newResults.filter(r => r.status === 'Skipped').length,
       untestedCount:newResults.filter(r => r.status === 'Untested').length,
     });
+  };
+
+  const handleDefectsChange = (caseId: string, defects: string[]) => {
+    onUpdate({ ...run, caseResults: caseResults.map(r => r.caseId === caseId ? { ...r, defects: defects.length ? defects : undefined } : r) });
   };
 
   const TABS: { id: RunDetailTab; label: string }[] = [
@@ -1424,10 +1543,13 @@ const RunDetailView: React.FC<{
             {run.failedCount===0
               ? <p className="text-xs text-slate-500">No defects so far.</p>
               : caseResults.filter(r=>r.status==='Failed').map(r=>(
-                <div key={r.caseId} className="flex items-center gap-3 p-3 bg-white border border-rose-200 rounded-lg shadow-xs">
-                  <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0"/>
-                  <span className="text-xs text-slate-800 flex-1">{r.title}</span>
-                  <span className="text-[10px] font-mono text-[var(--success)]">{r.customId}</span>
+                <div key={r.caseId} className="p-3 bg-white border border-rose-200 rounded-lg shadow-xs space-y-2">
+                  <div className="flex items-center gap-3">
+                    <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0"/>
+                    <span className="text-xs text-slate-800 flex-1">{r.title}</span>
+                    <span className="text-[10px] font-mono text-[var(--success)]">{r.customId}</span>
+                  </div>
+                  <DefectIdsEditor caseLabel={r.customId} defects={r.defects || []} onChange={d => handleDefectsChange(r.caseId, d)} />
                 </div>
               ))
             }

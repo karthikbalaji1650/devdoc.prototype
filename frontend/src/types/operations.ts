@@ -65,6 +65,17 @@ export interface TestCaseStep {
 
 export type TestCaseStatus = 'Untested' | 'Passed' | 'Failed' | 'Blocked' | 'Skipped' | 'Retest';
 
+/** A file attached to a test case: a screenshot, log or report. Stored
+ * inline as a data: URI with the rest of the test data. */
+export interface TestCaseAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number; // bytes
+  dataUrl: string;
+  addedAt: string;
+}
+
 export interface TestCaseItem {
   id: string;
   suiteId: string;
@@ -73,6 +84,8 @@ export interface TestCaseItem {
   preconditions: string;
   steps: TestCaseStep[];
   expectedResult: string;
+  postconditions?: string;
+  attachments?: TestCaseAttachment[];
   priority: 'P1' | 'P2' | 'P3' | 'P4';
   type: 'Automated' | 'Manual';
   labels?: string[];
@@ -118,6 +131,8 @@ export interface TestRunCaseResult {
   testedAt?: string;
   comment?: string;
   labels?: string[];
+  /** Issue IDs (Jira, GitHub, ...) filed for this result, e.g. ["WH3-1210"]. */
+  defects?: string[];
 }
 
 export interface TestRunItem {
