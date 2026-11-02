@@ -100,3 +100,30 @@ test.describe('defect links on failed results (DDS-SRS-018)', () => {
     await expect(page.getByText('#482', { exact: true })).toHaveCount(0);
   });
 });
+
+test.describe('test summary reports (DDS-SRS-024)', () => {
+  test('a run downloads as CSV and HTML, and opens a print-ready report for PDF', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await openTestManagement(page);
+    await page.getByRole('button', { name: /Test Runs/ }).first().click();
+    await page.getByText('[Regression] Full Release v5.67').click();
+    const report = page.getByLabel('Download test summary report');
+
+    for (const format of ['csv', 'html'] as const) {
+      const download = page.waitForEvent('download');
+      await report.selectOption(format);
+      const file = await download;
+      expect(file.suggestedFilename()).toBe(`Regression_Full_Release_v5_67_test_summary.${format}`);
+      const text = readFileSync(await file.path(), 'utf8');
+      expect(text).toContain(format === 'csv' ? 'Case ID,Title,Status' : '5. Sign-off');
+    }
+
+    const popup = page.waitForEvent('popup');
+    await report.selectOption('pdf');
+    const tab = await popup;
+    await expect(tab.getByRole('heading', { name: '[Regression] Full Release v5.67' })).toBeVisible();
+    await expect(tab.getByText('3. Failures and defects')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Save as PDF');
+  });
+});

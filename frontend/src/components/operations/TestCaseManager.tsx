@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment } from '../../types/operations';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
+import { buildRunReportCsv, buildRunReportHtml, reportFileName } from '../../services/testRunReport';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
@@ -1408,6 +1409,32 @@ const RunDetailView: React.FC<{
     });
   };
 
+  // Test summary report (DDS-SRS-024). PDF opens the HTML report in a new tab
+  // and asks the browser to print it; the app's CSP rules out inline scripts,
+  // so the print call comes from here rather than from the report itself.
+  const [reportNote, setReportNote] = useState('');
+  const handleDownloadReport = (format: 'html' | 'csv' | 'pdf') => {
+    const suiteTitle = suite?.title || run.suiteId;
+    const isCsv = format === 'csv';
+    const blob = new Blob([isCsv ? buildRunReportCsv(run, suiteTitle) : buildRunReportHtml(run, suiteTitle)],
+      { type: isCsv ? 'text/csv;charset=utf-8' : 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    if (format === 'pdf') {
+      const win = window.open(url, '_blank');
+      if (!win) { setReportNote('Allow pop-ups for this site to save the report as PDF, or download it as HTML.'); URL.revokeObjectURL(url); return; }
+      win.addEventListener('load', () => { win.focus(); win.print(); });
+      setReportNote('Report opened in a new tab: choose "Save as PDF" in the print dialog.');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = reportFileName(run, format);
+    a.click();
+    URL.revokeObjectURL(url);
+    setReportNote('');
+  };
+
   const handleDefectsChange = (caseId: string, defects: string[]) => {
     onUpdate({ ...run, caseResults: caseResults.map(r => r.caseId === caseId ? { ...r, defects: defects.length ? defects : undefined } : r) });
   };
@@ -1434,12 +1461,20 @@ const RunDetailView: React.FC<{
           <p className="text-xs text-slate-500">Created by Manivannan T. on {new Date(run.executedAt).toLocaleDateString()}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <select aria-label="Download test summary report" value="" onChange={e => { if (e.target.value) handleDownloadReport(e.target.value as 'html' | 'csv' | 'pdf'); }}
+            className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer">
+            <option value="">Download report…</option>
+            <option value="pdf">PDF</option>
+            <option value="html">HTML</option>
+            <option value="csv">CSV</option>
+          </select>
           <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Check className="w-3.5 h-3.5" /> Close</button>
           <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><RefreshCw className="w-3.5 h-3.5" /> Rerun</button>
           <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs"><Play className="w-3.5 h-3.5" /> Execute Automated Tests</button>
         </div>
       </div>
+      {reportNote && <p role="status" className="text-xs text-[var(--blue)] -mt-2 mb-3">{reportNote}</p>}
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 shadow-xs">

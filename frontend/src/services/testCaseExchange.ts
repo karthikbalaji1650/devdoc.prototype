@@ -111,7 +111,7 @@ export function toCsv(cases: TestCaseItem[]): string {
     c.postconditions, c.labels.join(', '), c.references.join(', '), c.estimateMin?.toString() ?? '', c.robotCode ?? '',
   ]);
   // CRLF line ends and a BOM so Excel opens UTF-8 text correctly.
-  return '﻿' + [CSV_COLUMNS as readonly string[], ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  return '\ufeff' + [CSV_COLUMNS as readonly string[], ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
 export function parseCsv(text: string): string[][] {
@@ -119,7 +119,7 @@ export function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let cell = '';
   let quoted = false;
-  const src = text.replace(/^﻿/, '');
+  const src = text.replace(/^\ufeff/, '');
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (quoted) {
