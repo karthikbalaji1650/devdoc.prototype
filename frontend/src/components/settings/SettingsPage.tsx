@@ -30,6 +30,7 @@ import {
 } from '../../services/aiService';
 import { getStorageUsage } from '../../services/safeStorage';
 import { getSessionAuditLog } from '../../services/sessionAuditService';
+import { canAccessDataManagement } from '../../services/permissions';
 
 /* ─── Props ─── */
 interface SettingsPageProps {
@@ -37,10 +38,14 @@ interface SettingsPageProps {
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
   onUpdateAvatar: (avatarUrl?: string) => void;
+  /** Controlled by App: the System & Storage tab is the admin-only
+   * "Data Management" view, so the sidebar can highlight it. */
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
 }
 
 /* ─── Section tab definition ─── */
-type SettingsTab = 'profile' | 'ai' | 'notifications' | 'appearance' | 'data';
+export type SettingsTab = 'profile' | 'ai' | 'notifications' | 'appearance' | 'data';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ElementType; desc: string }[] = [
   { id: 'profile',       label: 'Profile',        icon: User,     desc: 'Account info & session' },
@@ -129,8 +134,13 @@ function formatDuration(loginIso: string, logoutIso: string | null): string {
 }
 
 /* ─── Main Component ─── */
-export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, onLogout, onUpdateAvatar }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, onLogout, onUpdateAvatar, activeTab: requestedTab, onTabChange }) => {
+  // System & Storage holds backups, "clear all data" and every user's
+  // session audit log: admins only (DDS-SRS-008, -011). Guarded here as
+  // well as in the tab list, so no other route can reach it.
+  const canManageData = canAccessDataManagement(user);
+  const activeTab: SettingsTab = requestedTab === 'data' && !canManageData ? 'profile' : requestedTab;
+  const visibleTabs = TABS.filter((tab) => tab.id !== 'data' || canManageData);
   const [aiConfig, setAiConfig] = useState<AiConfig>(getStoredAiConfig());
   const [aiSaved, setAiSaved] = useState(false);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
@@ -184,7 +194,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      <AppSidebar user={user} activeView="settings" onNavigate={onNavigate} onLogout={onLogout} />
+      <AppSidebar user={user} activeView={activeTab === 'data' ? 'data-management' : 'settings'} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Settings Sub-Tab Panel */}
@@ -193,11 +203,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Settings</p>
           </div>
           <nav className="p-3 space-y-0.5 flex-1">
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
               return (
-                <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+                <button key={tab.id} type="button" onClick={() => onTabChange(tab.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all group border ${
                     active ? 'bg-[#16223a] border-[#3ec7ff] text-[#eef3ff] font-bold' : 'text-[#96a8c9] hover:text-[#eef3ff] hover:bg-[#16223a] border-transparent'
                   }`}>
@@ -418,7 +428,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             )}
 
             {/* SYSTEM & STORAGE */}
-            {activeTab === 'data' && (
+            {activeTab === 'data' && canManageData && (
               <section className="space-y-6">
                 <SectionHeader icon={Database} title="System & Storage" desc="Manage locally stored app data, workspace connectivity, and session audits." />
 

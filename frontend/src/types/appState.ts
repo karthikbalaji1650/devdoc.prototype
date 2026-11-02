@@ -5,7 +5,9 @@ export type AppView =
   | 'doccraft'
   | 'operations'
   | 'coder'
-  | 'settings';
+  | 'settings'
+  // Settings opened on its System & Storage tab - admin-only (DDS-SRS-007/008).
+  | 'data-management';
 
 export type OperationsTab =
   | 'incidents'

@@ -3,6 +3,7 @@ import type { DocumentModel, DocSection, SectionType } from './types/document';
 import type { AppView, OperationsTab } from './types/appState';
 import type { UserProfile } from './types/auth';
 import type { IncidentItem } from './types/operations';
+import type { SettingsTab } from './components/settings/SettingsPage';
 import { TEMPLATE_REGISTRY, getDefaultDocument } from './templates';
 import { sampleTestReportDoc } from './templates/testReportTemplate';
 import { HeaderNav } from './components/HeaderNav';
@@ -81,6 +82,9 @@ export const App: React.FC = () => {
   });
 
   const [activeOpsTab, setActiveOpsTab] = useState<OperationsTab>('incidents');
+  // Last Settings tab other than System & Storage, which is its own
+  // (admin-only) 'data-management' view.
+  const [settingsTab, setSettingsTab] = useState<Exclude<SettingsTab, 'data'>>('profile');
 
   // Document model state
   const [document, setDocument] = useState<DocumentModel>(() => {
@@ -632,7 +636,8 @@ export const App: React.FC = () => {
   }
 
   // 5. Render Settings Page
-  if (currentApp === 'settings') {
+  if (currentApp === 'settings' || currentApp === 'data-management') {
+    // SettingsPage itself falls back to Profile for a non-admin asking for data management.
     return (
       <Suspense fallback={<PageLoading />}>
         <SettingsPage
@@ -640,6 +645,15 @@ export const App: React.FC = () => {
           onNavigate={handleLaunchApp}
           onLogout={handleLogout}
           onUpdateAvatar={handleUpdateAvatar}
+          activeTab={currentApp === 'data-management' ? 'data' : settingsTab}
+          onTabChange={(tab) => {
+            if (tab === 'data') {
+              setCurrentApp('data-management');
+            } else {
+              setSettingsTab(tab);
+              setCurrentApp('settings');
+            }
+          }}
         />
       </Suspense>
     );

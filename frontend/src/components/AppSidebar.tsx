@@ -12,6 +12,7 @@ import {
   PanelLeftOpen,
   ShieldAlert,
   ClipboardCheck,
+  Database,
 } from 'lucide-react';
 import type { UserProfile } from '../types/auth';
 import type { AppView, OperationsTab } from '../types/appState';
@@ -75,6 +76,14 @@ const NAV_ITEMS = [
     icon: ClipboardCheck,
     app: 'operations' as AppView,
     opsTab: 'reviewers' as OperationsTab,
+  },
+  {
+    id: 'data-management',
+    label: 'Data Management',
+    icon: Database,
+    app: 'data-management' as AppView,
+    opsTab: undefined as OperationsTab | undefined,
+    adminOnly: true,
   },
   {
     id: 'settings',
