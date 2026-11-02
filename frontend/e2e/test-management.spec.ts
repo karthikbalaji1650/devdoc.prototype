@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
 import { signInAs } from './helpers';
 
@@ -34,6 +35,42 @@ test.describe('test case fields (DDS-SRS-013)', () => {
     // The next case continues the sequence.
     await page.getByRole('button', { name: 'Add Case' }).first().click();
     await expect(page.getByRole('heading', { name: /Add Test Case\s*TC-002/ })).toBeVisible();
+  });
+});
+
+test.describe('CSV / JSON / XML exchange (DDS-SRS-015)', () => {
+  for (const format of ['csv', 'json', 'xml'] as const) {
+    test(`exporting as ${format} and importing the file back adds copies with fresh IDs`, async ({ page }) => {
+      await signInAs(page);
+      await page.goto('/');
+      await openTestManagement(page);
+      const rows = page.getByText(/^C\d$/);
+      const before = await rows.count();
+      expect(before).toBeGreaterThan(0);
+
+      const download = page.waitForEvent('download');
+      await page.getByLabel('Export test cases').selectOption(format);
+      const file = await download;
+      expect(file.suggestedFilename()).toMatch(new RegExp(`_test_cases\\.${format}$`));
+
+      // Playwright stores downloads under a random, extension-less name; hand the
+      // importer the file under the name a user would actually have saved it as.
+      const buffer = readFileSync(await file.path());
+      await page.getByLabel('Import test cases (CSV, JSON or XML)').setInputFiles({ name: file.suggestedFilename(), mimeType: 'text/plain', buffer });
+      await expect(page.getByText(`Imported ${before} test case`)).toBeVisible();
+      // Originals keep C1.. ; the clashing copies continue the TC sequence.
+      await expect(rows).toHaveCount(before);
+      await expect(page.getByText('TC-001', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(`TC-${String(before).padStart(3, '0')}`, { exact: true }).first()).toBeVisible();
+    });
+  }
+
+  test('a malformed file is rejected with a message', async ({ page }) => {
+    await signInAs(page);
+    await page.goto('/');
+    await openTestManagement(page);
+    await page.getByLabel('Import test cases (CSV, JSON or XML)').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{oops') });
+    await expect(page.getByText('JSON: the file is not valid JSON.')).toBeVisible();
   });
 });
 

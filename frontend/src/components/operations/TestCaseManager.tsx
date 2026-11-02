@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment } from '../../types/operations';
 import { nextTestCaseId } from '../../services/testCaseIds';
+import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
@@ -1018,6 +1019,44 @@ const TestCasesView: React.FC<{
     saveToLibrary(tc);
     onShowToast(`📚 Saved "${tc.customId}" to the reusable library.`);
   };
+  // CSV / JSON / XML exchange (DDS-SRS-015).
+  const handleExportCases = (format: ExchangeFormat) => {
+    if (!selectedSuite) return;
+    const cases = (selectedSuite.testCases || []).filter(tc => !tc.isDeleted);
+    const { content, mimeType } = exportTestCases(cases, selectedSuite.title, format);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
+    a.download = `${selectedSuite.title.replace(/[^\w-]+/g, '_')}_test_cases.${format}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    onShowToast(`✅ Exported ${cases.length} test case${cases.length === 1 ? '' : 's'} as ${format.toUpperCase()}.`);
+  };
+  const handleImportCases = async (file: File) => {
+    if (!selectedSuite) return;
+    const format = formatFromFileName(file.name);
+    if (!format) { onShowToast('❌ Import a .csv, .json or .xml file.'); return; }
+    try {
+      const parsed = parseTestCases(await file.text(), format);
+      // Keep an imported ID when it is free; otherwise continue the TC-### sequence.
+      const taken = new Set(suites.flatMap(s => (s.testCases || []).map(tc => tc.customId)));
+      const working = suites.map(s => ({ testCases: [...(s.testCases || [])] }));
+      const now = new Date().toISOString();
+      const imported: TestCaseItem[] = parsed.map((c, i) => {
+        const customId = c.customId && !taken.has(c.customId) ? c.customId : nextTestCaseId(working);
+        taken.add(customId);
+        const tc: TestCaseItem = {
+          ...c, customId, id: `tc-${Date.now()}-${i}`, suiteId: selectedSuite.id,
+          postconditions: c.postconditions || undefined, createdAt: now, status: 'Untested',
+        };
+        working[0].testCases.push(tc);
+        return tc;
+      });
+      onUpdateSuites(suites.map(s => s.id === selectedSuite.id ? { ...s, testCases: [...(s.testCases || []), ...imported] } : s));
+      onShowToast(`✅ Imported ${imported.length} test case${imported.length === 1 ? '' : 's'} from ${file.name}.`);
+    } catch (e) {
+      onShowToast(`❌ ${e instanceof ImportError ? e.message : `Could not read ${file.name}.`}`);
+    }
+  };
   const handleImportFromLibrary = (entries: TestCaseItem[]) => {
     if (!selectedSuite || entries.length === 0) return;
     const now = new Date().toISOString();
@@ -1081,6 +1120,18 @@ const TestCasesView: React.FC<{
             <button onClick={handleSaveSuiteToLibrary} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold">
               <BookmarkPlus className="w-3.5 h-3.5" /> Save Suite to Library
             </button>
+            <select aria-label="Export test cases" value="" onChange={e => { if (e.target.value) handleExportCases(e.target.value as ExchangeFormat); }}
+              className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer">
+              <option value="">Export cases…</option>
+              <option value="csv">as CSV</option>
+              <option value="json">as JSON</option>
+              <option value="xml">as XML</option>
+            </select>
+            <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer hover:border-blue-400">
+              <Upload className="w-3.5 h-3.5" /> Import cases
+              <input type="file" accept=".csv,.json,.xml" className="hidden" aria-label="Import test cases (CSV, JSON or XML)"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportCases(f); e.target.value = ''; }} />
+            </label>
           </>}
           <button onClick={onExportProtocolExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] hover:border-[var(--blue)] text-[var(--blue)] border border-[var(--border)] rounded-lg text-xs font-semibold shadow-xs transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" /> Backup (.xlsx)
