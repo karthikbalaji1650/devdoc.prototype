@@ -2,7 +2,22 @@
 // and the same HTML opened for the browser to print / save as PDF. The HTML follows the usual
 // test summary report sections (IEEE 829 style): identification, summary,
 // failures and defects, detailed results, sign-off.
-import type { TestRunCaseResult, TestRunItem, TestCaseStatus } from '../types/operations';
+//
+// The report is consolidated (DDS-SRS-031): manual and automated results
+// side by side, each result marked with its type, and - given an earlier
+// run - what changed since it (DDS-SRS-025).
+import type { TestRunCaseResult, TestRunItem, TestCaseStatus, TestSuiteItem } from '../types/operations';
+import { CHANGE_LABELS, compareRuns, executionTypeOf, type ExecutionType } from './runComparison';
+
+export interface ReportOptions {
+  /** The run's suite: tells manual from automated results. */
+  suite?: TestSuiteItem;
+  /** An earlier run to compare with. */
+  baseline?: TestRunItem;
+  generatedAt?: Date;
+}
+
+const TYPES: ExecutionType[] = ['Manual', 'Automated', 'Unknown'];
 
 const STATUSES: TestCaseStatus[] = ['Passed', 'Failed', 'Blocked', 'Retest', 'Skipped', 'Untested'];
 
@@ -39,19 +54,29 @@ export function reportFileName(run: TestRunItem, ext: string): string {
   return `${run.name.replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '')}_test_summary.${ext}`;
 }
 
-export function buildRunReportCsv(run: TestRunItem, suiteTitle: string): string {
+export function buildRunReportCsv(run: TestRunItem, suiteTitle: string, opts: ReportOptions = {}): string {
   const cell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const header = ['Run', 'Suite', 'Environment', 'Case ID', 'Title', 'Status', 'Assigned To', 'Tested By', 'Tested At', 'Defects', 'Comment'];
-  const rows = (run.caseResults ?? []).map((r) => [
-    run.name, suiteTitle, run.environment, r.customId, r.title, r.status, r.assignedTo ?? '', r.testedBy ?? '',
-    r.testedAt ?? '', (r.defects ?? []).join(' '), r.comment ?? '',
-  ]);
+  const changes = opts.baseline ? new Map(compareRuns(opts.baseline, run).changes.map((c) => [c.key, c])) : null;
+  const header = ['Run', 'Suite', 'Environment', 'Case ID', 'Title', 'Status', 'Type', 'Assigned To', 'Tested By', 'Tested At', 'Defects', 'Comment',
+    ...(changes ? [`Status in ${opts.baseline!.name}`, 'Change'] : [])];
+  const rows = (run.caseResults ?? []).map((r) => {
+    const change = changes?.get((r.customId || r.caseId).trim().toLowerCase());
+    return [
+      run.name, suiteTitle, run.environment, r.customId, r.title, r.status, executionTypeOf(r, opts.suite), r.assignedTo ?? '', r.testedBy ?? '',
+      r.testedAt ?? '', (r.defects ?? []).join(' '), r.comment ?? '',
+      ...(changes ? [change?.before ?? '', change ? CHANGE_LABELS[change.kind] : ''] : []),
+    ];
+  });
   return '\ufeff' + [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 
-export function buildRunReportHtml(run: TestRunItem, suiteTitle: string, opts: { generatedAt?: Date } = {}): string {
+export function buildRunReportHtml(run: TestRunItem, suiteTitle: string, opts: ReportOptions = {}): string {
   const results = run.caseResults ?? [];
   const s = summarizeRun(results);
+  const typeOf = (r: TestRunCaseResult) => executionTypeOf(r, opts.suite);
+  const byType = TYPES.map((type) => ({ type, s: summarizeRun(results.filter((r) => typeOf(r) === type)) })).filter((x) => x.type !== 'Unknown' || x.s.total);
+  const cmp = opts.baseline ? compareRuns(opts.baseline, run) : null;
+  const notable = cmp ? cmp.changes.filter((c) => c.kind !== 'unchanged') : [];
   const generated = (opts.generatedAt ?? new Date()).toISOString();
   const failures = results.filter((r) => r.status === 'Failed' || r.status === 'Blocked');
   const allDefects = [...new Set(results.flatMap((r) => r.defects ?? []))];
@@ -98,10 +123,13 @@ export function buildRunReportHtml(run: TestRunItem, suiteTitle: string, opts: {
   .sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; margin-top: 4mm; }
   .sign div { border-top: 1px solid #9ca3af; padding-top: 1.5mm; font-size: 8.5pt; color: #4b5563; height: 18mm; }
   .foot { margin-top: 8mm; font-size: 8pt; color: #9ca3af; }
+  .num td, .num th { text-align: right; } .num td:first-child, .num th:first-child { text-align: left; }
+  .total td { font-weight: 700; border-top: 2px solid #1f3864; }
+  .kind { font-weight: 700; } .kind.regression { color: #b91c1c; } .kind.fixed { color: #15803d; } .kind.still-failing { color: #92400e; }
 </style></head>
 <body>
   <div class="head">
-    <div><div class="eyebrow">DevDoc Studio · Test summary report</div><h1>${esc(run.name)}</h1></div>
+    <div><div class="eyebrow">DevDoc Studio · Consolidated test summary report (manual + automated)</div><h1>${esc(run.name)}</h1></div>
     <div class="verdict ${verdictClass}">${verdict}</div>
   </div>
 
@@ -118,21 +146,38 @@ export function buildRunReportHtml(run: TestRunItem, suiteTitle: string, opts: {
   <div class="bar">${bar}</div>
   <div class="legend">${STATUSES.map((st) => `<span>${st}: <b>${s.counts[st]}</b></span>`).join('')}</div>
 
-  <h2>3. Failures and defects</h2>
+  <h2>3. Manual and automated</h2>
+  <table class="results num"><thead><tr><th>Test type</th><th>Cases</th><th>Executed</th><th>Passed</th><th>Failed</th><th>Blocked</th><th>Pass rate</th></tr></thead><tbody>
+  ${[...byType, { type: 'All', s }].map(({ type, s: t }) =>
+    `<tr${type === 'All' ? ' class="total"' : ''}><td>${type === 'Unknown' ? 'Not in suite' : type}</td><td>${t.total}</td><td>${t.executed}</td><td>${t.counts.Passed}</td><td>${t.counts.Failed}</td><td>${t.counts.Blocked}</td><td>${t.executed ? `${t.passRatePct}%` : '—'}</td></tr>`).join('')}
+  </tbody></table>
+  ${results.some((r) => typeOf(r) === 'Unknown') ? '<p class="muted">"Not in suite": results whose test case is no longer in the suite, so its type is unknown.</p>' : ''}
+
+  <h2>4. Comparison with an earlier run</h2>
+  ${cmp
+    ? `<p>Compared with <b>${esc(cmp.baseline.name)}</b> (${fmtDate(cmp.baseline.executedAt)}): pass rate ${cmp.passRate.before}% → ${cmp.passRate.after}%.
+       <b class="kind regression">${cmp.counts.regression} regression${cmp.counts.regression === 1 ? '' : 's'}</b>, ${cmp.counts.fixed} fixed, ${cmp.counts['still-failing']} still failing, ${cmp.counts.new} new, ${cmp.counts.removed} not in this run.</p>
+       ${notable.length
+         ? `<table class="results"><thead><tr><th>Case</th><th>Title</th><th>Before</th><th>Now</th><th>Change</th></tr></thead><tbody>${notable.map((c) =>
+             `<tr><td class="id">${esc(c.customId)}</td><td>${esc(c.title)}</td><td class="st ${c.before ?? ''}">${c.before ?? '—'}</td><td class="st ${c.after ?? ''}">${c.after ?? '—'}</td><td class="kind ${c.kind}">${CHANGE_LABELS[c.kind]}</td></tr>`).join('')}</tbody></table>`
+         : '<p class="muted">No case changed status.</p>'}`
+    : '<p class="muted">No earlier run of this suite to compare with.</p>'}
+
+  <h2>5. Failures and defects</h2>
   ${failures.length
     ? `<table class="results"><thead><tr><th>Case</th><th>Title</th><th>Status</th><th>Defects</th><th>Comment</th></tr></thead><tbody>${failures.map((r) =>
         `<tr><td class="id">${esc(r.customId)}</td><td>${esc(r.title)}</td><td class="st ${r.status}">${r.status}</td><td class="mono">${esc((r.defects ?? []).join(', ')) || '<span class="muted">none linked</span>'}</td><td>${esc(r.comment) || ''}</td></tr>`).join('')}</tbody></table>`
     : '<p class="muted">No failed or blocked test cases.</p>'}
   <p class="muted">Linked defects: ${allDefects.length ? allDefects.map(esc).join(', ') : 'none'}.</p>
 
-  <h2>4. Detailed results</h2>
-  <table class="results"><thead><tr><th>Case</th><th>Title</th><th>Status</th><th>Tested by</th><th>Tested at</th></tr></thead><tbody>
-  ${results.map((r) => `<tr><td class="id">${esc(r.customId)}</td><td>${esc(r.title)}</td><td class="st ${r.status}">${r.status}</td><td>${esc(r.testedBy) || '—'}</td><td>${fmtDate(r.testedAt)}</td></tr>`).join('')}
+  <h2>6. Detailed results</h2>
+  <table class="results"><thead><tr><th>Case</th><th>Title</th><th>Type</th><th>Status</th><th>Tested by</th><th>Tested at</th></tr></thead><tbody>
+  ${results.map((r) => `<tr><td class="id">${esc(r.customId)}</td><td>${esc(r.title)}</td><td>${typeOf(r) === 'Unknown' ? '—' : typeOf(r)}</td><td class="st ${r.status}">${r.status}</td><td>${esc(r.testedBy) || '—'}</td><td>${fmtDate(r.testedAt)}</td></tr>`).join('')}
   </tbody></table>
 
-  <h2>5. Sign-off</h2>
+  <h2>7. Sign-off</h2>
   <div class="sign"><div>Prepared by (QA)</div><div>Reviewed by (Dev Lead)</div><div>Approved by (Product Owner)</div></div>
 
-  <p class="foot">Generated by DevDoc Studio on ${fmtDate(generated)}. Counts are computed from the per-case results listed in section 4.</p>
+  <p class="foot">Generated by DevDoc Studio on ${fmtDate(generated)}. Counts are computed from the per-case results listed in section 6.</p>
 </body></html>`;
 }

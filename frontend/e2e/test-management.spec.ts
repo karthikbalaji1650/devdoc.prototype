@@ -247,6 +247,41 @@ test.describe('defect links on failed results (DDS-SRS-018)', () => {
   });
 });
 
+test.describe('run comparison (DDS-SRS-025) and consolidated report (DDS-SRS-031)', () => {
+  test('a run is compared with the suite\'s previous run, regressions are flagged, and the report includes both', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    await page.getByRole('button', { name: /Test Runs/ }).first().click();
+    await page.getByText('[Performance] JMeter Tests').click();
+
+    await page.getByRole('button', { name: 'Compare' }).click();
+    await expect(page.getByLabel('Compare with')).toContainText('[Regression] Release v5.67 Browser Testing');
+    const summary = page.getByRole('list', { name: 'Changes since the earlier run' });
+    await expect(summary).toContainText('Fixed: 1');
+    await expect(summary).toContainText('Regression: 0');
+
+    // Fail C4, which passed in the earlier run: a regression.
+    await page.getByRole('button', { name: 'Tests & Results' }).click();
+    await page.locator('div.grid', { hasText: 'C4' }).getByRole('combobox').selectOption('Failed');
+    await expect(page.getByRole('button', { name: 'Compare (1 regression)' })).toBeVisible();
+    await page.getByRole('button', { name: 'Compare (1 regression)' }).click();
+    const table = page.getByRole('table', { name: 'Case status changes' });
+    await expect(table.getByRole('row', { name: /C4/ })).toContainText('Regression');
+
+    const download = page.waitForEvent('download');
+    await page.getByLabel('Download test summary report').selectOption('html');
+    const html = readFileSync(await (await download).path(), 'utf8');
+    expect(html).toContain('Consolidated test summary report (manual + automated)');
+    expect(html).toContain('3. Manual and automated');
+    expect(html).toContain('Compared with <b>[Regression] Release v5.67 Browser Testing</b>');
+    expect(html).toContain('1 regression</b>');
+
+    // The runs list flags it too.
+    await page.getByRole('button', { name: 'Back to test runs' }).click();
+    await expect(page.getByText(/▼ 1 regression vs \[Regression\] Release v5.67 Browser Testing/)).toBeVisible();
+  });
+});
+
 test.describe('test summary reports (DDS-SRS-024)', () => {
   test('a run downloads as CSV and HTML, and opens a print-ready report for PDF', async ({ page }) => {
     await signIn(page);
@@ -261,14 +296,15 @@ test.describe('test summary reports (DDS-SRS-024)', () => {
       const file = await download;
       expect(file.suggestedFilename()).toBe(`Regression_Full_Release_v5_67_test_summary.${format}`);
       const text = readFileSync(await file.path(), 'utf8');
-      expect(text).toContain(format === 'csv' ? 'Case ID,Title,Status' : '5. Sign-off');
+      expect(text).toContain(format === 'csv' ? 'Case ID,Title,Status,Type' : '7. Sign-off');
     }
 
     const popup = page.waitForEvent('popup');
     await report.selectOption('pdf');
     const tab = await popup;
     await expect(tab.getByRole('heading', { name: '[Regression] Full Release v5.67' })).toBeVisible();
-    await expect(tab.getByText('3. Failures and defects')).toBeVisible();
+    await expect(tab.getByText('3. Manual and automated')).toBeVisible();
+    await expect(tab.getByText('5. Failures and defects')).toBeVisible();
     await expect(page.getByRole('status')).toContainText('Save as PDF');
   });
 });

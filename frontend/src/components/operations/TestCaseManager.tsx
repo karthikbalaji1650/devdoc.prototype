@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment, ProjectItem, TestSection } from '../../types/operations';
 import { isSectionEmpty, nextSectionOrder, sectionOfCase, sectionTree } from '../../services/testSections';
 import { CaseHistoryModal } from './CaseHistoryModal';
+import { CHANGE_LABELS, comparableRuns, compareRuns, previousRun, type ChangeKind } from '../../services/runComparison';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
 import { buildRunReportCsv, buildRunReportHtml, reportFileName } from '../../services/testRunReport';
@@ -555,7 +556,7 @@ const SAMPLE_TA_DOC: DocumentModel = {
 };
 
 type MainView     = 'test-cases' | 'runs' | 'milestones' | 'reports';
-type RunDetailTab = 'results' | 'activity' | 'progress' | 'defects';
+type RunDetailTab = 'results' | 'activity' | 'progress' | 'defects' | 'compare';
 
 
 // ── Add Test Run Modal ─────────────────────────────────────────────────────────
@@ -1508,12 +1509,26 @@ const TestCasesView: React.FC<{
 
 
 // ── Run Detail View ────────────────────────────────────────────────────────────
+const KIND_STYLE: Record<ChangeKind, string> = {
+  regression: 'bg-rose-50 text-rose-700 border-rose-200', fixed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'still-failing': 'bg-amber-50 text-amber-800 border-amber-200', new: 'bg-blue-50 text-blue-700 border-blue-200',
+  removed: 'bg-slate-100 text-slate-600 border-slate-200', changed: 'bg-violet-50 text-violet-700 border-violet-200',
+  unchanged: 'bg-white text-slate-500 border-slate-200',
+};
+
 const RunDetailView: React.FC<{
-  run: TestRunItem; suites: TestSuiteItem[];
+  run: TestRunItem; runs: TestRunItem[]; suites: TestSuiteItem[];
   onUpdate: (run: TestRunItem) => void; onClose: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
-}> = ({ run, suites, onUpdate, onClose, onUpdateSuites }) => {
+}> = ({ run, runs, suites, onUpdate, onClose, onUpdateSuites }) => {
   const [activeTab, setActiveTab] = useState<RunDetailTab>('results');
+  // Historical trends (DDS-SRS-025): which earlier run of the suite to compare with.
+  const baselines = comparableRuns(runs, run);
+  const [baselineId, setBaselineId] = useState<string>(() => baselines[0]?.id ?? '');
+  // Falls back to the latest one if the picked run has since been deleted.
+  const baseline = baselines.find(r => r.id === baselineId) ?? baselines[0];
+  const comparison = baseline ? compareRuns(baseline, run) : null;
+  const [showUnchanged, setShowUnchanged] = useState(false);
   const [expandedResultCaseId, setExpandedResultCaseId] = useState<string|null>(null);
   const suite       = suites.find(s => s.id === run.suiteId);
   const handleUploadEvidence = (caseId: string, file: File) => {
@@ -1557,7 +1572,10 @@ const RunDetailView: React.FC<{
   const handleDownloadReport = (format: 'html' | 'csv' | 'pdf') => {
     const suiteTitle = suite?.title || run.suiteId;
     const isCsv = format === 'csv';
-    const blob = new Blob([isCsv ? buildRunReportCsv(run, suiteTitle) : buildRunReportHtml(run, suiteTitle)],
+    // Consolidated (DDS-SRS-031): manual vs automated from the suite, and
+    // changes since the run picked on the Compare tab.
+    const opts = { suite, baseline };
+    const blob = new Blob([isCsv ? buildRunReportCsv(run, suiteTitle, opts) : buildRunReportHtml(run, suiteTitle, opts)],
       { type: isCsv ? 'text/csv;charset=utf-8' : 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     if (format === 'pdf') {
@@ -1585,6 +1603,7 @@ const RunDetailView: React.FC<{
     { id:'activity', label:'Activity' },
     { id:'progress', label:'Progress' },
     { id:'defects',  label:'Defects' },
+    { id:'compare',  label: comparison?.counts.regression ? `Compare (${comparison.counts.regression} regression${comparison.counts.regression === 1 ? '' : 's'})` : 'Compare' },
   ];
 
   // Results grouped like the suite's sections (and sub-sections); results
@@ -1604,7 +1623,7 @@ const RunDetailView: React.FC<{
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
+        <button onClick={onClose} aria-label="Back to test runs" className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
         <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-xs">
           {run.id.split('-')[1]?.toUpperCase() || 'R'}
         </div>
@@ -1770,6 +1789,63 @@ const RunDetailView: React.FC<{
             </div>
           </div>
         )}
+        {activeTab==='compare' && (
+          <div className="space-y-4">
+            {baselines.length === 0 ? (
+              <p className="text-xs text-slate-500">No earlier run of this suite with results to compare with.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label htmlFor="compare-baseline" className="text-xs font-semibold text-slate-700">Compare with</label>
+                  <select id="compare-baseline" value={baseline?.id ?? ''} onChange={e => setBaselineId(e.target.value)}
+                    className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 cursor-pointer">
+                    {baselines.map(r => <option key={r.id} value={r.id}>{r.name} · {new Date(r.executedAt).toLocaleString()}</option>)}
+                  </select>
+                  {comparison && (
+                    <span className="text-xs text-slate-600">
+                      Pass rate <b>{comparison.passRate.before}%</b> → <b className={comparison.passRate.after < comparison.passRate.before ? 'text-rose-700' : 'text-emerald-700'}>{comparison.passRate.after}%</b>
+                    </span>
+                  )}
+                </div>
+                {comparison && (
+                  <>
+                    <ul aria-label="Changes since the earlier run" className="flex flex-wrap gap-2">
+                      {(['regression','fixed','still-failing','new','removed','changed'] as ChangeKind[]).map(k => (
+                        <li key={k} className={`px-2.5 py-1 rounded-lg border text-xs font-semibold ${KIND_STYLE[k]}`}>
+                          {CHANGE_LABELS[k]}: {comparison.counts[k]}
+                        </li>
+                      ))}
+                    </ul>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <input type="checkbox" checked={showUnchanged} onChange={e => setShowUnchanged(e.target.checked)} />
+                      Show unchanged ({comparison.counts.unchanged})
+                    </label>
+                    <table className="w-full text-xs bg-white border border-slate-200 rounded-xl overflow-hidden" aria-label="Case status changes">
+                      <thead className="bg-slate-100 text-[10px] uppercase text-slate-500">
+                        <tr><th className="text-left px-3 py-2">Case</th><th className="text-left px-3 py-2">Title</th><th className="text-left px-3 py-2">{baseline!.name}</th><th className="text-left px-3 py-2">This run</th><th className="text-left px-3 py-2">Change</th></tr>
+                      </thead>
+                      <tbody>
+                        {comparison.changes.filter(c => showUnchanged || c.kind !== 'unchanged').map(c => (
+                          <tr key={c.key} className="border-t border-slate-200">
+                            <td className="px-3 py-2 font-mono text-[11px] text-[var(--success)]">{c.customId}</td>
+                            <td className="px-3 py-2 text-slate-800">{c.title}</td>
+                            <td className="px-3 py-2">{c.before ? <StatusBadge status={c.before} small /> : '—'}</td>
+                            <td className="px-3 py-2">{c.after ? <StatusBadge status={c.after} small /> : '—'}</td>
+                            <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${KIND_STYLE[c.kind]}`}>{CHANGE_LABELS[c.kind]}</span></td>
+                          </tr>
+                        ))}
+                        {comparison.changes.every(c => c.kind === 'unchanged') && !showUnchanged && (
+                          <tr><td colSpan={5} className="px-3 py-3 text-slate-500">No case changed status.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <p className="text-[11px] text-slate-500">The downloaded report includes this comparison.</p>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {activeTab==='defects' && (
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-800 mb-2">Defects ({run.failedCount})</h3>
@@ -1812,10 +1888,17 @@ const TestRunsView: React.FC<{
   const [inputXml,      setInputXml]      = useState(SAMPLE_ROBOT_XML);
 
   const selectedRun = runs.find(r => r.id === selectedRunId);
-  if (selectedRun) return <RunDetailView run={selectedRun} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}/>;
+  if (selectedRun) return <RunDetailView run={selectedRun} runs={runs} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}/>;
 
   const openRuns      = runs.filter(r => r.status === 'In Progress');
   const completedRuns = runs.filter(r => r.status !== 'In Progress');
+
+  // Regressions against the suite's previous run (DDS-SRS-025), at a glance.
+  const RegressionBadge: React.FC<{ run: TestRunItem }> = ({ run }) => {
+    const prev = previousRun(runs, run);
+    const n = prev ? compareRuns(prev, run).counts.regression : 0;
+    return n ? <span className="inline-block mt-1 px-1.5 py-0.5 rounded border text-[10px] font-bold bg-rose-50 text-rose-700 border-rose-200">▼ {n} regression{n === 1 ? '' : 's'} vs {prev!.name}</span> : null;
+  };
 
   const RunCard: React.FC<{ run: TestRunItem; open?: boolean }> = ({ run, open }) => (
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 cursor-pointer group shadow-xs" onClick={()=>setSelectedRunId(run.id)}>
@@ -1827,6 +1910,7 @@ const TestRunsView: React.FC<{
           <h3 className={`text-sm font-bold mb-1 ${open?'text-blue-700':'text-slate-800 group-hover:text-slate-900'}`}>{run.name}</h3>
           <p className="text-[11px] text-slate-500 mb-1">By Manivannan T. · {new Date(run.executedAt).toLocaleDateString()}</p>
           <p className="text-[11px] text-slate-500">{run.passedCount} Passed · {run.failedCount} Failed · {run.blockedCount} Blocked · {run.untestedCount??0} Untested</p>
+          <RegressionBadge run={run} />
         </div>
         <div className="flex items-center gap-3 w-44 flex-shrink-0">
           <div className="flex-1"><RunProgressBar run={run}/></div>
