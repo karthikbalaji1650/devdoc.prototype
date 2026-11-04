@@ -27,6 +27,8 @@ class CollectionRules:
     # Logs are append-only: entries cannot be changed once written.
     append_only: bool = False
     extra_editor: Callable[[User, dict[str, Any]], bool] = field(default=lambda _u, _i: False)
+    # Who can see an item; by default everyone signed in.
+    private: bool = False
 
 
 COLLECTIONS: dict[str, CollectionRules] = {
@@ -39,6 +41,9 @@ COLLECTIONS: dict[str, CollectionRules] = {
         extra_editor=lambda user, item: item.get("reviewerName") == user.name,
     ),
     "drive-exports": CollectionRules("Drive export record", ("docTitle",), 50, evict_oldest=True, append_only=True),
+    # The Doc Bin: deleted documents and sections. Each user sees what they
+    # deleted; admins see everything. Holds a copy of what was deleted.
+    "doc-bin": CollectionRules("Doc Bin entry", ("documentId", "itemType"), 1000, evict_oldest=True, private=True),
 }
 
 
@@ -59,9 +64,12 @@ class CollectionService:
     def _can_change(self, user: User, rules: CollectionRules, item: dict[str, Any]) -> bool:
         return is_admin(user) or item.get("createdBy") == user.name or rules.extra_editor(user, item)
 
-    async def list(self, name: str) -> dict[str, Any]:
-        self._rules(name)
-        return {"items": await self._store.list(name), "seeded": await self._store.is_seeded(name)}
+    async def list(self, user: User, name: str) -> dict[str, Any]:
+        rules = self._rules(name)
+        items = await self._store.list(name)
+        if rules.private and not is_admin(user):
+            items = [i for i in items if i.get("createdBy") == user.name]
+        return {"items": items, "seeded": await self._store.is_seeded(name)}
 
     async def save(self, user: User, name: str, item_id: str, body: Any) -> dict[str, Any]:
         rules = self._rules(name)
@@ -73,6 +81,8 @@ class CollectionService:
                 raise ApiError(400, f"{f} is required.")
         existing = await self._store.get(name, item_id)
         if existing is not None:
+            if rules.private and not self._can_change(user, rules, existing):
+                raise ApiError(404, "Item not found.")
             if rules.append_only:
                 raise ApiError(409, f"A {rules.label} cannot be changed once recorded.")
             if not self._can_change(user, rules, existing):
@@ -94,7 +104,7 @@ class CollectionService:
     async def delete(self, user: User, name: str, item_id: str) -> None:
         rules = self._rules(name)
         existing = await self._store.get(name, item_id)
-        if existing is None:
+        if existing is None or (rules.private and not self._can_change(user, rules, existing)):
             raise ApiError(404, "Item not found.")
         if not (is_admin(user) or existing.get("createdBy") == user.name):
             raise ApiError(403, f"You can only delete a {rules.label} you created.")
@@ -111,4 +121,4 @@ class CollectionService:
         for item in items:
             if isinstance(item, dict) and isinstance(item.get("id"), str):
                 await self._store.put(name, {**item, "createdBy": user.name, "updatedAt": _now()})
-        return await self.list(name)
+        return await self.list(user, name)

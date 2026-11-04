@@ -1,3 +1,5 @@
+import secrets
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.errors import ApiError
@@ -6,10 +8,14 @@ from app.db.params import pg_param
 from app.models.document import DocumentRecord, DocumentWrite
 from app.models.user import User
 from app.repositories.base import DocumentRepository
+from app.repositories.document_history import DocumentHistoryStore
 from app.services.permissions import can_delete_document, can_edit_document, is_admin, is_visible
 
 VALID_STATUSES = ("DRAFT", "IN_REVIEW", "APPROVED", "PUBLISHED")
 NOT_FOUND = "Document not found."
+# Automatic snapshots: at most one per document in this window, so history
+# holds meaningful restore points rather than every autosave.
+SNAPSHOT_INTERVAL_SECONDS = 5 * 60
 
 
 def _with_updated_at(record: DocumentRecord) -> dict[str, Any]:
@@ -24,9 +30,38 @@ def _status_is_valid(status: Any) -> bool:
     return isinstance(status, str) and status in VALID_STATUSES
 
 
+def _iso(moment: datetime) -> str:
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 class DocumentService:
-    def __init__(self, documents: DocumentRepository) -> None:
+    def __init__(self, documents: DocumentRepository, history: DocumentHistoryStore) -> None:
         self._documents = documents
+        self._history = history
+
+    async def _snapshot(self, record: DocumentRecord, label: str, user: User) -> None:
+        now = datetime.now(UTC)
+        await self._history.add(
+            record.id,
+            {
+                "id": f"{record.id}-{int(now.timestamp() * 1000)}-{secrets.token_hex(2)}",
+                "savedAt": js_iso_date(record.updated_at),  # when this version was saved
+                "takenAt": _iso(now),
+                "label": label,
+                "takenBy": user.name,
+                "doc": js_spread(record.document_json),
+            },
+        )
+
+    async def _snapshot_if_due(self, record: DocumentRecord, new_document: dict[str, Any], user: User) -> None:
+        if record.document_json == new_document:
+            return
+        latest = await self._history.latest(record.id)
+        if latest is not None:
+            taken = datetime.fromisoformat(latest["takenAt"].replace("Z", "+00:00"))
+            if (datetime.now(UTC) - taken).total_seconds() < SNAPSHOT_INTERVAL_SECONDS:
+                return
+        await self._snapshot(record, "Auto-saved version", user)
 
     async def list_visible(self, user: User) -> list[dict[str, Any]]:
         records = await self._documents.list_active()
@@ -60,6 +95,8 @@ class DocumentService:
         saved_metadata["id"] = document_id
         saved_metadata["author"] = author
         document = {"metadata": saved_metadata, "sections": sections}
+        if existing is not None:
+            await self._snapshot_if_due(existing, document, user)
 
         date = saved_metadata.get("date")
         await self._documents.upsert(
@@ -98,3 +135,23 @@ class DocumentService:
         if not can_delete_document(user, existing):
             raise ApiError(403, "You can only delete documents you authored.")
         await self._documents.purge(document_id)
+        await self._history.delete(document_id)
+
+    async def history(self, user: User, document_id: str) -> list[dict[str, Any]]:
+        """Earlier versions, newest first - for anyone who can see the document."""
+        await self.get_visible(user, document_id)
+        return await self._history.list(document_id)
+
+    async def restore(self, user: User, document_id: str, snapshot_id: str) -> dict[str, Any]:
+        """Makes an earlier version current. The version being replaced is
+        kept in history first, so a restore can itself be undone."""
+        record = await self._documents.get_active(document_id)
+        if record is None or not is_visible(user, record):
+            raise ApiError(404, NOT_FOUND)
+        if not can_edit_document(user, record):
+            raise ApiError(403, "You can only edit documents you authored.")
+        snapshot = next((s for s in await self._history.list(document_id) if s["id"] == snapshot_id), None)
+        if snapshot is None:
+            raise ApiError(404, "That version is no longer in the history.")
+        await self._snapshot(record, "Before restore", user)
+        return await self.save(user, document_id, snapshot["doc"])

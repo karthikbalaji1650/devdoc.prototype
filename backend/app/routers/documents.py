@@ -53,6 +53,22 @@ async def delete_document(document_id: str, user: CurrentUser, services: Service
     return no_content()
 
 
+@get_route(router, "/{document_id}/history", responses=_not_found)
+async def document_history(document_id: str, user: CurrentUser, services: ServicesDep) -> Response:
+    """Earlier versions, newest first (at most 10)."""
+    return JsonResponse({"snapshots": await services.documents.history(user, document_id)})
+
+
+@router.post(
+    "/{document_id}/history/{snapshot_id}/restore",
+    response_model=SavedDocumentResponse,
+    responses={**_not_found, **_forbidden},
+)
+async def restore_version(document_id: str, snapshot_id: str, user: CurrentUser, services: ServicesDep) -> Response:
+    """Makes that version current; the replaced version stays in history."""
+    return JsonResponse({"document": await services.documents.restore(user, document_id, snapshot_id)})
+
+
 @router.delete("/{document_id}/purge", status_code=204, responses={**_not_found, **_forbidden})
 async def purge_document(document_id: str, user: CurrentUser, services: ServicesDep) -> Response:
     """Permanent delete, including an already soft-deleted document."""

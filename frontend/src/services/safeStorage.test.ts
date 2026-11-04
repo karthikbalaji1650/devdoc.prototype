@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { safeSetItem, getStorageUsage, STORAGE_ERROR_EVENT, APPROX_QUOTA_CHARS, type StorageErrorDetail } from './safeStorage';
-import { saveDocument, getDocument } from './documentsStoreService';
-import { makeDoc } from '../test/fixtures';
 
 function failWith(err: unknown) {
   return vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw err; });
@@ -42,17 +40,6 @@ describe('safeSetItem', () => {
     const before = seen.length;
     expect(safeSetItem('quiet', 'v', { notify: false })).toBe(false);
     expect(seen.length).toBe(before);
-  });
-});
-
-describe('saveDocument under a full disk', () => {
-  it('returns false rather than throwing, and keeps the previously saved copy', () => {
-    const doc = makeDoc('q1', { title: 'Saved' });
-    expect(saveDocument(doc)).toBe(true);
-    failWith(quotaError());
-    expect(saveDocument(makeDoc('q1', { title: 'Unsaved' }))).toBe(false);
-    vi.restoreAllMocks();
-    expect(getDocument('q1')?.metadata.title).toBe('Saved');
   });
 });
 

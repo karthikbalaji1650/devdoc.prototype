@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { History, RotateCcw, X } from 'lucide-react';
 import type { DocumentModel } from '../../types/document';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
-import { listSnapshots, type Snapshot } from '../../services/versionHistoryService';
+import { listSnapshots, type Snapshot } from '../../services/documentsStoreService';
 
 interface VersionHistoryModalProps {
   documentId: string;
@@ -17,7 +17,17 @@ function summarise(doc: DocumentModel): string {
 }
 
 export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({ documentId, canRestore, onClose, onRestore }) => {
-  const [snapshots] = useState<Snapshot[]>(() => listSnapshots(documentId));
+  // Kept by the server, for everyone who can see the document.
+  const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    listSnapshots(documentId).then(
+      (s) => { if (!cancelled) setSnapshots(s); },
+      (err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); },
+    );
+    return () => { cancelled = true; };
+  }, [documentId]);
   const dialogRef = useDialogA11y<HTMLElement>(onClose);
 
   return (
@@ -34,7 +44,11 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({ docume
           <button type="button" onClick={onClose} aria-label="Close version history" className="rounded p-1.5 text-[var(--text-dim)] hover:bg-[var(--panel-alt)] hover:text-[var(--text)]"><X className="h-4 w-4" /></button>
         </header>
         <div className="flex-1 overflow-y-auto p-4">
-          {snapshots.length === 0 ? (
+          {error ? (
+            <p role="alert" className="p-4 text-sm text-red-400">{error}</p>
+          ) : snapshots === null ? (
+            <p role="status" className="p-4 text-sm text-[var(--text-dim)]">Loading history…</p>
+          ) : snapshots.length === 0 ? (
             <div className="border border-dashed border-[var(--border)] p-10 text-center text-sm text-[var(--text-dim)]">
               No earlier versions yet. A restore point is saved automatically every few minutes while you edit.
             </div>

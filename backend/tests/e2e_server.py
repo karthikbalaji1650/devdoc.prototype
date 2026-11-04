@@ -2,7 +2,7 @@
 e2e/remote-test-execution.spec.ts): the real app on in-memory
 repositories seeded with the test users, so no database is needed.
 Started and killed by those specs; prints `READY <users json>` once up.
-`POST /__e2e/reset` empties its (fake, in-process) Redis between tests.
+`POST /__e2e/reset` empties its (fake, in-process) Redis and documents between tests.
 
     PORT=4111 FRONTEND_ORIGIN=http://localhost:5199 uv run python -m tests.e2e_server
 """
@@ -23,13 +23,16 @@ def main() -> None:
     port = int(os.environ.get("PORT") or 4111)
     origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5199")
     redis = fakeredis.FakeAsyncRedis(decode_responses=True)
-    app = create_app(test_settings(cors_origins=origin), repositories=memory_repositories(seeded_store()), redis=redis)
+    store = seeded_store()
+    app = create_app(test_settings(cors_origins=origin), repositories=memory_repositories(store), redis=redis)
 
     async def with_reset(scope: dict[str, Any], receive: Any, send: Any) -> None:
-        """POST /__e2e/reset empties Redis, so each browser test starts
-        from the sample data. Test harness only - not part of the API."""
+        """POST /__e2e/reset empties Redis and the documents, so each browser
+        test starts from the sample data. Users (and their sessions) stay.
+        Test harness only - not part of the API."""
         if scope["type"] == "http" and scope["path"] == "/__e2e/reset" and scope["method"] == "POST":
             await redis.flushall()
+            store.documents.clear()
             await send({"type": "http.response.start", "status": 204, "headers": []})
             await send({"type": "http.response.body", "body": b""})
             return

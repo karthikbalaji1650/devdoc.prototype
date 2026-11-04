@@ -15,6 +15,7 @@ export interface TestUser { email: string; password: string; name: string }
 
 export interface Stack {
   frontendUrl: string;
+  apiUrl: string;
   users: TestUser[];
   /** Empties the server's Redis: the next visit loads fresh sample data. */
   reset(): Promise<void>;
@@ -52,6 +53,7 @@ export async function startStack(apiPort: number, frontendPort: number): Promise
 
   return {
     frontendUrl,
+    apiUrl: `http://localhost:${apiPort}`,
     users,
     async reset() {
       const res = await fetch(`http://127.0.0.1:${apiPort}/__e2e/reset`, { method: 'POST' });

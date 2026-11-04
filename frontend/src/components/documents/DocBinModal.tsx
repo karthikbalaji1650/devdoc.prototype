@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ArchiveRestore, FileText, RotateCcw, Trash2, X } from 'lucide-react';
 import type { DocumentModel } from '../../types/document';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
+import { useSharedCollection } from '../../services/sharedCollection';
 import {
+  docBin,
   listDocBin,
   permanentlyDeleteFromDocBin,
   restoreFromDocBin,
@@ -15,30 +17,35 @@ interface DocBinModalProps {
 }
 
 export const DocBinModal: React.FC<DocBinModalProps> = ({ onClose, onRestore }) => {
-  const [entries, setEntries] = useState<DocBinEntry[]>([]);
+  // On the server: your own deleted items (admins see everyone's).
+  const bin = useSharedCollection(docBin);
+  const entries = bin.items ? listDocBin() : [];
   const [message, setMessage] = useState('');
   const dialogRef = useDialogA11y<HTMLElement>(onClose);
 
-  const refresh = () => setEntries(listDocBin());
-  useEffect(() => { refresh(); }, []);
-
-  const handleRestore = (entry: DocBinEntry) => {
-    const restored = restoreFromDocBin(entry.id);
-    if (!restored) {
-      setMessage('Restore failed. The original document may have been deleted permanently.');
-      return;
+  const handleRestore = async (entry: DocBinEntry) => {
+    try {
+      const restored = await restoreFromDocBin(entry.id);
+      if (!restored) {
+        setMessage('Restore failed. The original document may have been deleted permanently.');
+        return;
+      }
+      setMessage(`${entry.itemType === 'document' ? 'Document' : 'Section'} restored.`);
+      onRestore?.(restored);
+    } catch (err) {
+      setMessage(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-    refresh();
-    setMessage(`${entry.itemType === 'document' ? 'Document' : 'Section'} restored.`);
-    onRestore?.(restored);
   };
 
-  const handlePermanentDelete = (entry: DocBinEntry) => {
+  const handlePermanentDelete = async (entry: DocBinEntry) => {
     const label = entry.itemType === 'document' ? entry.documentTitle : entry.section?.title || 'section';
     if (!window.confirm(`Permanently delete "${label}"? This cannot be undone.`)) return;
-    permanentlyDeleteFromDocBin(entry.id);
-    refresh();
-    setMessage('Item permanently deleted.');
+    try {
+      await permanentlyDeleteFromDocBin(entry.id);
+      setMessage('Item permanently deleted.');
+    } catch (err) {
+      setMessage(`Not deleted: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   return (
@@ -57,7 +64,11 @@ export const DocBinModal: React.FC<DocBinModalProps> = ({ onClose, onRestore }) 
 
         {message && <p role="status" className="border-b border-[var(--border)] px-5 py-2 text-xs text-[var(--success)]">{message}</p>}
         <div className="flex-1 overflow-y-auto p-4">
-          {entries.length === 0 ? (
+          {bin.status === 'loading' ? (
+            <p role="status" className="p-4 text-sm text-[var(--text-dim)]">Loading…</p>
+          ) : bin.status === 'unavailable' ? (
+            <p className="p-4 text-sm text-[var(--text-dim)]">The Doc Bin is stored on the server - it needs the backend.</p>
+          ) : entries.length === 0 ? (
             <div className="border border-dashed border-[var(--border)] p-10 text-center">
               <FileText className="mx-auto mb-2 h-7 w-7 text-[var(--text-faint)]" />
               <p className="text-sm text-[var(--text-dim)]">Doc Bin is empty.</p>
@@ -76,10 +87,10 @@ export const DocBinModal: React.FC<DocBinModalProps> = ({ onClose, onRestore }) 
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button type="button" onClick={() => handleRestore(entry)} className="inline-flex items-center gap-1.5 border border-emerald-500/50 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10">
+                    <button type="button" onClick={() => void handleRestore(entry)} className="inline-flex items-center gap-1.5 border border-emerald-500/50 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10">
                       <RotateCcw className="h-3.5 w-3.5" /> Restore
                     </button>
-                    <button type="button" onClick={() => handlePermanentDelete(entry)} aria-label={`Permanently delete ${entry.itemType === 'document' ? entry.documentTitle : entry.section?.title || 'section'}`} title="Permanently delete" className="rounded p-1.5 text-[var(--text-dim)] hover:bg-red-500/10 hover:text-red-300">
+                    <button type="button" onClick={() => void handlePermanentDelete(entry)} aria-label={`Permanently delete ${entry.itemType === 'document' ? entry.documentTitle : entry.section?.title || 'section'}`} title="Permanently delete" className="rounded p-1.5 text-[var(--text-dim)] hover:bg-red-500/10 hover:text-red-300">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>

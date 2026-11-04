@@ -156,6 +156,8 @@ def test_openapi_documents_every_route_with_camel_case_fields(api: Api) -> None:
         "/api/documents",
         "/api/documents/{document_id}",
         "/api/documents/{document_id}/purge",
+        "/api/documents/{document_id}/history",
+        "/api/documents/{document_id}/history/{snapshot_id}/restore",
         "/api/ai/providers",
         "/api/ai/rephrase",
         "/api/ai/generate-test-cases",

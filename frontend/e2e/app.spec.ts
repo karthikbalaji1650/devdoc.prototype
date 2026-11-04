@@ -1,12 +1,13 @@
-import { test, expect } from '@playwright/test';
-import { signInAs, seedDocuments } from './helpers';
+import { test, expect, signInAs, seedDocuments, serverDocument } from './fixtures';
 
+// Runs against a real API (see fixtures.ts): documents are stored on the
+// server only. The browser-only demo is covered by demo.spec.ts.
 const ADMIN = 'Manivannan Thangavel';
 const OTHER = 'Judia Lumina';
-const STORE_KEY = 'devdoc_studio_documents_v1';
 
-const storedTitle = (page: import('@playwright/test').Page, id = 'd1') =>
-  page.evaluate(([key, docId]) => JSON.parse(localStorage.getItem(key)!)[docId].doc.metadata.title, [STORE_KEY, id]);
+/** The title the server holds now. */
+const storedTitle = async (page: import('@playwright/test').Page, id = 'd1') =>
+  (await serverDocument(page, id))?.metadata.title;
 
 const titleInput = (page: import('@playwright/test').Page) =>
   page.getByText('Document Title', { exact: true }).first().locator('xpath=following::input[1]');
@@ -18,9 +19,10 @@ async function openEditor(page: import('@playwright/test').Page, title: string) 
 }
 
 test.describe('sign in', () => {
-  test('a user can sign in and reach the dashboard', async ({ page }) => {
+  test('a user signs in with their real password and reaches the dashboard', async ({ page, stack }) => {
     await page.goto('/');
-    await page.getByPlaceholder('Enter your password').fill('anything');
+    await page.getByPlaceholder('engineer@sanmina.com').fill(stack.users[0].email);
+    await page.getByPlaceholder('Enter your password').fill(stack.users[0].password);
     await page.getByRole('button', { name: /sign in to platform/i }).click();
     await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
   });
@@ -33,7 +35,7 @@ test.describe('autosave', () => {
     await openEditor(page, 'Original');
   });
 
-  test('is debounced, then written', async ({ page }) => {
+  test('is debounced, then saved to the server', async ({ page }) => {
     await titleInput(page).fill('Edited fast');
     expect(await storedTitle(page)).toBe('Original');
     await expect.poll(() => storedTitle(page)).toBe('Edited fast');
@@ -42,16 +44,24 @@ test.describe('autosave', () => {
   test('leaving the editor immediately does not lose the edit', async ({ page }) => {
     await titleInput(page).fill('Edited then left');
     await page.getByRole('button', { name: /All Documents/ }).click();
-    expect(await storedTitle(page)).toBe('Edited then left');
     await expect(page.getByText('Edited then left', { exact: true })).toBeVisible();
+    await expect.poll(() => storedTitle(page)).toBe('Edited then left');
   });
 
   test('closing the tab flushes the edit and it survives a reload', async ({ page }) => {
     await titleInput(page).fill('Edited then hidden');
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
-    expect(await storedTitle(page)).toBe('Edited then hidden');
+    await expect.poll(() => storedTitle(page)).toBe('Edited then hidden');
     await page.reload();
-    expect(await storedTitle(page)).toBe('Edited then hidden');
+    await openEditor(page, 'Edited then hidden');
+    await expect(titleInput(page)).toHaveValue('Edited then hidden');
+  });
+
+  test('nothing is stored in the browser', async ({ page }) => {
+    await titleInput(page).fill('Server only');
+    await expect.poll(() => storedTitle(page)).toBe('Server only');
+    const keys = await page.evaluate(() => Object.keys(localStorage));
+    expect(keys.filter((k) => /documents|doc_history|doc_bin|current_doc/.test(k))).toEqual([]);
   });
 });
 
@@ -79,7 +89,7 @@ test.describe('permissions', () => {
     await page.getByRole('button', { name: 'Document Editor' }).first().click();
     await page.getByRole('button', { name: /Move .* to Doc Bin/ }).click();
     await expect(page.getByText(/only delete documents you authored/i)).toBeVisible();
-    expect(await storedTitle(page)).toBe('Someone Elses Doc');
+    expect((await serverDocument(page, 'd1'))?.metadata.title).toBe('Someone Elses Doc');
   });
 
   test('an author can move their own document to the Doc Bin and restore it', async ({ page }) => {
@@ -90,7 +100,12 @@ test.describe('permissions', () => {
     await expect(page.getByText('No documents yet.')).toBeVisible();
     await page.getByRole('button', { name: 'Doc Bin', exact: true }).click();
     await page.getByRole('button', { name: /Restore/ }).click();
+    await expect(page.getByRole('status')).toContainText('Document restored');
     await page.keyboard.press('Escape');
+    await expect(page.getByText('My Own Doc', { exact: true })).toBeVisible();
+    // The bin is on the server: still restored after a reload.
+    await page.reload();
+    await page.getByRole('button', { name: 'Document Editor' }).first().click();
     await expect(page.getByText('My Own Doc', { exact: true })).toBeVisible();
   });
 
@@ -141,35 +156,27 @@ test.describe('dashboard drill-down', () => {
   });
 });
 
-test.describe('storage full', () => {
-  test('warns instead of silently losing the edit', async ({ page }) => {
+test.describe('a save the server does not accept', () => {
+  test('is announced instead of silently lost', async ({ page }) => {
     await signInAs(page);
     await seedDocuments(page, [{ id: 'd1', title: 'Original', docNumber: 'D-1', author: ADMIN }]);
     await openEditor(page, 'Original');
-    await page.evaluate((key) => {
-      const original = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (k: string, v: string) {
-        if (k === key) throw new DOMException('full', 'QuotaExceededError');
-        return original.call(this, k, v);
-      };
-    }, STORE_KEY);
-    await titleInput(page).fill('Will not fit');
-    await expect(page.getByText(/storage is full/i)).toBeVisible();
+    await page.route('**/api/documents/d1', (route) =>
+      route.request().method() === 'PUT' ? route.fulfill({ status: 500, body: 'down' }) : route.continue());
+    await titleInput(page).fill('Will not be saved');
+    await expect(page.getByText(/Not saved: Server error \(500\)/)).toBeVisible();
   });
 });
 
 test.describe('crash recovery', () => {
   test('a corrupted document shows the recovery screen and a working backup download', async ({ page }) => {
     await signInAs(page);
+    // The server never stores a document like this; feed one in to prove the screen copes.
+    await page.route('**/api/documents', (route) => route.fulfill({ json: { documents: [{
+      metadata: { id: 'bad', title: 'Corrupt one', docNumber: 'X', author: ADMIN, date: '2026-01-01', version: '1', classification: 'INTERNAL ONLY', status: 'DRAFT', templateType: 'technical-analysis' },
+      sections: null, updatedAt: new Date().toISOString(),
+    }] } }));
     await page.goto('/');
-    await page.evaluate((key) => {
-      localStorage.setItem(key, JSON.stringify({ bad: { updatedAt: new Date().toISOString(), doc: {
-        metadata: { id: 'bad', title: 'Corrupt one', docNumber: 'X', author: 'Manivannan Thangavel', date: '2026-01-01', version: '1', classification: 'INTERNAL ONLY', status: 'DRAFT', templateType: 'technical-analysis' },
-        sections: null,
-      } } }));
-      localStorage.setItem('devdoc_studio_sample_docs_seeded_v1', '1');
-    }, STORE_KEY);
-    await page.reload();
     await page.getByRole('button', { name: 'Document Editor' }).first().click();
     await page.getByText('Corrupt one', { exact: true }).first().click();
     await expect(page.getByRole('alert')).toContainText('Something went wrong');

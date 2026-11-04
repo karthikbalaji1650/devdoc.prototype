@@ -8,7 +8,8 @@ const USERS: Record<Role, { id: string; name: string; title: string; initials: s
   'firmware-lead': { id: 'usr-03', name: 'Judia Lumina', title: 'Firmware Lead', initials: 'JL' },
 };
 
-/** Starts the app already signed in (once per browser context, so reloads keep their data).
+/** Browser-only demo (no backend): starts the app already signed in, once per
+ * browser context. Specs that need a server use ./fixtures instead.
  * Marks the first-run welcome guide as already seen, so it doesn't cover
  * the screen and block every other test's clicks - tests that actually
  * exercise the welcome guide clear that flag themselves. */
@@ -23,36 +24,4 @@ export async function signInAs(page: Page, role: Role = 'admin'): Promise<void> 
     }));
     localStorage.setItem('devdoc_studio_welcome_seen_v1', '1');
   }, [u, role] as const);
-}
-
-interface SeedDoc {
-  id: string;
-  title: string;
-  docNumber: string;
-  author: string;
-  status?: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'PUBLISHED';
-}
-
-/** Replaces the document store, then reloads so the app picks it up. The sample-doc seed is
- * marked done so tests control exactly which documents exist. */
-export async function seedDocuments(page: Page, docs: SeedDoc[]): Promise<void> {
-  await page.goto('/');
-  await page.evaluate((list) => {
-    const store: Record<string, unknown> = {};
-    for (const d of list) {
-      store[d.id] = {
-        updatedAt: new Date().toISOString(),
-        doc: {
-          metadata: {
-            id: d.id, title: d.title, docNumber: d.docNumber, author: d.author, date: '2026-09-25',
-            version: '1.0', classification: 'INTERNAL ONLY', status: d.status ?? 'DRAFT', templateType: 'technical-analysis',
-          },
-          sections: [{ id: 's1', title: 'Purpose', level: 1, type: 'richText', content: 'Sample content' }],
-        },
-      };
-    }
-    localStorage.setItem('devdoc_studio_documents_v1', JSON.stringify(store));
-    localStorage.setItem('devdoc_studio_sample_docs_seeded_v1', '1');
-  }, docs);
-  await page.reload();
 }

@@ -1,300 +1,151 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { makeDoc, makeSection } from '../test/fixtures';
-import * as store from './documentsStoreService';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { DocumentModel } from '../types/document';
+import { makeDoc } from '../test/fixtures';
+import { API_BASE, installFakeCollectionsApi } from '../test/fakeCollectionsApi';
 
-describe('document store', () => {
-  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-25T10:00:00Z')); });
-  afterEach(() => { vi.useRealTimers(); });
+// A fake /api/documents (plus the collections fake for the Doc Bin).
+function installFakeDocumentsApi() {
+  const { fetchMock: collectionsFetch } = installFakeCollectionsApi();
+  const docs = new Map<string, { doc: DocumentModel; updatedAt: string; deleted: boolean }>();
+  const snapshots = new Map<string, { id: string; savedAt: string; takenAt: string; label: string; doc: DocumentModel }[]>();
+  let refuse: string | null = null;
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+  const calls: string[] = [];
 
-  it('saves and reads a document back', () => {
-    const doc = makeDoc('a');
-    store.saveDocument(doc);
-    expect(store.getDocument('a')).toEqual(doc);
+  const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+    if (url.includes('/api/collections/')) return collectionsFetch(url, init);
+    const method = init.method ?? 'GET';
+    const path = url.replace(`${API_BASE}/api/documents`, '');
+    calls.push(`${method} ${path}`);
+    const [, id, sub, snapId] = path.split('/').map(decodeURIComponent);
+    if (method === 'GET' && !id) {
+      return json({ documents: [...docs.values()].filter((d) => !d.deleted).map((d) => ({ ...d.doc, updatedAt: d.updatedAt })) });
+    }
+    if (method === 'PUT') {
+      if (refuse) return json({ error: refuse }, 403);
+      const doc = JSON.parse(String(init.body));
+      const prev = docs.get(id);
+      if (prev) snapshots.set(id, [{ id: `snap-${(snapshots.get(id)?.length ?? 0) + 1}`, savedAt: prev.updatedAt, takenAt: 'now', label: 'Auto-saved version', doc: prev.doc }, ...(snapshots.get(id) ?? [])]);
+      docs.set(id, { doc, updatedAt: new Date().toISOString(), deleted: false });
+      return json({ document: doc });
+    }
+    if (method === 'DELETE' && sub === 'purge') { docs.delete(id); return new Response(null, { status: 204 }); }
+    if (method === 'DELETE') { const d = docs.get(id); if (d) d.deleted = true; return new Response(null, { status: 204 }); }
+    if (method === 'GET' && sub === 'history') return json({ snapshots: snapshots.get(id) ?? [] });
+    if (method === 'POST' && sub === 'history') {
+      const snap = snapshots.get(id)!.find((s) => s.id === snapId)!;
+      docs.set(id, { doc: snap.doc, updatedAt: new Date().toISOString(), deleted: false });
+      return json({ document: snap.doc });
+    }
+    return json({ error: 'unexpected' }, 500);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { docs, calls, refuseWith: (m: string | null) => { refuse = m; } };
+}
+
+let store: typeof import('./documentsStoreService');
+let api: ReturnType<typeof installFakeDocumentsApi>;
+beforeEach(async () => {
+  api = installFakeDocumentsApi();
+  vi.resetModules();
+  store = await import('./documentsStoreService');
+});
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+describe('documents (server-only)', () => {
+  it('loads every visible document from the server, newest first', async () => {
+    api.docs.set('a', { doc: makeDoc('a'), updatedAt: '2026-01-01T00:00:00.000Z', deleted: false });
+    api.docs.set('b', { doc: makeDoc('b'), updatedAt: '2026-02-01T00:00:00.000Z', deleted: false });
+    await store.loadDocuments();
+    expect(store.documentsStatus()).toBe('ready');
+    expect(store.listDocuments().map((d) => d.metadata.id)).toEqual(['b', 'a']);
+    expect(store.getDocument('a')?.metadata.id).toBe('a');
   });
 
-  it('returns null for an unknown id', () => {
-    expect(store.getDocument('nope')).toBeNull();
+  it('saves to the server, in order, and nothing to browser storage', async () => {
+    await store.loadDocuments();
+    store.saveDocument(makeDoc('d1', { title: 'First' }));
+    store.saveDocument(makeDoc('d1', { title: 'Second' }));
+    expect(store.getDocument('d1')?.metadata.title).toBe('Second'); // memory is immediate
+    await store.whenSaved('d1');
+    expect(api.calls.filter((c) => c.startsWith('PUT'))).toEqual(['PUT /d1', 'PUT /d1']);
+    expect(api.docs.get('d1')?.doc.metadata.title).toBe('Second');
+    expect(localStorage.length).toBe(0);
   });
 
-  it('ignores a document that has no id', () => {
-    store.saveDocument(makeDoc(''));
-    expect(store.listDocuments()).toHaveLength(0);
+  it('announces a save the server refused', async () => {
+    const onError = vi.fn();
+    window.addEventListener(store.DOCUMENT_SAVE_ERROR_EVENT, onError);
+    api.refuseWith('You can only edit documents you authored.');
+    store.saveDocument(makeDoc('d1'));
+    await store.whenSaved('d1');
+    expect((onError.mock.calls[0][0] as CustomEvent).detail).toBe('Not saved: You can only edit documents you authored.');
+    window.removeEventListener(store.DOCUMENT_SAVE_ERROR_EVENT, onError);
   });
 
-  it('overwrites (not duplicates) when the same id is saved again', () => {
-    store.saveDocument(makeDoc('a', { title: 'First' }));
-    store.saveDocument(makeDoc('a', { title: 'Second' }));
-    expect(store.listDocuments()).toHaveLength(1);
-    expect(store.getDocument('a')?.metadata.title).toBe('Second');
+  it('without a backend shows the read-only sample and refuses to save', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    await store.loadDocuments();
+    expect(store.documentsStatus()).toBe('unavailable');
+    expect(store.listDocuments().map((d) => d.metadata.docNumber)).toEqual(['ADR-2026-042']);
+    expect(store.saveDocument(makeDoc('d1'))).toBe(false);
+    expect(api.calls).toEqual([]);
   });
 
-  it('lists the most recently saved document first', () => {
-    store.saveDocument(makeDoc('old'));
-    vi.advanceTimersByTime(60_000);
-    store.saveDocument(makeDoc('new'));
-    expect(store.listDocuments().map((d) => d.metadata.id)).toEqual(['new', 'old']);
-  });
-
-  it('deletes a document', () => {
-    store.saveDocument(makeDoc('a'));
-    store.deleteDocument('a');
-    expect(store.getDocument('a')).toBeNull();
-  });
-
-  it('survives corrupt storage without throwing', () => {
-    localStorage.setItem('devdoc_studio_documents_v1', '{not json');
+  it('forgets everything on sign-out', async () => {
+    api.docs.set('a', { doc: makeDoc('a'), updatedAt: 'x', deleted: false });
+    await store.loadDocuments();
+    store.resetDocuments();
     expect(store.listDocuments()).toEqual([]);
   });
+});
 
-  it('generates unique ids', () => {
-    const ids = new Set(Array.from({ length: 50 }, () => store.generateDocumentId()));
-    expect(ids.size).toBe(50);
-    expect([...ids][0]).toMatch(/^doc-/);
+describe('Doc Bin (on the server)', () => {
+  it('moving a document to the bin soft-deletes it, and restoring saves it again', async () => {
+    await store.loadDocuments();
+    store.saveDocument(makeDoc('d1', { title: 'Mine' }));
+    await store.moveDocumentToBin(makeDoc('d1', { title: 'Mine' }));
+    expect(store.getDocument('d1')).toBeNull();
+    expect(api.docs.get('d1')?.deleted).toBe(true);
+    const [entry] = store.listDocBin();
+    expect(entry).toMatchObject({ documentId: 'd1', itemType: 'document', documentTitle: 'Mine' });
+
+    const restored = await store.restoreFromDocBin(entry.id);
+    expect(restored?.metadata.title).toBe('Mine');
+    expect(api.docs.get('d1')?.deleted).toBe(false);
+    expect(store.listDocBin()).toEqual([]);
+  });
+
+  it('restores a section into its document at its old position', async () => {
+    const doc = makeDoc('d1');
+    const section = { id: 'gone', title: 'Gone', level: 1 as const, type: 'richText' as const, content: '' };
+    await store.loadDocuments();
+    store.saveDocument(doc);
+    await store.moveSectionToBin(doc, section, 0);
+    const restored = await store.restoreFromDocBin(store.listDocBin()[0].id);
+    expect(restored?.sections[0].id).toBe('gone');
+  });
+
+  it('permanently deleting a document purges it on the server', async () => {
+    await store.loadDocuments();
+    store.saveDocument(makeDoc('d1'));
+    await store.moveDocumentToBin(makeDoc('d1'));
+    await store.permanentlyDeleteFromDocBin(store.listDocBin()[0].id);
+    expect(api.docs.has('d1')).toBe(false);
+    expect(store.listDocBin()).toEqual([]);
   });
 });
 
-describe('legacy single-document migration', () => {
-  // The migration runs once per module load, so each case needs a fresh module.
-  const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
-
-  it('brings the old single document in as the first entry', async () => {
-    localStorage.setItem('devdoc_studio_current_doc_v1', JSON.stringify(makeDoc('legacy')));
-    const s = await fresh();
-    expect(s.listDocuments().map((d) => d.metadata.id)).toEqual(['legacy']);
-  });
-
-  it('does not overwrite an existing store', async () => {
-    localStorage.setItem('devdoc_studio_current_doc_v1', JSON.stringify(makeDoc('legacy')));
-    localStorage.setItem('devdoc_studio_documents_v1', JSON.stringify({
-      real: { doc: makeDoc('real'), updatedAt: '2026-09-25T00:00:00Z' },
-    }));
-    const s = await fresh();
-    expect(s.listDocuments().map((d) => d.metadata.id)).toEqual(['real']);
-  });
-
-  it('ignores malformed legacy data', async () => {
-    localStorage.setItem('devdoc_studio_current_doc_v1', 'garbage');
-    const s = await fresh();
-    expect(s.listDocuments()).toEqual([]);
-  });
-});
-
-describe('Doc Bin — documents', () => {
-  it('moves a document out of the store and into the bin', () => {
-    const doc = makeDoc('a');
-    store.saveDocument(doc);
-    store.moveDocumentToBin(doc);
-    expect(store.getDocument('a')).toBeNull();
-    const bin = store.listDocBin();
-    expect(bin).toHaveLength(1);
-    expect(bin[0]).toMatchObject({ itemType: 'document', documentId: 'a', documentTitle: 'Doc a' });
-  });
-
-  it('restores a binned document exactly and empties the bin', () => {
-    const doc = makeDoc('a');
-    store.saveDocument(doc);
-    store.moveDocumentToBin(doc);
-    const restored = store.restoreFromDocBin(store.listDocBin()[0].id);
-    expect(restored).toEqual(doc);
-    expect(store.getDocument('a')).toEqual(doc);
-    expect(store.listDocBin()).toHaveLength(0);
-  });
-
-  it('returns null when restoring an id that is not in the bin', () => {
-    expect(store.restoreFromDocBin('missing')).toBeNull();
-  });
-
-  it('permanently deleting removes it from the bin and never restores it', () => {
-    const doc = makeDoc('a');
-    store.saveDocument(doc);
-    store.moveDocumentToBin(doc);
-    const id = store.listDocBin()[0].id;
-    store.permanentlyDeleteFromDocBin(id);
-    expect(store.listDocBin()).toHaveLength(0);
-    expect(store.restoreFromDocBin(id)).toBeNull();
-    expect(store.getDocument('a')).toBeNull();
-  });
-
-  it('lists the most recently deleted item first', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-09-25T10:00:00Z'));
-    store.moveDocumentToBin(makeDoc('first'));
-    vi.advanceTimersByTime(60_000);
-    store.moveDocumentToBin(makeDoc('second'));
-    expect(store.listDocBin().map((e) => e.documentId)).toEqual(['second', 'first']);
-    vi.useRealTimers();
-  });
-
-  it('permanently deleting a document also purges its (already soft-deleted) backend copy', async () => {
-    const backend = await import('./backendDocumentsService');
-    const doc = makeDoc('a');
-    store.saveDocument(doc);
-    store.moveDocumentToBin(doc);
-    store.permanentlyDeleteFromDocBin(store.listDocBin()[0].id);
-    expect(backend.purgeDocumentFromBackend).toHaveBeenCalledWith('a');
-  });
-
-  it('permanently deleting a section does not attempt to purge anything on the backend', async () => {
-    const backend = await import('./backendDocumentsService');
-    const doc = makeDoc('a', {}, [makeSection('s1'), makeSection('s2')]);
-    store.saveDocument(doc);
-    store.moveSectionToBin(doc, doc.sections[0], 0);
-    vi.mocked(backend.purgeDocumentFromBackend).mockClear();
-    store.permanentlyDeleteFromDocBin(store.listDocBin()[0].id);
-    expect(backend.purgeDocumentFromBackend).not.toHaveBeenCalled();
-  });
-});
-
-describe('Doc Bin — sections', () => {
-  const sections = [makeSection('s1'), makeSection('s2'), makeSection('s3')];
-
-  it('binning a section leaves its document in the store', () => {
-    const doc = makeDoc('a', {}, sections);
-    store.saveDocument(doc);
-    store.moveSectionToBin(doc, sections[1], 1);
-    expect(store.getDocument('a')).not.toBeNull();
-    expect(store.listDocBin()[0]).toMatchObject({ itemType: 'section', documentId: 'a', sectionIndex: 1 });
-  });
-
-  it('restores a section at its original position', () => {
-    const doc = makeDoc('a', {}, sections);
-    store.moveSectionToBin(doc, sections[1], 1);
-    store.saveDocument({ ...doc, sections: [sections[0], sections[2]] }); // as if it was deleted
-    const restored = store.restoreFromDocBin(store.listDocBin()[0].id);
-    expect(restored?.sections.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
-    expect(store.getDocument('a')?.sections.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
-  });
-
-  it('does not duplicate a section that already exists', () => {
-    const doc = makeDoc('a', {}, sections);
-    store.saveDocument(doc);
-    store.moveSectionToBin(doc, sections[1], 1); // still present in the stored doc
-    const restored = store.restoreFromDocBin(store.listDocBin()[0].id);
-    expect(restored?.sections.filter((s) => s.id === 's2')).toHaveLength(1);
-  });
-
-  it('clamps an out-of-range position to the end', () => {
-    const doc = makeDoc('a', {}, [sections[0]]);
-    store.saveDocument(doc);
-    store.moveSectionToBin(doc, sections[2], 99);
-    const restored = store.restoreFromDocBin(store.listDocBin()[0].id);
-    expect(restored?.sections.map((s) => s.id)).toEqual(['s1', 's3']);
-  });
-
-  it('cannot restore a section whose parent document is gone', () => {
-    const doc = makeDoc('a', {}, sections);
-    store.moveSectionToBin(doc, sections[0], 0); // doc never saved to the store
-    expect(store.restoreFromDocBin(store.listDocBin()[0].id)).toBeNull();
-    expect(store.listDocBin()).toHaveLength(1); // stays in the bin, not lost
-  });
-});
-
-vi.mock('./backendDocumentsService', () => ({
-  fetchBackendDocuments: vi.fn(async () => []),
-  pushDocumentToBackend: vi.fn(async () => false),
-  deleteDocumentFromBackend: vi.fn(async () => false),
-  purgeDocumentFromBackend: vi.fn(async () => false),
-}));
-
-describe('saveDocument — skipBackendPush', () => {
-  const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
-
-  it('does not push when skipBackendPush is set, but still saves locally', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    const doc = makeDoc('a', { title: 'Seeded sample' });
-    expect(s.saveDocument(doc, { skipBackendPush: true })).toBe(true);
-    expect(s.getDocument('a')?.metadata.title).toBe('Seeded sample');
-    expect(backend.pushDocumentToBackend).not.toHaveBeenCalled();
-  });
-
-  it('pushes as normal when the option is not given', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('a'));
-    expect(backend.pushDocumentToBackend).toHaveBeenCalled();
-  });
-});
-
-describe('syncFromBackend', () => {
-  const fresh = async () => { vi.resetModules(); return import('./documentsStoreService'); };
-  // Mirrors the server's wire shape (see backendDocumentsService.SyncedDocument).
-  const synced = (id: string, updatedAt: string, overrides: Parameters<typeof makeDoc>[1] = {}) =>
-    ({ ...makeDoc(id, overrides), updatedAt });
-
-  it('adds documents that exist on the backend but not locally', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('local-only', { title: 'Mine' }));
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      synced('local-only', '2026-01-01T00:00:00.000Z', { title: 'Should not overwrite' }), // older than the local save below
-      synced('from-colleague', '2026-01-01T00:00:00.000Z', { title: "Colleague's doc" }),
-    ]);
-
-    const added = await s.syncFromBackend();
-
-    expect(added).toBe(1);
-    expect(s.getDocument('local-only')?.metadata.title).toBe('Mine'); // not clobbered
-    expect(s.getDocument('from-colleague')?.metadata.title).toBe("Colleague's doc");
-  });
-
-  it('is a no-op when the backend has nothing new (or is not configured)', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([]);
-    expect(await s.syncFromBackend()).toBe(0);
-    expect(s.listDocuments()).toHaveLength(0);
-  });
-
-  it('pulls an update when the server copy is demonstrably newer than the local one', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('a', { title: 'Old title' })); // store records its own save time as "now"
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      synced('a', '2099-01-01T00:00:00.000Z', { title: 'Updated elsewhere' }), // far in the future: unambiguously newer
-    ]);
-
-    expect(await s.syncFromBackend()).toBe(1);
-    expect(s.getDocument('a')?.metadata.title).toBe('Updated elsewhere');
-  });
-
-  it('snapshots the local copy before replacing it, so the pull can be undone', async () => {
-    const { listSnapshots } = await import('./versionHistoryService');
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('a', { title: 'Before sync' }));
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      synced('a', '2099-01-01T00:00:00.000Z', { title: 'After sync' }),
-    ]);
-
-    await s.syncFromBackend();
-
-    const snaps = listSnapshots('a');
-    expect(snaps).toHaveLength(1);
-    expect(snaps[0].doc.metadata.title).toBe('Before sync');
-  });
-
-  it('does not pull an update when the server copy is not newer (an unpushed local edit is never clobbered)', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('a', { title: 'My unsynced edit' })); // e.g. made while offline, push never reached the server
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      synced('a', '2000-01-01T00:00:00.000Z', { title: 'Stale server copy' }), // well before the local save above
-    ]);
-
-    expect(await s.syncFromBackend()).toBe(0);
-    expect(s.getDocument('a')?.metadata.title).toBe('My unsynced edit');
-  });
-
-  it('does not pull an update with no usable timestamp', async () => {
-    const backend = await import('./backendDocumentsService');
-    const s = await fresh();
-    s.saveDocument(makeDoc('a', { title: 'Mine' }));
-    vi.mocked(backend.fetchBackendDocuments).mockResolvedValue([
-      { ...makeDoc('a', { title: 'No timestamp' }), updatedAt: '' },
-    ]);
-
-    expect(await s.syncFromBackend()).toBe(0);
-    expect(s.getDocument('a')?.metadata.title).toBe('Mine');
+describe('version history (kept by the server)', () => {
+  it('lists snapshots and restores one, after pending saves', async () => {
+    await store.loadDocuments();
+    store.saveDocument(makeDoc('d1', { title: 'v1' }));
+    store.saveDocument(makeDoc('d1', { title: 'v2' }));
+    await store.whenSaved('d1');
+    const [snap] = await store.listSnapshots('d1');
+    expect(snap.doc.metadata.title).toBe('v1');
+    const doc = await store.restoreSnapshot('d1', snap.id);
+    expect(doc.metadata.title).toBe('v1');
+    expect(store.getDocument('d1')?.metadata.title).toBe('v1');
   });
 });

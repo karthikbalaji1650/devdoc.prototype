@@ -29,9 +29,9 @@ class ItemResponse(WireModel):
 
 
 @get_route(router, "/{name}", response_model=CollectionResponse)
-async def list_items(name: str, services: ServicesDep) -> Response:
-    """Every item, oldest first."""
-    return FastJsonResponse(await services.collections.list(name))
+async def list_items(name: str, user: CurrentUser, services: ServicesDep) -> Response:
+    """Every item the caller may see, oldest first."""
+    return FastJsonResponse(await services.collections.list(user, name))
 
 
 @router.post("/{name}/seed", response_model=CollectionResponse, responses=_write)

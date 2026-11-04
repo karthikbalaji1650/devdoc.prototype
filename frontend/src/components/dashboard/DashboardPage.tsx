@@ -11,7 +11,7 @@ import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
 import { getStoredReviewersLog, reviewersLog } from '../../services/reviewersLogService';
 import { useSharedCollection } from '../../services/sharedCollection';
-import { listDocuments } from '../../services/documentsStoreService';
+import { listDocuments, useDocuments } from '../../services/documentsStoreService';
 import { visibleDocumentsFor } from '../../services/permissions';
 import { buildTrackedDocuments, countTracked, findDocumentByNumber, type TrackedStatus } from '../../services/documentStats';
 import { isAdmin } from '../../services/permissions';
@@ -100,7 +100,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   // The headline cards count distinct documents (stored documents merged
   // with reviewer sign-offs), so they agree with Recent Activity and
   // with the list each card opens.
-  const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user]);
+  const { version: documentsVersion } = useDocuments();
+  const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user, documentsVersion]);
   const docCounts = countTracked(buildTrackedDocuments(visibleDocs, reviewers, isAdmin(user)));
 
   const STATS: { label: string; value: number; status: Exclude<TrackedStatus, 'OTHER'> | null; valueColor: string }[] = [

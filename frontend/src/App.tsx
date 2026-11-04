@@ -5,7 +5,6 @@ import type { UserProfile } from './types/auth';
 import type { IncidentItem } from './types/operations';
 import type { SettingsTab } from './components/settings/SettingsPage';
 import { TEMPLATE_REGISTRY, getDefaultDocument } from './templates';
-import { sampleTestReportDoc } from './templates/testReportTemplate';
 import { HeaderNav } from './components/HeaderNav';
 import { DocumentSidebar } from './components/DocumentSidebar';
 import { SectionEditorContainer } from './components/SectionEditorContainer';
@@ -16,18 +15,18 @@ import { AiSettingsModal } from './components/ai/AiSettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { AppSidebar } from './components/AppSidebar';
 import { DocumentsListPage } from './components/documents/DocumentsListPage';
-import { listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin, syncFromBackend } from './services/documentsStoreService';
+import {
+  listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin,
+  loadDocuments, resetDocuments, restoreSnapshot, useDocuments, DOCUMENT_SAVE_ERROR_EVENT,
+} from './services/documentsStoreService';
 import { DocBinModal } from './components/documents/DocBinModal';
 import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
-import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { isBackendConfigured, logoutBackend } from './services/backendAuthService';
 import { createDebouncedSaver } from './services/autosave';
-import { seedSampleDocumentsIfNeeded } from './services/sampleData';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
 import { getStoredReviewersLog, reviewersLog } from './services/reviewersLogService';
 import { useSharedCollection } from './services/sharedCollection';
-import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
 import { canEditDocument, canDeleteDocument, isAdmin, visibleDocumentsFor } from './services/permissions';
 
 import { saveAs } from 'file-saver';
@@ -54,20 +53,6 @@ const PageLoading: React.FC = () => (
   </div>
 );
 
-const STORAGE_KEY = 'devdoc_studio_current_doc_v1';
-
-const migrateSavedDocument = (savedDocument: DocumentModel): DocumentModel => {
-  const isLegacyImpactAnalysis = savedDocument.metadata.templateType === 'test-report' && (
-    savedDocument.metadata.title === 'Firmware Security & REST API Test Execution Report' ||
-    savedDocument.sections.some(section => section.id === 'sec-exec-summary') ||
-    !savedDocument.sections.some(section => section.id === 'sec-purpose-scope')
-  );
-
-  return isLegacyImpactAnalysis
-    ? JSON.parse(JSON.stringify(sampleTestReportDoc))
-    : savedDocument;
-};
-
 export const App: React.FC = () => {
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
@@ -87,17 +72,9 @@ export const App: React.FC = () => {
   const [settingsTab, setSettingsTab] = useState<Exclude<SettingsTab, 'data'>>('profile');
 
   // Document model state
-  const [document, setDocument] = useState<DocumentModel>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return migrateSavedDocument(JSON.parse(saved) as DocumentModel);
-      } catch (e) {
-        console.error('Failed to parse saved document', e);
-      }
-    }
-    return getDefaultDocument();
-  });
+  // The document being edited. Every saved document lives on the server
+  // (documentsStoreService); this is only the open one's working copy.
+  const [document, setDocument] = useState<DocumentModel>(() => getDefaultDocument());
 
   // null = showing the documents list; a real id = editing that document
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
@@ -111,8 +88,8 @@ export const App: React.FC = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   // Set when the dashboard sends you to the list narrowed to one status.
   const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<TrackedStatus, 'OTHER'> | null>(null);
-  // Adds the ADR-2026-042 sample once so the dashboard's In review card has a document to open.
-  const [documentListVersion, setDocumentListVersion] = useState(() => (seedSampleDocumentsIfNeeded() ? 1 : 0));
+  // Documents are loaded from the server; re-render when they load or change.
+  const { version: documentListVersion } = useDocuments();
   // The documents list shows review status from the shared reviewers log: re-render once it loads.
   useSharedCollection(reviewersLog);
 
@@ -122,33 +99,18 @@ export const App: React.FC = () => {
   const [aiInitialText, setAiInitialText] = useState('');
   const [aiApplyCallback, setAiApplyCallback] = useState<((newText: string) => void) | null>(null);
 
-  // Auto-save the active document into the multi-document store.
-  // (Legacy single-doc key is kept in sync too, only so an older build
-  // reverting mid-session wouldn't see a blank slate; documentsStoreService
-  // migrates it in on first read.)
-  // Saves are debounced so a burst of keystrokes serialises the document
-  // once, not once per keystroke. Anything that reads the saved copy (or
-  // leaves the page / editor) calls flush() first so no edit is lost.
+  // Auto-save the open document to the server. Saves are debounced so a
+  // burst of keystrokes sends the document once, not once per keystroke.
+  // Anything that reads the saved copy (or leaves the page / editor) calls
+  // flush() first so no edit is lost. The server keeps version history.
   const autosaverRef = useRef(
-    createDebouncedSaver<DocumentModel>((doc) => {
-      // The store is the source of truth; the legacy copy is best-effort
-      // and must not raise a second warning when storage is full.
-      snapshotIfDue(() => getDocument(doc.metadata.id), doc.metadata.id);
-      saveDocument(doc);
-      safeSetItem(STORAGE_KEY, JSON.stringify(doc), { notify: false });
-    }, 400)
+    createDebouncedSaver<DocumentModel>((doc) => { saveDocument(doc); }, 400)
   );
 
-  // Pulls in documents a colleague saved from another browser, when a
-  // backend (server/) is configured — a no-op otherwise. Additive only
-  // (see syncFromBackend), so it can never clobber unsynced local work.
+  // Signing in (or a page load with a stored session) loads that user's
+  // documents from the server.
   useEffect(() => {
-    if (!currentUser) return;
-    let cancelled = false;
-    syncFromBackend().then((added) => {
-      if (!cancelled && added > 0) setDocumentListVersion((v) => v + 1);
-    });
-    return () => { cancelled = true; };
+    if (currentUser) void loadDocuments(true);
   }, [currentUser]);
 
   useEffect(() => {
@@ -189,18 +151,18 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  // Browser storage is full or blocked: tell the user their latest edits
-  // are NOT being saved (rate-limited so autosave retries don't spam).
+  // A save the server refused or never received: say so, rather than let
+  // the user believe it was kept (rate-limited so autosave retries don't spam).
   useEffect(() => {
     let lastShown = 0;
-    const onStorageError = () => {
-      if (Date.now() - lastShown < 30000) return;
+    const onSaveError = (e: Event) => {
+      if (Date.now() - lastShown < 10000) return;
       lastShown = Date.now();
-      setToastMessage('⚠️ Browser storage is full - recent changes are not being saved. Export your data, then clear space in Settings → System & Storage.');
+      setToastMessage(`⚠️ ${(e as CustomEvent<string>).detail}`);
       setTimeout(() => setToastMessage(null), 8000);
     };
-    window.addEventListener(STORAGE_ERROR_EVENT, onStorageError);
-    return () => window.removeEventListener(STORAGE_ERROR_EVENT, onStorageError);
+    window.addEventListener(DOCUMENT_SAVE_ERROR_EVENT, onSaveError);
+    return () => window.removeEventListener(DOCUMENT_SAVE_ERROR_EVENT, onSaveError);
   }, []);
 
   const showToast = (msg: string) => {
@@ -210,13 +172,16 @@ export const App: React.FC = () => {
 
   // Opens an existing document (from the list, an import, etc.) or
   // registers a brand-new one, and switches the editor onto it.
-  const openDocumentInEditor = (doc: DocumentModel) => {
+  // Returns false when it can't be saved at all (the browser-only demo):
+  // the editor is not opened on a document that would never be kept.
+  const openDocumentInEditor = (doc: DocumentModel): boolean => {
     const id = doc.metadata.id || generateDocumentId();
     const docWithId: DocumentModel = { ...doc, metadata: { ...doc.metadata, id } };
-    saveDocument(docWithId);
+    if (!saveDocument(docWithId)) return false;
     setDocument(docWithId);
     setActiveSectionId('metadata');
     setActiveDocumentId(id);
+    return true;
   };
 
   const handleOpenDocument = (id: string) => {
@@ -237,8 +202,7 @@ export const App: React.FC = () => {
     newDoc.metadata.author = currentUser?.name || 'Unknown';
     newDoc.metadata.status = 'DRAFT';
     newDoc.metadata.date = new Date().toISOString().split('T')[0];
-    openDocumentInEditor(newDoc);
-    showToast(`Created "${newDoc.metadata.title || 'New Document'}"`);
+    if (openDocumentInEditor(newDoc)) showToast(`Created "${newDoc.metadata.title || 'New Document'}"`);
   };
 
   const handleBackToDocumentsList = () => {
@@ -256,9 +220,10 @@ export const App: React.FC = () => {
       showToast('You can only delete documents you authored.');
       return;
     }
-    moveDocumentToBin(doc);
-    setDocumentListVersion((version) => version + 1);
-    showToast(`Moved "${doc.metadata.title || 'Untitled Document'}" to Doc Bin.`);
+    moveDocumentToBin(doc).then(
+      () => showToast(`Moved "${doc.metadata.title || 'Untitled Document'}" to Doc Bin.`),
+      (err: unknown) => showToast(`⚠️ Not moved to the Doc Bin: ${err instanceof Error ? err.message : String(err)}`),
+    );
   };
 
   // Auth Handlers
@@ -276,6 +241,7 @@ export const App: React.FC = () => {
     // hang on the network.
     if (isBackendConfigured()) void logoutBackend();
     logout();
+    resetDocuments();
     setCurrentUser(null);
     setCurrentApp('login');
     showToast('Logged out successfully.');
@@ -387,7 +353,7 @@ export const App: React.FC = () => {
       ]
     };
 
-    openDocumentInEditor(rcaDoc);
+    if (!openDocumentInEditor(rcaDoc)) return;
     setCurrentApp('doccraft');
     showToast(`Generated RCA Document for ${incident.id}!`);
   };
@@ -429,7 +395,7 @@ export const App: React.FC = () => {
     if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
     const deletedSection = document.sections.find((section) => section.id === id);
     if (!deletedSection) return;
-    moveSectionToBin(document, deletedSection, document.sections.findIndex((section) => section.id === id));
+    void moveSectionToBin(document, deletedSection, document.sections.findIndex((section) => section.id === id));
     setDocument(prev => {
       const newSections = prev.sections.filter(s => s.id !== id);
       if (activeSectionId === id) {
@@ -544,8 +510,7 @@ export const App: React.FC = () => {
       const text = await file.text();
       const imported = JSON.parse(text);
       if (imported.metadata && imported.sections) {
-        openDocumentInEditor(imported);
-        showToast('Draft project loaded successfully');
+        if (openDocumentInEditor(imported)) showToast('Draft project loaded successfully');
       } else {
         alert('Invalid document project JSON format');
       }
@@ -561,8 +526,7 @@ export const App: React.FC = () => {
       showToast('Parsing uploaded Word template...');
       const { parseDocxFile } = await import('./exporters/docxImporter');
       const importedDoc = await parseDocxFile(file);
-      openDocumentInEditor(importedDoc);
-      showToast(`Imported ${importedDoc.sections.length} sections from DOCX!`);
+      if (openDocumentInEditor(importedDoc)) showToast(`Imported ${importedDoc.sections.length} sections from DOCX!`);
     } catch (e) {
       console.error('Failed to parse docx', e);
       alert('Could not parse Word document. Please ensure it is a valid .docx file.');
@@ -693,11 +657,11 @@ export const App: React.FC = () => {
           documents={visibleDocs}
           scopeLabel={documentsStatusFilter ? `${scopeBase} · ${documentsStatusFilter.replace('_', ' ').toLowerCase()} only` : scopeBase}
           onClearFilter={documentsStatusFilter ? () => setDocumentsStatusFilter(null) : undefined}
-          notStoredNote={notStored.length > 0 ? `${notStored.length} more tracked in the Reviewers Log but not stored in this browser: ${notStored.map((t) => t.docNumber || t.title).join(', ')}` : undefined}
+          notStoredNote={notStored.length > 0 ? `${notStored.length} more tracked in the Reviewers Log but not stored on the server: ${notStored.map((t) => t.docNumber || t.title).join(', ')}` : undefined}
           onOpen={handleOpenDocument}
           onCreate={handleCreateDocument}
           onDelete={handleMoveDocumentToBin}
-          onRestore={() => setDocumentListVersion((version) => version + 1)}
+          onRestore={() => undefined}
           onNavigate={handleLaunchApp}
           onLogout={handleLogout}
         />
@@ -779,11 +743,16 @@ export const App: React.FC = () => {
           onClose={() => setHistoryOpen(false)}
           onRestore={(snap) => {
             if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
+            // The server keeps the version being replaced, so the restore can be undone.
             autosaverRef.current.flush();
-            recordSnapshot(document, 'Before restore');
-            setDocument(snap.doc);
-            setHistoryOpen(false);
-            showToast(`Restored version from ${new Date(snap.savedAt).toLocaleString()}.`);
+            restoreSnapshot(activeDocumentId, snap.id).then(
+              (doc) => {
+                setDocument(doc);
+                setHistoryOpen(false);
+                showToast(`Restored version from ${new Date(snap.savedAt).toLocaleString()}.`);
+              },
+              (err: unknown) => showToast(`⚠️ Not restored: ${err instanceof Error ? err.message : String(err)}`),
+            );
           }}
         />
       )}

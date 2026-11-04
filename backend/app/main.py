@@ -24,6 +24,8 @@ from app.db.redis import create_redis
 from app.dependencies import Services
 from app.repositories.base import Repositories
 from app.repositories.collections import CollectionStore
+from app.repositories.document_cache import CachedDocumentRepository
+from app.repositories.document_history import DocumentHistoryStore
 from app.repositories.postgres import postgres_repositories
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import TestExecRepository
@@ -46,7 +48,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
         collections=CollectionService(CollectionStore(redis)),
-        documents=DocumentService(repos.documents),
+        documents=DocumentService(CachedDocumentRepository(repos.documents, redis), DocumentHistoryStore(redis)),
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
         test_management=TestManagementService(TestManagementStore(redis)),
