@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -19,34 +20,41 @@ from app.core.middleware import ExpressCorsMiddleware, JsonBodyMiddleware
 from app.core.rate_limit import login_rate_limiter
 from app.core.routing import ExpressPathMiddleware, route_templates
 from app.db.pool import create_pool
+from app.db.redis import create_redis
 from app.dependencies import Services
 from app.repositories.base import Repositories
 from app.repositories.postgres import postgres_repositories
 from app.repositories.test_exec import TestExecRepository
-from app.routers import ai, auth, documents, health, test_exec
+from app.repositories.test_management import TestManagementStore
+from app.routers import ai, auth, documents, health, test_exec, test_management
 from app.schemas.openapi import install_openapi
 from app.services.ai import AiService
 from app.services.auth import AuthService
 from app.services.documents import DocumentService
 from app.services.test_exec import TestExecService
+from app.services.test_management import TestManagementService
 
 logger = logging.getLogger("devdoc.api")
 
 
-def build_services(settings: Settings, repos: Repositories, http_client: httpx.AsyncClient) -> Services:
+def build_services(settings: Settings, repos: Repositories, http_client: httpx.AsyncClient, redis: Redis) -> Services:
     return Services(
         auth=AuthService(repos),
         documents=DocumentService(repos.documents),
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
+        test_management=TestManagementService(TestManagementStore(redis)),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )
 
 
-def create_app(settings: Settings | None = None, repositories: Repositories | None = None) -> FastAPI:
-    """`repositories` is for tests and the browser-test harness; without it
-    the app connects to Postgres at DATABASE_URL."""
+def create_app(
+    settings: Settings | None = None, repositories: Repositories | None = None, redis: Redis | None = None
+) -> FastAPI:
+    """`repositories` and `redis` are for tests and the browser-test harness;
+    without them the app connects to Postgres at DATABASE_URL and Redis at
+    REDIS_URL."""
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -60,16 +68,25 @@ def create_app(settings: Settings | None = None, repositories: Repositories | No
             pool = create_pool(settings.database_url)
             await pool.open(wait=False)
             repos = postgres_repositories(pool)
+        redis_client = redis
+        owns_redis = redis_client is None
+        if redis_client is None:
+            if not settings.redis_url:
+                print("REDIS_URL is required.", file=sys.stderr)
+                sys.exit(1)
+            redis_client = create_redis(settings.redis_url)
         async with httpx.AsyncClient() as http_client:
-            app.state.services = build_services(settings, repos, http_client)
+            app.state.services = build_services(settings, repos, http_client, redis_client)
             try:
                 yield
             finally:
+                if owns_redis:
+                    await redis_client.aclose()
                 if pool is not None:
                     await pool.close()
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
-    routers = [m.router for m in (health, auth, documents, ai, test_exec)]
+    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management)]
     for router in routers:
         app.include_router(router)
 

@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
+import fakeredis
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -62,7 +63,8 @@ class Api:
 
 def make_api(settings: Settings | None = None) -> Iterator[Api]:
     store = seeded_store()
-    app = create_app(settings or test_settings(), repositories=memory_repositories(store))
+    redis = fakeredis.FakeAsyncRedis(decode_responses=True)
+    app = create_app(settings or test_settings(), repositories=memory_repositories(store), redis=redis)
     with TestClient(app, raise_server_exceptions=False) as client:
         yield Api(client, store)
 

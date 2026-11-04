@@ -13,6 +13,7 @@ from app.services.ai import AiService
 from app.services.auth import AuthService
 from app.services.documents import DocumentService
 from app.services.test_exec import TestExecService
+from app.services.test_management import TestManagementService
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Services:
     documents: DocumentService
     ai: AiService
     test_exec: TestExecService
+    test_management: TestManagementService
     login_limiter: RateLimiter
     cookie_secure: bool
 

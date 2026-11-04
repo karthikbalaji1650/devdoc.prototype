@@ -24,6 +24,26 @@ services:
       retries: 5
 
   # ----------------------------------------------------
+  # 1a. Redis - stores data the app used to keep in each user's
+  #     browser (test management first), and caches reads. AOF with
+  #     an fsync every second, so a restart loses at most ~1 s of writes.
+  # ----------------------------------------------------
+  redis:
+    image: redis:7.4-alpine
+    container_name: devdoc-studio-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
   # 1b. API (FastAPI, backend/) — real authentication and shared
   #     document storage. The frontend only calls it when
   #     VITE_API_BASE_URL is set at build time; without it the app
@@ -40,6 +60,8 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)"]
       interval: 10s
@@ -47,6 +69,7 @@ services:
       retries: 5
     environment:
       - DATABASE_URL=postgresql://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
+      - REDIS_URL=redis://redis:6379/0
       - CORS_ORIGINS=http://localhost:5173
       # Optional: set in your shell or a root .env before `docker compose up`
       # to let the frontend's AI rephrase feature use this server as a key-
@@ -126,4 +149,6 @@ services:
 
 volumes:
   pgdata:
+    driver: local
+  redisdata:
     driver: local

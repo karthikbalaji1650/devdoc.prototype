@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str | None = None
+    # Test management (and other data that used to live in the browser).
+    redis_url: str | None = None
 
     # Kept as a raw string: Node only treated the exact value "true" as on
     # (COOKIE_SECURE === 'true'), so "1" or "yes" must stay off here too.

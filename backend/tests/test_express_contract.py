@@ -162,8 +162,17 @@ def test_openapi_documents_every_route_with_camel_case_fields(api: Api) -> None:
         "/api/test-exec/scripts",
         "/api/test-exec/runs",
         "/api/test-exec/runs/{job_id}",
+        "/api/test-management",
+        "/api/test-management/seed",
+        "/api/test-management/suites/{suite_id}",
+        "/api/test-management/suites/{suite_id}/sections/{section_id}",
+        "/api/test-management/suites/{suite_id}/cases/{case_id}",
+        "/api/test-management/runs/{run_id}",
+        "/api/test-management/milestones/{milestone_id}",
     }
     components = schema["components"]["schemas"]
     assert "avatarBg" in components["SessionUser"]["properties"]
     assert "_schema" in components["RobotResultsJson"]["properties"]
     assert "docNumber" in components["DocumentMetadata"]["properties"]
+    assert "testCases" in components["StoredSuite"]["properties"]
+    assert "customId" in components["TestCaseModel"]["properties"]

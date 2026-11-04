@@ -44,6 +44,7 @@ def seeded_store() -> MemoryStore:
 def test_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "database_url": None,
+        "redis_url": None,
         "cookie_secure": "",
         "cors_origins": "",
         "gemini_api_key": "",

@@ -40,18 +40,20 @@ Interactive docs: `/docs`; schema: `/openapi.json`.
 
 ## Running it
 
-With docker-compose, run `docker compose up` from the repo root. It starts Postgres, this API on port 8000, and the web app, already wired together.
+With docker-compose, run `docker compose up` from the repo root. It starts Postgres, Redis, this API on port 8000, and the web app, already wired together.
 
 Standalone, for development (needs [uv](https://docs.astral.sh/uv/)):
 
 ```
-cp .env.example .env      # DATABASE_URL, CORS_ORIGINS, optional AI keys
+cp .env.example .env      # DATABASE_URL, REDIS_URL, CORS_ORIGINS, optional AI keys
 uv sync
 uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-header
 ```
 
 This needs a Postgres reachable at `DATABASE_URL`, seeded by the repo's
-`sql/init.sql` (docker-compose does this on first start).
+`sql/init.sql` (docker-compose does this on first start), and a Redis at
+`REDIS_URL` for test management data (`docker compose up redis`). Tests
+use an in-process fake Redis, so they need neither.
 
 ## Demo accounts
 

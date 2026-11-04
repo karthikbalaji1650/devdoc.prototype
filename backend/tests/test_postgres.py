@@ -8,6 +8,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
+import fakeredis
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
@@ -31,7 +32,7 @@ def client() -> Iterator[TestClient]:
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         conn.execute(INIT_SQL.read_text())
-    app = create_app(test_settings(database_url=DATABASE_URL))
+    app = create_app(test_settings(database_url=DATABASE_URL), redis=fakeredis.FakeAsyncRedis(decode_responses=True))
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
 

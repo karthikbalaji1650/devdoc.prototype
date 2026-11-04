@@ -16,13 +16,13 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /mobile-smoke\.spec\.ts/ },
-    // backend-login.spec.ts and remote-test-execution.spec.ts each start a
+    // backend-login, remote-test-execution and test-management specs each start a
     // second, fixed-port dev server and API instance — running them three
     // times over would triple-spawn on the same ports. They're about the
     // app talking to the API, not rendering, so one engine is enough;
     // everything else still runs on all three.
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|mobile-smoke\.spec\.ts/ },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|mobile-smoke\.spec\.ts/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management\.spec\.ts|mobile-smoke\.spec\.ts/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management\.spec\.ts|mobile-smoke\.spec\.ts/ },
     // Not the full suite (it assumes a desktop layout throughout) - a
     // focused smoke check that the app is at least usable on a phone.
     // See the "Mobile" note in the README: this is baseline coverage,

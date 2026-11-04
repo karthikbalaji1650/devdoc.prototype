@@ -1,16 +1,45 @@
 import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
-import { signInAs } from './helpers';
+import { signInThroughBackend, startStack, type Stack } from './backendHarness';
+
+// Test Management is server-only (its data lives in Redis behind the API),
+// so these run against a real API on their own ports. One worker, in file
+// order: they share that server, which is reset before each test.
+test.describe.configure({ mode: 'default' });
+
+let stack: Stack;
+test.beforeAll(async () => { stack = await startStack(4133, 5220); });
+test.afterAll(() => stack?.stop());
+test.beforeEach(async () => { await stack.reset(); });
+
+const signIn = (page: Page) => signInThroughBackend(page, stack);
 
 async function openTestManagement(page: Page) {
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add Case' }).first()).toBeVisible();
 }
 
+test.describe('shared on the server', () => {
+  test('a case one user adds is visible to another user', async ({ page, browser }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    await page.getByRole('button', { name: 'Add Case' }).first().click();
+    await page.getByPlaceholder('Test case title').fill('Shared across users');
+    await page.getByRole('button', { name: 'Add Test Case' }).click();
+    await expect(page.getByText('Shared across users')).toBeVisible();
+
+    const otherContext = await browser.newContext();
+    const other = await otherContext.newPage();
+    await signInThroughBackend(other, stack, stack.users[2]);
+    await openTestManagement(other);
+    await expect(other.getByText('Shared across users')).toBeVisible();
+    await otherContext.close();
+  });
+});
+
 test.describe('test case fields (DDS-SRS-013)', () => {
   test('a new case gets a sequential TC id, post-conditions and attachments, and keeps them after reload', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
+    await signIn(page);
     await openTestManagement(page);
 
     await page.getByRole('button', { name: 'Add Case' }).first().click();
@@ -41,8 +70,7 @@ test.describe('test case fields (DDS-SRS-013)', () => {
 test.describe('CSV / JSON / XML exchange (DDS-SRS-015)', () => {
   for (const format of ['csv', 'json', 'xml'] as const) {
     test(`exporting as ${format} and importing the file back adds copies with fresh IDs`, async ({ page }) => {
-      await signInAs(page);
-      await page.goto('/');
+      await signIn(page);
       await openTestManagement(page);
       const rows = page.getByText(/^C\d$/);
       const before = await rows.count();
@@ -66,8 +94,7 @@ test.describe('CSV / JSON / XML exchange (DDS-SRS-015)', () => {
   }
 
   test('a malformed file is rejected with a message', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
+    await signIn(page);
     await openTestManagement(page);
     await page.getByLabel('Import test cases (CSV, JSON or XML)').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{oops') });
     await expect(page.getByText('JSON: the file is not valid JSON.')).toBeVisible();
@@ -76,8 +103,7 @@ test.describe('CSV / JSON / XML exchange (DDS-SRS-015)', () => {
 
 test.describe('defect links on failed results (DDS-SRS-018)', () => {
   test('issue IDs can be linked to a failed result and persist', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
+    await signIn(page);
     await openTestManagement(page);
     const openDefects = async () => {
       await page.getByRole('button', { name: /Test Runs/ }).first().click();
@@ -103,8 +129,7 @@ test.describe('defect links on failed results (DDS-SRS-018)', () => {
 
 test.describe('test summary reports (DDS-SRS-024)', () => {
   test('a run downloads as CSV and HTML, and opens a print-ready report for PDF', async ({ page }) => {
-    await signInAs(page);
-    await page.goto('/');
+    await signIn(page);
     await openTestManagement(page);
     await page.getByRole('button', { name: /Test Runs/ }).first().click();
     await page.getByText('[Regression] Full Release v5.67').click();

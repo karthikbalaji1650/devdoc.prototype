@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment } from '../../types/operations';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
@@ -6,7 +6,10 @@ import { buildRunReportCsv, buildRunReportHtml, reportFileName } from '../../ser
 import type { DocumentModel } from '../../types/document';
 import { generateTestCasesFromTaDoc } from '../../services/aiTestCaseGeneratorService';
 import { fetchWithTimeout } from '../../services/fetchWithTimeout';
-import { loadSuites, saveSuites, loadRuns, saveRuns, loadMilestones, saveMilestones } from '../../services/testManagementStoreService';
+import {
+  isTestManagementAvailable, loadTestManagement, seedTestManagement, syncTestManagement,
+  type TestManagementData,
+} from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary } from '../../services/testCaseLibraryService';
@@ -2380,16 +2383,65 @@ const LeftPanel: React.FC<{
 // ── Main TestCaseManager Component ─────────────────────────────────────────────
 const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNavigateToDocCraft, currentDocument }) => {
   const [view,                   setView]                   = useState<MainView>('test-cases');
-  const [suites,                 setSuites]                 = useState<TestSuiteItem[]>(() => loadSuites() ?? INITIAL_SUITES);
-  const [runs,                   setRuns]                   = useState<TestRunItem[]>(() => loadRuns() ?? INITIAL_RUNS);
-  const [milestones,             setMilestones]             = useState<MilestoneItem[]>(() => loadMilestones() ?? INITIAL_MILESTONES);
-  const [selectedSuiteId,        setSelectedSuiteId]        = useState<string|null>(() => (loadSuites() ?? INITIAL_SUITES)[0]?.id || null);
+  const [suites,                 setSuites]                 = useState<TestSuiteItem[]>([]);
+  const [runs,                   setRuns]                   = useState<TestRunItem[]>([]);
+  const [milestones,             setMilestones]             = useState<MilestoneItem[]>([]);
+  const [selectedSuiteId,        setSelectedSuiteId]        = useState<string|null>(null);
 
-  // Test Management had no persistence at all before this - a refresh wiped
-  // every suite, test case, run and milestone back to the sample data.
-  useEffect(() => { saveSuites(suites); }, [suites]);
-  useEffect(() => { saveRuns(runs); }, [runs]);
-  useEffect(() => { saveMilestones(milestones); }, [milestones]);
+  // The data lives on the server (see testManagementApiService.ts), shared
+  // by every user - never in this browser. `synced` is what the server is
+  // known to hold; every change to the three arrays is diffed against it
+  // and sent, one change after another so saves never overtake each other.
+  type LoadState = 'loading' | 'ready' | 'error' | 'unavailable';
+  const [loadState,              setLoadState]              = useState<LoadState>(() => isTestManagementAvailable() ? 'loading' : 'unavailable');
+  const [loadError,              setLoadError]              = useState('');
+  const synced    = useRef<TestManagementData>({ suites: [], runs: [], milestones: [] });
+  const syncQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const applySnapshot = useCallback((data: TestManagementData) => {
+    synced.current = { suites: data.suites, runs: data.runs, milestones: data.milestones };
+    setSuites(data.suites);
+    setRuns(data.runs);
+    setMilestones(data.milestones);
+    setSelectedSuiteId(cur => cur && data.suites.some(s => s.id === cur) ? cur : data.suites[0]?.id ?? null);
+  }, []);
+
+  const loadFromServer = useCallback(async () => {
+    setLoadState('loading');
+    try {
+      let snapshot = await loadTestManagement();
+      const empty = !snapshot.suites.length && !snapshot.runs.length && !snapshot.milestones.length;
+      if (!snapshot.seeded && empty) {
+        snapshot = await seedTestManagement({ suites: INITIAL_SUITES, runs: INITIAL_RUNS, milestones: INITIAL_MILESTONES });
+      }
+      applySnapshot(snapshot);
+      setLoadState('ready');
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadState('error');
+    }
+  }, [applySnapshot]);
+
+  useEffect(() => {
+    if (isTestManagementAvailable()) void loadFromServer();
+  }, [loadFromServer]);
+
+  useEffect(() => {
+    if (loadState !== 'ready') return;
+    const prev = synced.current;
+    if (prev.suites === suites && prev.runs === runs && prev.milestones === milestones) return;
+    const next = { suites, runs, milestones };
+    synced.current = next;
+    syncQueue.current = syncQueue.current.then(async () => {
+      const errors = await syncTestManagement(prev, next);
+      if (!errors.length) return;
+      // Rejected (e.g. someone else's suite) or unreachable: show what the
+      // server actually holds rather than an edit that was never saved.
+      setToast(`⚠️ Not saved: ${errors[0].message} Showing the latest from the server.`);
+      setTimeout(() => setToast(null), 5000);
+      try { applySnapshot(await loadTestManagement()); } catch { /* keep the toast */ }
+    });
+  }, [suites, runs, milestones, loadState, applySnapshot]);
   const [showAiModal,            setShowAiModal]            = useState(false);
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
@@ -2606,6 +2658,46 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  if (loadState !== 'ready') {
+    return (
+      <div className="flex h-screen flex-col bg-slate-50 text-slate-900">
+        <div className="h-24 flex items-center gap-3 px-5 border-b border-slate-200 bg-white flex-shrink-0">
+          {onBackToHub && (
+            <button onClick={onBackToHub} className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-medium">
+              <ChevronLeft className="w-4 h-4"/> Back
+            </button>
+          )}
+          <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <FlaskConical className="w-4 h-4 text-teal-600"/> Test Management
+          </span>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-6">
+          {loadState === 'loading' ? (
+            <p role="status" className="text-sm text-slate-500 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin"/> Loading test data from the server…
+            </p>
+          ) : (
+            <div role="alert" className="max-w-md text-center bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-800 mb-2">
+                {loadState === 'unavailable' ? 'Test Management needs the backend' : 'Could not load test data'}
+              </h2>
+              <p className="text-xs text-slate-600 mb-4">
+                {loadState === 'unavailable'
+                  ? 'Suites, test cases, runs and milestones are stored on the server and shared by every user. Run the app with VITE_API_BASE_URL set (docker compose up does this).'
+                  : loadError}
+              </p>
+              {loadState === 'error' && (
+                <button onClick={() => void loadFromServer()} className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold">
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
       {/* Left Panel */}
