@@ -138,3 +138,32 @@ describe('syncTestManagement', () => {
     expect(calls()).toEqual(['DELETE /suites/s1/sections/child', 'DELETE /suites/s1/sections/parent']);
   });
 });
+
+describe('case revisions', () => {
+  it('loads a case\'s revisions, and none for a case the server does not have yet', async () => {
+    const { loadCaseRevisions } = await import('./testManagementApiService');
+    const revisions = [{ revision: 2, savedAt: 'x', savedBy: 'A', changes: ['title'], case: { title: 'B' } }];
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ revisions }), { status: 200 }));
+    await expect(loadCaseRevisions('s 1', 'c1')).resolves.toEqual(revisions);
+    expect(calls()).toEqual(['GET /suites/s%201/cases/c1/revisions']);
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Test case not found.' }), { status: 404 }));
+    await expect(loadCaseRevisions('s1', 'new')).resolves.toEqual([]);
+  });
+
+  it('restores tracked fields but keeps the current files and identity', async () => {
+    const { restoreCaseRevision } = await import('./testManagementApiService');
+    const current = { ...tc('c1', 'Now'), postconditions: 'added later', attachments: [{ id: 'a', name: 'n', mimeType: 't', size: 1, dataUrl: 'data:', addedAt: 'x' }], evidenceImage: 'data:img' };
+    const restored = restoreCaseRevision(current, {
+      revision: 1, savedAt: 'x', savedBy: 'A', changes: [],
+      case: { title: 'Then', customId: 'c1', priority: 'P1', steps: [], attachments: [], evidenceImageHash: 'abc' },
+    });
+    expect(restored.title).toBe('Then');
+    expect(restored.priority).toBe('P1');
+    expect(restored).not.toHaveProperty('postconditions');
+    expect(restored.attachments).toBe(current.attachments);
+    expect(restored.evidenceImage).toBe('data:img');
+    expect(restored).not.toHaveProperty('evidenceImageHash');
+    expect(restored.id).toBe('c1');
+  });
+});

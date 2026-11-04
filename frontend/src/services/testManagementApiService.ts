@@ -225,3 +225,42 @@ export async function syncTestManagement(
   await runAll([...runs.puts, ...runs.deletes, ...milestones.puts, ...milestones.deletes], errors);
   return errors;
 }
+
+// ── revision history (DDS-SRS-014) ───────────────────────────────────────
+
+/** A saved version of a test case. Files are kept as name, size and a
+ * fingerprint (`hash`, `evidenceImageHash`), not their contents. */
+export interface CaseRevision {
+  revision: number;
+  savedAt: string;
+  savedBy: string;
+  /** Fields that differ from the revision before; empty for the first. */
+  changes: string[];
+  case: Partial<TestCaseItem> & { evidenceImageHash?: string };
+}
+
+/** Newest first. Empty for a case the server doesn't have yet. */
+export async function loadCaseRevisions(suiteId: string, caseId: string): Promise<CaseRevision[]> {
+  try {
+    const data = await request<{ revisions: CaseRevision[] }>('GET', `/suites/${enc(suiteId)}/cases/${enc(caseId)}/revisions`);
+    return Array.isArray(data?.revisions) ? data.revisions : [];
+  } catch (err) {
+    if (err instanceof TestManagementApiError && err.status === 404) return [];
+    throw err;
+  }
+}
+
+/** The case as it would be after restoring `revision`: its tracked fields
+ * come back, while the current files (which history only fingerprints)
+ * and the case's identity stay as they are now. */
+export function restoreCaseRevision(current: TestCaseItem, revision: CaseRevision): TestCaseItem {
+  const { attachments: _a, evidenceImageName: _n, evidenceImageHash: _h, ...fields } = revision.case;
+  const restored: TestCaseItem = { ...current };
+  // Fields the old version didn't have are removed, not kept from now.
+  for (const key of Object.keys(restored) as (keyof TestCaseItem)[]) {
+    if (!['id', 'suiteId', 'attachments', 'evidenceImage', 'evidenceImageName', 'createdBy', 'updatedAt'].includes(key) && !(key in fields)) {
+      delete restored[key];
+    }
+  }
+  return { ...restored, ...fields, id: current.id, suiteId: current.suiteId } as TestCaseItem;
+}

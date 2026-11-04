@@ -6,6 +6,7 @@ Keys (all under `dds:tm:`):
     suites                      hash  suite id   -> suite JSON (no sections/cases)
     suite:{id}:sections         hash  section id -> section JSON
     suite:{id}:cases            hash  case id    -> case JSON
+    suite:{id}:case:{id}:revisions  list  revision JSON, newest first (DDS-SRS-014)
     projects                    hash  project id -> project JSON
     runs                        hash  run id     -> run JSON
     milestones                  hash  milestone id -> milestone JSON
@@ -36,6 +37,10 @@ def _sections_key(suite_id: str) -> str:
 
 def _cases_key(suite_id: str) -> str:
     return f"{PREFIX}suite:{suite_id}:cases"
+
+
+def _revisions_key(suite_id: str, case_id: str) -> str:
+    return f"{PREFIX}suite:{suite_id}:case:{case_id}:revisions"
 
 
 def _collection_key(name: Collection) -> str:
@@ -104,10 +109,13 @@ class TestManagementStore:
         await self._put(_suites_key(), suite["id"], suite)
 
     async def delete_suite(self, suite_id: str) -> None:
-        """Removes the suite with all of its sections and cases."""
+        """Removes the suite with all of its sections, cases and their history."""
+        case_ids = await self._redis.hkeys(_cases_key(suite_id))
         async with self._redis.pipeline(transaction=True) as pipe:
             pipe.hdel(_suites_key(), suite_id)
             pipe.delete(_sections_key(suite_id), _cases_key(suite_id))
+            for case_id in case_ids:
+                pipe.delete(_revisions_key(suite_id, case_id))
             await pipe.execute()
 
     # ── sections and cases (children of a suite) ───────────────────────
@@ -133,7 +141,25 @@ class TestManagementStore:
         await self._put(_cases_key(suite_id), case["id"], case)
 
     async def delete_case(self, suite_id: str, case_id: str) -> None:
-        await self._redis.hdel(_cases_key(suite_id), case_id)
+        async with self._redis.pipeline(transaction=True) as pipe:
+            pipe.hdel(_cases_key(suite_id), case_id)
+            pipe.delete(_revisions_key(suite_id, case_id))
+            await pipe.execute()
+
+    # ── case revisions ─────────────────────────────────────────────────
+    async def latest_revision(self, suite_id: str, case_id: str) -> dict[str, Any] | None:
+        return _load(await self._redis.lindex(_revisions_key(suite_id, case_id), 0))
+
+    async def add_revision(self, suite_id: str, case_id: str, revision: dict[str, Any], keep: int) -> None:
+        """Newest first; only the latest `keep` revisions are kept."""
+        key = _revisions_key(suite_id, case_id)
+        async with self._redis.pipeline(transaction=True) as pipe:
+            pipe.lpush(key, json.dumps(revision))
+            pipe.ltrim(key, 0, keep - 1)
+            await pipe.execute()
+
+    async def list_revisions(self, suite_id: str, case_id: str) -> list[dict[str, Any]]:
+        return [json.loads(r) for r in await self._redis.lrange(_revisions_key(suite_id, case_id), 0, -1)]
 
     # ── projects, runs and milestones ────────────────────────────────────────────
     async def get_item(self, collection: Collection, item_id: str) -> dict[str, Any] | None:

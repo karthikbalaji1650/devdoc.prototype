@@ -18,6 +18,7 @@ from app.schemas.test_management import (
     MilestoneResponse,
     ProjectModel,
     ProjectResponse,
+    RevisionsResponse,
     RunResponse,
     SectionResponse,
     SeedRequest,
@@ -105,6 +106,17 @@ async def save_case(
     suite_id: str, case_id: str, request: Request, user: CurrentUser, services: ServicesDep
 ) -> Response:
     return _item("testCase", await services.test_management.save_case(user, suite_id, case_id, json_body(request)))
+
+
+@get_route(
+    router,
+    "/suites/{suite_id}/cases/{case_id}/revisions",
+    response_model=RevisionsResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+async def case_revisions(suite_id: str, case_id: str, services: ServicesDep) -> Response:
+    """A test case's saved versions, newest first (at most 50)."""
+    return JsonResponse({"revisions": await services.test_management.case_revisions(suite_id, case_id)})
 
 
 @router.delete("/suites/{suite_id}/cases/{case_id}", status_code=204, responses=_delete)

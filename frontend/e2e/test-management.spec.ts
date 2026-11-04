@@ -121,6 +121,42 @@ test.describe('projects and sub-sections (DDS-SRS-012)', () => {
   });
 });
 
+test.describe('revision history (DDS-SRS-014)', () => {
+  test('an edit becomes a revision showing what changed, and an older revision can be restored', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    const original = 'RTC Clock Drift Verification under 1-Hour Stress Load';
+    const row = page.getByText(original);
+
+    await row.click();
+    await row.locator('xpath=ancestor::div[contains(@class, "group")][1]').getByRole('button', { name: 'Edit test case' }).click();
+    await page.getByPlaceholder('Test case title').fill('RTC drift under 2-hour load');
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page.getByText('RTC drift under 2-hour load')).toBeVisible();
+
+    await page.reload(); // proves the edit and its revision are on the server
+    await openTestManagement(page);
+    await page.getByText('RTC drift under 2-hour load').click();
+    await page.getByRole('button', { name: 'History' }).click();
+    const dialog = page.getByRole('dialog', { name: /History of/ });
+    await expect(dialog.getByRole('button', { name: /Revision 2 \(current\)/ })).toContainText('Title');
+    const changes = dialog.getByRole('table', { name: 'Changes in revision 2' });
+    await expect(changes).toContainText(original);
+    await expect(changes).toContainText('RTC drift under 2-hour load');
+
+    await dialog.getByRole('button', { name: /^Revision 1/ }).click();
+    await dialog.getByRole('button', { name: 'Restore revision 1' }).click();
+    await expect(page.getByText('Restored revision 1')).toBeVisible();
+    await expect(page.getByText(original)).toBeVisible();
+
+    await page.reload();
+    await openTestManagement(page);
+    await page.getByText(original).click();
+    await page.getByRole('button', { name: 'History' }).click();
+    await expect(page.getByRole('button', { name: /Revision 3 \(current\)/ })).toBeVisible();
+  });
+});
+
 test.describe('test case fields (DDS-SRS-013)', () => {
   test('a new case gets a sequential TC id, post-conditions and attachments, and keeps them after reload', async ({ page }) => {
     await signIn(page);

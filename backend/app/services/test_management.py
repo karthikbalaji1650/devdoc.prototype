@@ -12,6 +12,7 @@ its section with `sectionId`.
 - Admins can change everything. Anyone signed in can read everything.
 """
 
+import hashlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,6 +23,37 @@ from app.services.permissions import is_admin
 
 _LABELS: dict[Collection, str] = {"projects": "Project", "runs": "Test run", "milestones": "Milestone"}
 _REQUIRED_TEXT: dict[Collection, str] = {"projects": "name", "runs": "name", "milestones": "name"}
+
+
+MAX_REVISIONS = 50
+# Bookkeeping the server sets on every save: never a "change" by itself.
+_UNTRACKED = frozenset({"id", "suiteId", "createdBy", "updatedAt"})
+
+
+def _fingerprint(data_url: Any) -> str | None:
+    return hashlib.sha256(data_url.encode()).hexdigest()[:12] if isinstance(data_url, str) and data_url else None
+
+
+def _revision_snapshot(case: dict[str, Any]) -> dict[str, Any]:
+    """The case as a revision keeps it: files are replaced by their name,
+    size and a fingerprint, so a change to one still shows without storing
+    up to 50 copies of every attachment."""
+    snapshot = {k: v for k, v in case.items() if k not in _UNTRACKED and k != "evidenceImage"}
+    if case.get("evidenceImage"):
+        snapshot["evidenceImageHash"] = _fingerprint(case["evidenceImage"])
+    attachments = case.get("attachments")
+    if isinstance(attachments, list):
+        snapshot["attachments"] = [
+            {**{k: v for k, v in a.items() if k != "dataUrl"}, "hash": _fingerprint(a.get("dataUrl"))}
+            if isinstance(a, dict)
+            else a
+            for a in attachments
+        ]
+    return snapshot
+
+
+def _changed_fields(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
+    return sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
 
 
 def _now() -> str:
@@ -140,7 +172,33 @@ class TestManagementService:
         existing = await self._store.get_case(suite_id, case_id)
         case = {**_stamp(user, body, case_id, existing), "suiteId": suite_id}
         await self._store.put_case(suite_id, case)
+        await self._record_revision(user, suite_id, case)
         return case
+
+    async def _record_revision(self, user: User, suite_id: str, case: dict[str, Any]) -> None:
+        """DDS-SRS-014: one revision per save that changed something."""
+        snapshot = _revision_snapshot(case)
+        latest = await self._store.latest_revision(suite_id, case["id"])
+        if latest is not None and latest.get("case") == snapshot:
+            return
+        await self._store.add_revision(
+            suite_id,
+            case["id"],
+            {
+                "revision": (latest or {}).get("revision", 0) + 1,
+                "savedAt": case["updatedAt"],
+                "savedBy": user.name,
+                "changes": _changed_fields(latest["case"], snapshot) if latest else [],
+                "case": snapshot,
+            },
+            MAX_REVISIONS,
+        )
+
+    async def case_revisions(self, suite_id: str, case_id: str) -> list[dict[str, Any]]:
+        """Newest first. Anyone signed in can read them, like the case itself."""
+        if await self._store.get_case(suite_id, case_id) is None:
+            raise ApiError(404, "Test case not found.")
+        return await self._store.list_revisions(suite_id, case_id)
 
     async def delete_case(self, user: User, suite_id: str, case_id: str) -> None:
         await self._owned_suite(user, suite_id, "edit test cases of")
@@ -195,7 +253,9 @@ class TestManagementService:
                     await self._store.put_section(suite_id, stamped)
             for case in suite.get("testCases") or []:
                 if isinstance(case, dict) and isinstance(case.get("id"), str):
-                    await self._store.put_case(suite_id, {**_stamp(user, case, case["id"], None), "suiteId": suite_id})
+                    stamped = {**_stamp(user, case, case["id"], None), "suiteId": suite_id}
+                    await self._store.put_case(suite_id, stamped)
+                    await self._record_revision(user, suite_id, stamped)
         for collection, items in (("runs", runs), ("milestones", milestones)):
             for item in items:
                 if isinstance(item, dict) and isinstance(item.get("id"), str):

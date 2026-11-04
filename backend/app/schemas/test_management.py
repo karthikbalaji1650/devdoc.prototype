@@ -110,6 +110,18 @@ class RunResponse(WireModel):
     run: StoredRun
 
 
+class CaseRevision(WireModel):
+    revision: int
+    savedAt: str
+    savedBy: str
+    changes: list[str]
+    case: TestCaseModel
+
+
+class RevisionsResponse(WireModel):
+    revisions: list[CaseRevision]
+
+
 class ProjectResponse(WireModel):
     project: StoredProject
 

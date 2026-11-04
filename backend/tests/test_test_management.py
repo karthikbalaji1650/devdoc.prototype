@@ -246,3 +246,73 @@ class TestSubSections:
         assert author.delete(f"{BASE}/suites/s1/sections/b").status_code == 409  # has a case
         author.put(f"{BASE}/suites/s1/cases/c1", json=case(sectionId="a"))
         assert author.delete(f"{BASE}/suites/s1/sections/b").status_code == 204
+
+
+class TestCaseRevisions:
+    """DDS-SRS-014."""
+
+    def revisions(self, agent: Agent, case_id: str = "c1") -> list[dict[str, Any]]:
+        res = agent.get(f"{BASE}/suites/s1/cases/{case_id}/revisions")
+        assert res.status_code == 200, res.text
+        return res.json()["revisions"]
+
+    def test_every_change_is_a_revision_newest_first(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case())
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case())  # nothing changed: no revision
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case(title="Drift under load", priority="P2"))
+        api.sign_in(ADMIN).put(f"{BASE}/suites/s1/cases/c1", json=case(title="Drift under load", priority="P3"))
+
+        revs = self.revisions(api.sign_in(OTHER))  # readable by anyone signed in
+        assert [r["revision"] for r in revs] == [3, 2, 1]
+        assert [r["changes"] for r in revs] == [["priority"], ["priority", "title"], []]
+        assert [r["savedBy"] for r in revs] == [ADMIN.name, AUTHOR.name, AUTHOR.name]
+        assert revs[2]["case"]["title"] == "Clock drift"
+        assert "createdBy" not in revs[0]["case"] and "updatedAt" not in revs[0]["case"]
+
+    def test_files_are_fingerprinted_not_copied(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        att = {"id": "a1", "name": "boot.log", "size": 3, "dataUrl": "data:text/plain;base64,QUJD"}
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case(attachments=[att], evidenceImage="data:image/png;base64,AA"))
+        author.put(
+            f"{BASE}/suites/s1/cases/c1",
+            json=case(
+                attachments=[{**att, "dataUrl": "data:text/plain;base64,WFla"}],
+                evidenceImage="data:image/png;base64,AA",
+            ),
+        )
+        latest, first = self.revisions(author)
+        assert latest["changes"] == ["attachments"]
+        assert "dataUrl" not in latest["case"]["attachments"][0]
+        assert latest["case"]["attachments"][0]["hash"] != first["case"]["attachments"][0]["hash"]
+        assert "evidenceImage" not in latest["case"] and len(latest["case"]["evidenceImageHash"]) == 12
+
+    def test_history_is_capped(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        for i in range(55):
+            author.put(f"{BASE}/suites/s1/cases/c1", json=case(title=f"v{i}"))
+        revs = self.revisions(author)
+        assert len(revs) == 50
+        assert revs[0]["revision"] == 55 and revs[-1]["revision"] == 6
+
+    def test_history_goes_with_the_case_or_suite(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case())
+        author.delete(f"{BASE}/suites/s1/cases/c1")
+        assert author.get(f"{BASE}/suites/s1/cases/c1/revisions").status_code == 404
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case())
+        assert [r["revision"] for r in self.revisions(author)] == [1]  # starts over
+
+        author.delete(f"{BASE}/suites/s1")
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case(title="new"))
+        assert [r["revision"] for r in self.revisions(author)] == [1]
+
+    def test_seeded_cases_start_with_a_revision(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        author.post(f"{BASE}/seed", json={"suites": [suite("s1", testCases=[case()])], "runs": [], "milestones": []})
+        assert [r["revision"] for r in self.revisions(author)] == [1]

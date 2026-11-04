@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment, ProjectItem, TestSection } from '../../types/operations';
 import { isSectionEmpty, nextSectionOrder, sectionOfCase, sectionTree } from '../../services/testSections';
+import { CaseHistoryModal } from './CaseHistoryModal';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
 import { buildRunReportCsv, buildRunReportHtml, reportFileName } from '../../services/testRunReport';
@@ -789,8 +790,11 @@ const AddCaseModal: React.FC<{
 }> = ({ suiteId, initial, nextCustomId, sections, defaultSectionId, onSave, onClose }) => {
   const [title, setTitle]     = useState(initial?.title || '');
   const [type, setType]       = useState<'Manual'|'Automated'>(initial?.type || 'Manual');
+  // An existing case keeps what it has: a case saved before sections held
+  // cases stays "By type" unless the user picks a section, so an unrelated
+  // edit doesn't record a section change in its history.
   const [sectionId, setSectionId] = useState<string>(() =>
-    (initial?.title !== undefined ? sectionOfCase({ sectionId: initial.sectionId, type: initial.type || 'Manual' }, sections) : defaultSectionId) ?? '');
+    (initial?.id ? (initial.sectionId && sections.some(s => s.id === initial.sectionId) ? initial.sectionId : '') : defaultSectionId) ?? '');
   const [priority, setPriority] = useState<'P1'|'P2'|'P3'|'P4'>(initial?.priority || 'P3');
   const [preconditions, setPreconditions] = useState(initial?.preconditions || '');
   const [expectedResult, setExpectedResult] = useState(initial?.expectedResult || '');
@@ -992,6 +996,7 @@ const TestCasesView: React.FC<{
   const [showSuiteLibraryModal, setShowSuiteLibraryModal] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
   const [addCaseSectionId, setAddCaseSectionId] = useState<string | undefined>(undefined);
+  const [historyCase, setHistoryCase] = useState<TestCaseItem | null>(null);
 
   // No fallback to the first suite: with a project picked, that could be a
   // suite from another project.
@@ -1427,9 +1432,14 @@ const TestCasesView: React.FC<{
                               </div>
                               {!!tc.attachments?.length && <div><span className="text-[10px] font-bold text-slate-500 block mb-1">Attachments ({tc.attachments.length})</span><AttachmentList attachments={tc.attachments} /></div>}
                               {tc.robotCode && <div><span className="text-[10px] font-bold text-amber-700 block mb-1">Robot Framework Code</span><pre className="bg-slate-900 text-amber-300 p-3 rounded font-mono text-[10px] overflow-x-auto border border-slate-800">{tc.robotCode}</pre></div>}
-                              <button type="button" onClick={() => handleSaveCaseToLibrary(tc)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold">
-                                <BookmarkPlus className="w-3.5 h-3.5" /> Save to Library
-                              </button>
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={() => handleSaveCaseToLibrary(tc)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold">
+                                  <BookmarkPlus className="w-3.5 h-3.5" /> Save to Library
+                                </button>
+                                <button type="button" onClick={() => setHistoryCase(tc)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-semibold">
+                                  <Clock className="w-3.5 h-3.5" /> History
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1472,6 +1482,19 @@ const TestCasesView: React.FC<{
         <AddCaseModal suiteId={selectedSuite.id} initial={editingCase||undefined} nextCustomId={nextTestCaseId(suites)}
           sections={sections} defaultSectionId={editingCase ? undefined : addCaseSectionId}
           onSave={handleSaveCase} onClose={()=>{setShowAddCase(false);setEditingCase(null);setAddCaseSectionId(undefined);}}/>
+      )}
+      {historyCase && selectedSuite && (
+        <CaseHistoryModal
+          suiteId={selectedSuite.id} testCase={historyCase}
+          sectionTitle={id => sections.find(s => s.id === id)?.title ?? '(deleted section)'}
+          onRestore={(restored, revision) => {
+            onUpdateSuites(suites.map(s => s.id === selectedSuite.id
+              ? { ...s, testCases: (s.testCases || []).map(c => c.id === restored.id ? restored : c) } : s));
+            onShowToast(`✅ Restored revision ${revision} of ${restored.customId}.`);
+            setHistoryCase(null);
+          }}
+          onClose={() => setHistoryCase(null)}
+        />
       )}
       {showLibraryModal && (
         <TestCaseLibraryModal onImport={handleImportFromLibrary} onClose={() => setShowLibraryModal(false)} />
