@@ -21,7 +21,7 @@ function suite(id: string, cases: TestCaseItem[] = [], title = id): TestSuiteIte
   return { id, title, description: '', module: 'M', createdAt: 'x', sections: [], testCases: cases };
 }
 const data = (suites: TestSuiteItem[], extra: Partial<TestManagementData> = {}): TestManagementData =>
-  ({ suites, runs: [], milestones: [], ...extra });
+  ({ projects: [], suites, runs: [], milestones: [], ...extra });
 
 /** "METHOD path" for every request made, in order. */
 function calls(): string[] {
@@ -30,7 +30,7 @@ function calls(): string[] {
 
 describe('loadTestManagement', () => {
   it('returns the snapshot, sending the session cookie', async () => {
-    const body = { suites: [suite('s1')], runs: [], milestones: [], seeded: true };
+    const body = { projects: [], suites: [suite('s1')], runs: [], milestones: [], seeded: true };
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
     await expect(loadTestManagement()).resolves.toEqual(body);
     expect(fetchMock.mock.calls[0][0]).toBe(API);
@@ -50,7 +50,7 @@ describe('loadTestManagement', () => {
 
 describe('seedTestManagement', () => {
   it('treats "already seeded" (409) as success and returns the server state', async () => {
-    const snapshot = { suites: [], runs: [], milestones: [], seeded: true };
+    const snapshot = { projects: [], suites: [], runs: [], milestones: [], seeded: true };
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'already' }), { status: 409 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(snapshot), { status: 200 }));
@@ -112,5 +112,29 @@ describe('syncTestManagement', () => {
   it('url-encodes ids', async () => {
     await syncTestManagement(data([]), data([suite('a/b c')]));
     expect(calls()).toEqual(['PUT /suites/a%2Fb%20c']);
+  });
+
+  it('saves a new project before the suite placed in it, and deletes it after the suite moves out', async () => {
+    const project = { id: 'p1', name: 'P', createdAt: 'x' };
+    await syncTestManagement(data([]), data([{ ...suite('s1'), projectId: 'p1' }], { projects: [project] }));
+    expect(calls()).toEqual(['PUT /projects/p1', 'PUT /suites/s1']);
+
+    fetchMock.mockClear();
+    await syncTestManagement(
+      data([{ ...suite('s1'), projectId: 'p1' }], { projects: [project] }),
+      data([suite('s1')]),
+    );
+    expect(calls()).toEqual(['PUT /suites/s1', 'DELETE /projects/p1']);
+  });
+
+  it('saves parent sections before sub-sections, and deletes sub-sections first', async () => {
+    const sec = (id: string, parentId?: string) => ({ id, suiteId: 's1', title: id, order: 0, parentId });
+    const withSections = { ...suite('s1'), sections: [sec('child', 'parent'), sec('parent')] };
+    await syncTestManagement(data([suite('s1')]), data([withSections]));
+    expect(calls()).toEqual(['PUT /suites/s1/sections/parent', 'PUT /suites/s1/sections/child']);
+
+    fetchMock.mockClear();
+    await syncTestManagement(data([withSections]), data([suite('s1')]));
+    expect(calls()).toEqual(['DELETE /suites/s1/sections/child', 'DELETE /suites/s1/sections/parent']);
   });
 });

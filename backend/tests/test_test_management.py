@@ -41,7 +41,7 @@ class TestSnapshot:
     def test_starts_empty_and_unseeded(self, api: Api) -> None:
         res = api.sign_in(AUTHOR).get(BASE)
         assert res.status_code == 200
-        assert res.json() == {"suites": [], "runs": [], "milestones": [], "seeded": False}
+        assert res.json() == {"projects": [], "suites": [], "runs": [], "milestones": [], "seeded": False}
 
     def test_nests_sections_and_cases_in_creation_order(self, api: Api) -> None:
         author = api.sign_in(AUTHOR)
@@ -161,3 +161,88 @@ class TestSeed:
         author = api.sign_in(AUTHOR)
         assert author.post(f"{BASE}/seed", json={"suites": []}).status_code == 400
         assert author.get(BASE).json()["seeded"] is False
+
+
+class TestProjects:
+    """DDS-SRS-012: Projects > Suites."""
+
+    def test_snapshot_lists_projects(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        assert author.get(BASE).json()["projects"] == []
+        assert author.put(f"{BASE}/projects/p1", json={"name": "AST2600"}).status_code == 200
+        projects = api.sign_in(OTHER).get(BASE).json()["projects"]
+        assert [(p["id"], p["name"], p["createdBy"]) for p in projects] == [("p1", "AST2600", AUTHOR.name)]
+
+    def test_name_required_and_owner_rules(self, api: Api) -> None:
+        author, other = api.sign_in(AUTHOR), api.sign_in(OTHER)
+        assert author.put(f"{BASE}/projects/p1", json={"name": " "}).status_code == 400
+        author.put(f"{BASE}/projects/p1", json={"name": "P"})
+        assert other.put(f"{BASE}/projects/p1", json={"name": "Mine now"}).status_code == 403
+        assert other.delete(f"{BASE}/projects/p1").status_code == 403
+
+    def test_anyone_can_put_their_own_suite_in_a_project(self, api: Api) -> None:
+        api.sign_in(AUTHOR).put(f"{BASE}/projects/p1", json={"name": "P"})
+        other = api.sign_in(OTHER)
+        res = other.put(f"{BASE}/suites/s1", json=suite(projectId="p1"))
+        assert res.status_code == 200
+        assert res.json()["suite"]["projectId"] == "p1"
+
+    def test_suite_project_must_exist(self, api: Api) -> None:
+        res = api.sign_in(AUTHOR).put(f"{BASE}/suites/s1", json=suite(projectId="nope"))
+        assert res.status_code == 400
+        assert res.json() == {"error": "Project not found."}
+
+    def test_a_project_with_suites_cannot_be_deleted(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        author.put(f"{BASE}/projects/p1", json={"name": "P"})
+        author.put(f"{BASE}/suites/s1", json=suite(projectId="p1"))
+        assert author.delete(f"{BASE}/projects/p1").status_code == 409
+        author.put(f"{BASE}/suites/s1", json=suite(projectId=None))
+        assert author.delete(f"{BASE}/projects/p1").status_code == 204
+
+    def test_seed_loads_projects(self, api: Api) -> None:
+        sample = {
+            "projects": [{"id": "p1", "name": "P"}],
+            "suites": [suite("s1", projectId="p1")],
+            "runs": [],
+            "milestones": [],
+        }
+        body = api.sign_in(AUTHOR).post(f"{BASE}/seed", json=sample).json()
+        assert body["projects"][0]["id"] == "p1"
+        assert body["suites"][0]["projectId"] == "p1"
+
+
+class TestSubSections:
+    """DDS-SRS-012: Sections nest through parentId."""
+
+    def test_a_sub_section_needs_a_parent_in_the_same_suite(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author, "s1")
+        make_suite(author, "s2")
+        author.put(f"{BASE}/suites/s2/sections/elsewhere", json={"title": "x"})
+        author.put(f"{BASE}/suites/s1/sections/a", json={"title": "A"})
+        assert author.put(f"{BASE}/suites/s1/sections/b", json={"title": "B", "parentId": "a"}).status_code == 200
+        res = author.put(f"{BASE}/suites/s1/sections/c", json={"title": "C", "parentId": "elsewhere"})
+        assert res.json() == {"error": "Parent section not found."}
+
+    def test_no_loops(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/sections/a", json={"title": "A"})
+        author.put(f"{BASE}/suites/s1/sections/b", json={"title": "B", "parentId": "a"})
+        for section_id, parent in (("a", "a"), ("a", "b")):
+            res = author.put(f"{BASE}/suites/s1/sections/{section_id}", json={"title": "A", "parentId": parent})
+            assert res.status_code == 400
+            assert res.json() == {"error": "A section cannot be placed inside itself."}
+
+    def test_only_an_empty_section_can_be_deleted(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/sections/a", json={"title": "A"})
+        author.put(f"{BASE}/suites/s1/sections/b", json={"title": "B", "parentId": "a"})
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case(sectionId="b"))
+
+        assert author.delete(f"{BASE}/suites/s1/sections/a").status_code == 409  # has a sub-section
+        assert author.delete(f"{BASE}/suites/s1/sections/b").status_code == 409  # has a case
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case(sectionId="a"))
+        assert author.delete(f"{BASE}/suites/s1/sections/b").status_code == 204

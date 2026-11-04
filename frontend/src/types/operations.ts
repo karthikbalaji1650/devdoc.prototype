@@ -79,6 +79,9 @@ export interface TestCaseAttachment {
 export interface TestCaseItem {
   id: string;
   suiteId: string;
+  /** The section (or sub-section) the case sits in. Older cases have none
+   * and are placed by type - see testSections.sectionOfCase. */
+  sectionId?: string;
   customId: string; // e.g. "TC-RTC-001"
   title: string;
   preconditions: string;
@@ -109,8 +112,19 @@ export interface TestSection {
   order: number;
 }
 
+/** Top of the test hierarchy (DDS-SRS-012): Projects > Suites > Sections > Cases. */
+export interface ProjectItem {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  createdBy?: string; // set by the server
+}
+
 export interface TestSuiteItem {
   id: string;
+  /** The project the suite belongs to; none for suites made before projects. */
+  projectId?: string;
   title: string;
   description: string;
   module: string;

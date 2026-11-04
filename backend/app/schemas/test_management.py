@@ -24,6 +24,7 @@ class TestCaseModel(WireModel):
     title: str
     customId: str | None = None
     suiteId: str | None = None
+    sectionId: str | None = None
 
 
 class TestSuiteModel(WireModel):
@@ -31,6 +32,7 @@ class TestSuiteModel(WireModel):
     title: str
     description: str | None = None
     module: str | None = None
+    projectId: str | None = None
 
 
 class TestRunModel(WireModel):
@@ -41,6 +43,11 @@ class TestRunModel(WireModel):
 
 class MilestoneModel(WireModel):
     name: str
+
+
+class ProjectModel(WireModel):
+    name: str
+    description: str | None = None
 
 
 class StoredSection(TestSectionModel, _Owned):
@@ -68,7 +75,12 @@ class StoredMilestone(MilestoneModel, _Owned):
     pass
 
 
+class StoredProject(ProjectModel, _Owned):
+    pass
+
+
 class SnapshotResponse(WireModel):
+    projects: list[StoredProject]
     suites: list[StoredSuite]
     runs: list[StoredRun]
     milestones: list[StoredMilestone]
@@ -76,6 +88,7 @@ class SnapshotResponse(WireModel):
 
 
 class SeedRequest(WireModel):
+    projects: list[ProjectModel] | None = None
     suites: list[TestSuiteModel]
     runs: list[TestRunModel]
     milestones: list[MilestoneModel]
@@ -95,6 +108,10 @@ class CaseResponse(WireModel):
 
 class RunResponse(WireModel):
     run: StoredRun
+
+
+class ProjectResponse(WireModel):
+    project: StoredProject
 
 
 class MilestoneResponse(WireModel):

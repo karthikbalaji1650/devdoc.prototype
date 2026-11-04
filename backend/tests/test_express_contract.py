@@ -167,6 +167,7 @@ def test_openapi_documents_every_route_with_camel_case_fields(api: Api) -> None:
         "/api/test-management/suites/{suite_id}",
         "/api/test-management/suites/{suite_id}/sections/{section_id}",
         "/api/test-management/suites/{suite_id}/cases/{case_id}",
+        "/api/test-management/projects/{project_id}",
         "/api/test-management/runs/{run_id}",
         "/api/test-management/milestones/{milestone_id}",
     }

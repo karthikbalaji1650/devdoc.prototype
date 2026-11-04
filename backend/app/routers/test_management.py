@@ -16,6 +16,8 @@ from app.schemas.test_management import (
     CaseResponse,
     MilestoneModel,
     MilestoneResponse,
+    ProjectModel,
+    ProjectResponse,
     RunResponse,
     SectionResponse,
     SeedRequest,
@@ -85,7 +87,9 @@ async def save_section(
     return _item("section", section)
 
 
-@router.delete("/suites/{suite_id}/sections/{section_id}", status_code=204, responses=_delete)
+@router.delete(
+    "/suites/{suite_id}/sections/{section_id}", status_code=204, responses={**_delete, 409: {"model": ErrorResponse}}
+)
 async def delete_section(suite_id: str, section_id: str, user: CurrentUser, services: ServicesDep) -> Response:
     await services.test_management.delete_section(user, suite_id, section_id)
     return no_content()
@@ -109,7 +113,25 @@ async def delete_case(suite_id: str, case_id: str, user: CurrentUser, services: 
     return no_content()
 
 
-# ── runs and milestones ────────────────────────────────────────────────
+# ── projects, runs and milestones ────────────────────────────────────────────────
+@router.put(
+    "/projects/{project_id}",
+    response_model=ProjectResponse,
+    responses=_write,
+    openapi_extra=request_body(ProjectModel),
+)
+async def save_project(project_id: str, request: Request, user: CurrentUser, services: ServicesDep) -> Response:
+    item = await services.test_management.save_item(user, "projects", project_id, json_body(request))
+    return _item("project", item)
+
+
+@router.delete("/projects/{project_id}", status_code=204, responses={**_delete, 409: {"model": ErrorResponse}})
+async def delete_project(project_id: str, user: CurrentUser, services: ServicesDep) -> Response:
+    """Refused (409) while any suite still belongs to the project."""
+    await services.test_management.delete_item(user, "projects", project_id)
+    return no_content()
+
+
 @router.put("/runs/{run_id}", response_model=RunResponse, responses=_write, openapi_extra=request_body(TestRunModel))
 async def save_run(run_id: str, request: Request, user: CurrentUser, services: ServicesDep) -> Response:
     return _item("run", await services.test_management.save_item(user, "runs", run_id, json_body(request)))

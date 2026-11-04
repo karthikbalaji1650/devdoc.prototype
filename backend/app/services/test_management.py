@@ -1,6 +1,11 @@
 """Test management: validation and the same ownership rules documents use.
 
-- A suite, run or milestone belongs to whoever created it (`createdBy`).
+Hierarchy (DDS-SRS-012): Projects > Suites > Sections (nested through
+`parentId`) > Cases. A suite names its project with `projectId`, a case
+its section with `sectionId`.
+
+- A project, suite, run or milestone belongs to whoever created it
+  (`createdBy`). Any signed-in user can put their own suite in any project.
 - A suite's sections and test cases belong to the suite, the way a
   document's sections belong to the document: only the suite's owner can
   add, change or remove them.
@@ -15,8 +20,8 @@ from app.models.user import User
 from app.repositories.test_management import Collection, TestManagementStore
 from app.services.permissions import is_admin
 
-_LABELS: dict[Collection, str] = {"runs": "Test run", "milestones": "Milestone"}
-_REQUIRED_TEXT: dict[Collection, str] = {"runs": "name", "milestones": "name"}
+_LABELS: dict[Collection, str] = {"projects": "Project", "runs": "Test run", "milestones": "Milestone"}
+_REQUIRED_TEXT: dict[Collection, str] = {"projects": "name", "runs": "name", "milestones": "name"}
 
 
 def _now() -> str:
@@ -74,6 +79,11 @@ class TestManagementService:
         existing = await self._store.get_suite(suite_id)
         if existing is not None and not _can_change(user, existing):
             raise ApiError(403, "You can only edit test suites you created.")
+        project_id = body.get("projectId")
+        if project_id is not None and (
+            not isinstance(project_id, str) or await self._store.get_item("projects", project_id) is None
+        ):
+            raise ApiError(400, "Project not found.")
         # Sections and cases are saved through their own routes.
         fields = {k: v for k, v in body.items() if k not in ("sections", "testCases")}
         suite = _stamp(user, fields, suite_id, existing)
@@ -89,15 +99,38 @@ class TestManagementService:
         body = _require_object(body)
         _require_text(body, "title")
         await self._owned_suite(user, suite_id, "edit sections of")
+        await self._check_parent(suite_id, section_id, body.get("parentId"))
         existing = await self._store.get_section(suite_id, section_id)
         section = {**_stamp(user, body, section_id, existing), "suiteId": suite_id}
         await self._store.put_section(suite_id, section)
         return section
 
+    async def _check_parent(self, suite_id: str, section_id: str, parent_id: Any) -> None:
+        """A sub-section's parent must be a section of the same suite, and
+        not the section itself or one of its own sub-sections."""
+        if parent_id is None:
+            return
+        if not isinstance(parent_id, str):
+            raise ApiError(400, "parentId must be a section id.")
+        parents = {s["id"]: s.get("parentId") for s in await self._store.list_sections(suite_id)}
+        if parent_id not in parents:
+            raise ApiError(400, "Parent section not found.")
+        seen: set[str] = set()
+        current: Any = parent_id
+        while isinstance(current, str) and current not in seen:
+            if current == section_id:
+                raise ApiError(400, "A section cannot be placed inside itself.")
+            seen.add(current)
+            current = parents.get(current)
+
     async def delete_section(self, user: User, suite_id: str, section_id: str) -> None:
         await self._owned_suite(user, suite_id, "edit sections of")
         if await self._store.get_section(suite_id, section_id) is None:
             raise ApiError(404, "Section not found.")
+        if any(s.get("parentId") == section_id for s in await self._store.list_sections(suite_id)):
+            raise ApiError(409, "Delete or move this section's sub-sections first.")
+        if any(c.get("sectionId") == section_id for c in await self._store.list_cases(suite_id)):
+            raise ApiError(409, "Move or delete this section's test cases first.")
         await self._store.delete_section(suite_id, section_id)
 
     async def save_case(self, user: User, suite_id: str, case_id: str, body: Any) -> dict[str, Any]:
@@ -115,7 +148,7 @@ class TestManagementService:
             raise ApiError(404, "Test case not found.")
         await self._store.delete_case(suite_id, case_id)
 
-    # ── runs and milestones ────────────────────────────────────────────
+    # ── projects, runs and milestones ────────────────────────────────────────────
     async def save_item(self, user: User, collection: Collection, item_id: str, body: Any) -> dict[str, Any]:
         body = _require_object(body)
         _require_text(body, _REQUIRED_TEXT[collection])
@@ -132,6 +165,8 @@ class TestManagementService:
             raise ApiError(404, f"{_LABELS[collection]} not found.")
         if not _can_change(user, existing):
             raise ApiError(403, f"You can only delete {_LABELS[collection].lower()}s you created.")
+        if collection == "projects" and any(s.get("projectId") == item_id for s in await self._store.list_suites()):
+            raise ApiError(409, "Move or delete this project's test suites first.")
         await self._store.delete_item(collection, item_id)
 
     # ── sample data ────────────────────────────────────────────────────
@@ -140,10 +175,14 @@ class TestManagementService:
         owned by that user. Later calls change nothing (409)."""
         body = _require_object(body)
         suites, runs, milestones = body.get("suites"), body.get("runs"), body.get("milestones")
-        if not all(isinstance(x, list) for x in (suites, runs, milestones)):
+        projects = body.get("projects", [])
+        if not all(isinstance(x, list) for x in (projects, suites, runs, milestones)):
             raise ApiError(400, "Body must have suites, runs and milestones arrays.")
         if not await self._store.claim_seed():
             raise ApiError(409, "Sample data has already been loaded.")
+        for project in projects:
+            if isinstance(project, dict) and isinstance(project.get("id"), str):
+                await self._store.put_item("projects", _stamp(user, project, project["id"], None))
         for suite in suites:
             if not isinstance(suite, dict) or not isinstance(suite.get("id"), str):
                 continue

@@ -7,11 +7,13 @@
 // sections and testCases). `syncTestManagement` diffs the previous state
 // against the new one and sends only what changed, item by item - which
 // is also what lets the server apply its per-item ownership rules.
-import type { MilestoneItem, TestCaseItem, TestRunItem, TestSection, TestSuiteItem } from '../types/operations';
+import type { MilestoneItem, ProjectItem, TestCaseItem, TestRunItem, TestSuiteItem } from '../types/operations';
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
+import { sectionTree } from './testSections';
 
 export interface TestManagementData {
+  projects: ProjectItem[];
   suites: TestSuiteItem[];
   runs: TestRunItem[];
   milestones: MilestoneItem[];
@@ -67,6 +69,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export async function loadTestManagement(): Promise<TestManagementSnapshot> {
   const data = await request<TestManagementSnapshot>('GET', '');
   return {
+    projects: Array.isArray(data?.projects) ? data.projects : [],
     suites: Array.isArray(data?.suites) ? data.suites : [],
     runs: Array.isArray(data?.runs) ? data.runs : [],
     milestones: Array.isArray(data?.milestones) ? data.milestones : [],
@@ -140,14 +143,30 @@ async function runAll(ops: Op[], errors: TestManagementApiError[], concurrency =
   await Promise.all(Array.from({ length: Math.min(concurrency, ops.length) }, worker));
 }
 
+/** Runs ops one after another (where order matters, e.g. a parent
+ * section before its sub-section), collecting failures. */
+async function runInOrder(ops: Op[], errors: TestManagementApiError[]): Promise<void> {
+  await runAll(ops, errors, 1);
+}
+
 /** Saves the difference between two states. Resolves with every error
- * (empty when everything was saved) - never throws. */
+ * (empty when everything was saved) - never throws.
+ *
+ * Order matters to the server's integrity checks: projects before the
+ * suites that name them, suites before their contents, parent sections
+ * before sub-sections - and deletes in reverse (cases, then sub-sections,
+ * sections, suites, projects). */
 export async function syncTestManagement(
   prev: TestManagementData,
   next: TestManagementData,
 ): Promise<TestManagementApiError[]> {
   const errors: TestManagementApiError[] = [];
 
+  const projects = diff(
+    prev.projects, next.projects,
+    (p) => () => request('PUT', `/projects/${enc(p.id)}`, p),
+    (id) => () => request('DELETE', `/projects/${enc(id)}`),
+  );
   const suites = diff(
     prev.suites, next.suites,
     (s) => () => request('PUT', `/suites/${enc(s.id)}`, suiteFields(s)),
@@ -158,23 +177,31 @@ export async function syncTestManagement(
   // Children of every suite that still exists; a deleted suite takes its
   // sections and cases with it on the server.
   const prevSuites = byId(prev.suites);
-  const childPuts: Op[] = [];
-  const childDeletes: Op[] = [];
+  const sectionPuts: Op[] = [];
+  const sectionDeletes: Op[] = [];
+  const casePuts: Op[] = [];
+  const caseDeletes: Op[] = [];
   for (const suite of next.suites) {
     const old = prevSuites.get(suite.id);
     const base = `/suites/${enc(suite.id)}`;
-    const sections = diff<TestSection>(
-      old?.sections, suite.sections,
-      (sec) => () => request('PUT', `${base}/sections/${enc(sec.id)}`, sec),
-      (id) => () => request('DELETE', `${base}/sections/${enc(id)}`),
-    );
+    const oldSections = byId(old?.sections);
+    for (const { section } of sectionTree(suite.sections)) { // parents first
+      const before = oldSections.get(section.id);
+      if (!before || !same(before, section)) {
+        sectionPuts.push(() => request('PUT', `${base}/sections/${enc(section.id)}`, section));
+      }
+    }
+    const kept = new Set((suite.sections ?? []).map((s) => s.id));
+    for (const { section } of sectionTree(old?.sections).reverse()) { // sub-sections first
+      if (!kept.has(section.id)) sectionDeletes.push(() => request('DELETE', `${base}/sections/${enc(section.id)}`));
+    }
     const cases = diff<TestCaseItem>(
       old?.testCases, suite.testCases,
       (tc) => () => request('PUT', `${base}/cases/${enc(tc.id)}`, tc),
       (id) => () => request('DELETE', `${base}/cases/${enc(id)}`),
     );
-    childPuts.push(...sections.puts, ...cases.puts);
-    childDeletes.push(...sections.deletes, ...cases.deletes);
+    casePuts.push(...cases.puts);
+    caseDeletes.push(...cases.deletes);
   }
 
   const runs = diff(
@@ -188,9 +215,13 @@ export async function syncTestManagement(
     (id) => () => request('DELETE', `/milestones/${enc(id)}`),
   );
 
-  // A new suite must exist before its cases can be saved into it.
+  await runAll(projects.puts, errors);
   await runAll(suites.puts, errors);
-  await runAll([...childPuts, ...childDeletes, ...suites.deletes, ...runs.puts, ...runs.deletes,
-    ...milestones.puts, ...milestones.deletes], errors);
+  await runInOrder(sectionPuts, errors);
+  await runAll([...casePuts, ...caseDeletes], errors);
+  await runInOrder(sectionDeletes, errors);
+  await runAll(suites.deletes, errors);
+  await runAll(projects.deletes, errors);
+  await runAll([...runs.puts, ...runs.deletes, ...milestones.puts, ...milestones.deletes], errors);
   return errors;
 }

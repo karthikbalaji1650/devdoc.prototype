@@ -6,6 +6,7 @@ Keys (all under `dds:tm:`):
     suites                      hash  suite id   -> suite JSON (no sections/cases)
     suite:{id}:sections         hash  section id -> section JSON
     suite:{id}:cases            hash  case id    -> case JSON
+    projects                    hash  project id -> project JSON
     runs                        hash  run id     -> run JSON
     milestones                  hash  milestone id -> milestone JSON
     seq                         counter for each item's insertion order
@@ -22,7 +23,7 @@ from typing import Any, Literal
 from redis.asyncio import Redis
 
 PREFIX = "dds:tm:"
-Collection = Literal["runs", "milestones"]
+Collection = Literal["projects", "runs", "milestones"]
 
 
 def _suites_key() -> str:
@@ -86,6 +87,7 @@ class TestManagementStore:
                 suite["sections"] = _ordered(results[2 * i])
                 suite["testCases"] = _ordered(results[2 * i + 1])
         return {
+            "projects": _ordered(await self._redis.hgetall(_collection_key("projects"))),
             "suites": suites,
             "runs": _ordered(await self._redis.hgetall(_collection_key("runs"))),
             "milestones": _ordered(await self._redis.hgetall(_collection_key("milestones"))),
@@ -94,6 +96,9 @@ class TestManagementStore:
     # ── suites ─────────────────────────────────────────────────────────
     async def get_suite(self, suite_id: str) -> dict[str, Any] | None:
         return _load(await self._redis.hget(_suites_key(), suite_id))
+
+    async def list_suites(self) -> list[dict[str, Any]]:
+        return _ordered(await self._redis.hgetall(_suites_key()))
 
     async def put_suite(self, suite: dict[str, Any]) -> None:
         await self._put(_suites_key(), suite["id"], suite)
@@ -109,6 +114,9 @@ class TestManagementStore:
     async def get_section(self, suite_id: str, section_id: str) -> dict[str, Any] | None:
         return _load(await self._redis.hget(_sections_key(suite_id), section_id))
 
+    async def list_sections(self, suite_id: str) -> list[dict[str, Any]]:
+        return _ordered(await self._redis.hgetall(_sections_key(suite_id)))
+
     async def put_section(self, suite_id: str, section: dict[str, Any]) -> None:
         await self._put(_sections_key(suite_id), section["id"], section)
 
@@ -118,13 +126,16 @@ class TestManagementStore:
     async def get_case(self, suite_id: str, case_id: str) -> dict[str, Any] | None:
         return _load(await self._redis.hget(_cases_key(suite_id), case_id))
 
+    async def list_cases(self, suite_id: str) -> list[dict[str, Any]]:
+        return _ordered(await self._redis.hgetall(_cases_key(suite_id)))
+
     async def put_case(self, suite_id: str, case: dict[str, Any]) -> None:
         await self._put(_cases_key(suite_id), case["id"], case)
 
     async def delete_case(self, suite_id: str, case_id: str) -> None:
         await self._redis.hdel(_cases_key(suite_id), case_id)
 
-    # ── runs and milestones ────────────────────────────────────────────
+    # ── projects, runs and milestones ────────────────────────────────────────────
     async def get_item(self, collection: Collection, item_id: str) -> dict[str, Any] | None:
         return _load(await self._redis.hget(_collection_key(collection), item_id))
 

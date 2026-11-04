@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment } from '../../types/operations';
+import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment, ProjectItem, TestSection } from '../../types/operations';
+import { isSectionEmpty, nextSectionOrder, sectionOfCase, sectionTree } from '../../services/testSections';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
 import { buildRunReportCsv, buildRunReportHtml, reportFileName } from '../../services/testRunReport';
@@ -382,9 +383,13 @@ const PieChart: React.FC<{ run: TestRunItem }> = ({ run }) => {
 
 
 // ── Seed Data ──────────────────────────────────────────────────────────────────
+const SAMPLE_PROJECT_ID = 'project-ast2600';
+const INITIAL_PROJECTS: ProjectItem[] = [
+  { id: SAMPLE_PROJECT_ID, name: 'AST2600 BMC Firmware', description: 'WH3-1205 release validation', createdAt: '2026-08-15T08:00:00Z' },
+];
 const INITIAL_SUITES: TestSuiteItem[] = [
   {
-    id: 'suite-01', title: 'AST2600 RTC Clock & Timing Suite',
+    id: 'suite-01', projectId: SAMPLE_PROJECT_ID, title: 'AST2600 RTC Clock & Timing Suite',
     description: 'Verification of RTC drift, NTP synchronization, and I2C register integrity.',
     module: 'Firmware Core', taDocId: 'wh3-1205-sample', taDocNumber: 'WH3-1205',
     createdAt: '2026-08-15T08:00:00Z',
@@ -437,7 +442,7 @@ const INITIAL_SUITES: TestSuiteItem[] = [
   },
 
   {
-    id: 'suite-02', title: 'Dual-Flash WebUI Upgrade & REST API Suite',
+    id: 'suite-02', projectId: SAMPLE_PROJECT_ID, title: 'Dual-Flash WebUI Upgrade & REST API Suite',
     description: 'HPM flashing, image bank switching, and REST endpoint payload validation.',
     module: 'REST API & WebUI', taDocId: 'wh3-1205-sample', taDocNumber: 'WH3-1205',
     createdAt: '2026-08-15T09:30:00Z',
@@ -778,10 +783,14 @@ const AddCaseModal: React.FC<{
   suiteId: string; initial?: Partial<TestCaseItem>;
   /** ID a new case gets: the next one in the TC-001, TC-002 ... sequence. */
   nextCustomId: string;
+  /** The suite's sections, and the one a new case goes in by default. */
+  sections: TestSection[]; defaultSectionId?: string;
   onSave: (tc: TestCaseItem) => void; onClose: () => void;
-}> = ({ suiteId, initial, nextCustomId, onSave, onClose }) => {
+}> = ({ suiteId, initial, nextCustomId, sections, defaultSectionId, onSave, onClose }) => {
   const [title, setTitle]     = useState(initial?.title || '');
   const [type, setType]       = useState<'Manual'|'Automated'>(initial?.type || 'Manual');
+  const [sectionId, setSectionId] = useState<string>(() =>
+    (initial?.title !== undefined ? sectionOfCase({ sectionId: initial.sectionId, type: initial.type || 'Manual' }, sections) : defaultSectionId) ?? '');
   const [priority, setPriority] = useState<'P1'|'P2'|'P3'|'P4'>(initial?.priority || 'P3');
   const [preconditions, setPreconditions] = useState(initial?.preconditions || '');
   const [expectedResult, setExpectedResult] = useState(initial?.expectedResult || '');
@@ -809,6 +818,7 @@ const AddCaseModal: React.FC<{
       ...initial,
       id: initial?.id || `tc-${Date.now()}`,
       suiteId, customId: initial?.customId || nextCustomId,
+      sectionId: sectionId || undefined,
       title, type, priority, preconditions, expectedResult, steps,
       postconditions: postconditions.trim() || undefined,
       attachments: attachments.length ? attachments : undefined,
@@ -840,6 +850,18 @@ const AddCaseModal: React.FC<{
             <input value={title} onChange={e => setTitle(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-xs" placeholder="Test case title" />
           </div>
+          {sections.length > 0 && (
+            <div>
+              <label htmlFor="case-section" className="block text-xs font-semibold text-slate-700 mb-1">Section</label>
+              <select id="case-section" value={sectionId} onChange={e => setSectionId(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
+                <option value="">By type (Manual / Automated section)</option>
+                {sectionTree(sections).map(({ section, depth }) => (
+                  <option key={section.id} value={section.id}>{'\u00a0\u00a0'.repeat(depth)}{depth ? '└ ' : ''}{section.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
@@ -945,6 +967,9 @@ const AddCaseModal: React.FC<{
 // ── Test Cases View ────────────────────────────────────────────────────────────
 const TestCasesView: React.FC<{
   suites: TestSuiteItem[]; selectedSuiteId: string | null;
+  projects: ProjectItem[];
+  /** The suites of the project picked in the left panel. */
+  visibleSuites: TestSuiteItem[];
   onSelectSuite: (id: string) => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
   onShowToast: (msg: string) => void;
@@ -955,7 +980,7 @@ const TestCasesView: React.FC<{
   onShowAiModal: () => void;
   onShowBackAnnotateModal: () => void;
   onRunTest: (suite: TestSuiteItem) => void;
-}> = ({ suites, selectedSuiteId, onSelectSuite, onUpdateSuites, onShowToast,
+}> = ({ suites, selectedSuiteId, projects, visibleSuites, onSelectSuite, onUpdateSuites, onShowToast,
         onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest }) => {
   const [collapseAll, setCollapseAll]       = useState(false);
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
@@ -965,15 +990,19 @@ const TestCasesView: React.FC<{
   const [showDeletedCases, setShowDeletedCases] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showSuiteLibraryModal, setShowSuiteLibraryModal] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
+  const [addCaseSectionId, setAddCaseSectionId] = useState<string | undefined>(undefined);
 
-  const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
+  // No fallback to the first suite: with a project picked, that could be a
+  // suite from another project.
+  const selectedSuite = suites.find(s => s.id === selectedSuiteId);
   const cases = (selectedSuite?.testCases || []).filter(tc =>
     (showDeletedCases || !tc.isDeleted) &&
     (!searchQ || tc.title.toLowerCase().includes(searchQ.toLowerCase()) ||
       tc.customId.toLowerCase().includes(searchQ.toLowerCase()))
   );
-  const totalCases    = suites.reduce((s, x) => s + (x.testCases?.length || 0), 0);
-  const totalSections = suites.reduce((s, x) => s + (x.sections?.length || 0), 0);
+  const totalCases    = visibleSuites.reduce((s, x) => s + (x.testCases?.length || 0), 0);
+  const totalSections = visibleSuites.reduce((s, x) => s + (x.sections?.length || 0), 0);
 
   const handleDeleteCase = (caseId: string) => {
     if (!selectedSuite) return;
@@ -1090,6 +1119,73 @@ const TestCasesView: React.FC<{
   };
 
   const sections = selectedSuite?.sections || [];
+  const sectionNodes = sectionTree(sections);
+  const parentOf = new Map(sections.map(s => [s.id, s.parentId]));
+  const isHidden = (id: string): boolean => {
+    if (collapseAll) return false;
+    const seen = new Set<string>();
+    for (let p = parentOf.get(id); p && !seen.has(p); p = parentOf.get(p)) {
+      if (collapsedSections.has(p)) return true;
+      seen.add(p);
+    }
+    return false;
+  };
+  const toggleSection = (id: string) => setCollapsedSections(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  // Section edits change the suite's structure; older cases without a
+  // sectionId are pinned to where they show now, so renaming or adding a
+  // section never silently moves them (see testSections.sectionOfCase).
+  const editSections = (fn: (sections: TestSection[], suite: TestSuiteItem) => TestSection[]) => {
+    if (!selectedSuite) return;
+    onUpdateSuites(suites.map(s => {
+      if (s.id !== selectedSuite.id) return s;
+      const before = s.sections || [];
+      return {
+        ...s,
+        testCases: (s.testCases || []).map(tc => tc.sectionId ? tc : { ...tc, sectionId: sectionOfCase(tc, before) ?? undefined }),
+        sections: fn(before, s),
+      };
+    }));
+  };
+  const handleAddSection = (parentId?: string) => {
+    const title = prompt(parentId ? 'Sub-section name:' : 'Section name:');
+    if (!title?.trim()) return;
+    editSections((list, suite) => [...list, {
+      id: `sec-${Date.now()}`, suiteId: suite.id, title: title.trim(), order: nextSectionOrder(list, parentId),
+      ...(parentId ? { parentId } : {}),
+    }]);
+    if (parentId) setCollapsedSections(prev => { const next = new Set(prev); next.delete(parentId); return next; });
+  };
+  const handleRenameSection = (sec: TestSection) => {
+    const title = prompt('Rename section:', sec.title);
+    if (!title?.trim() || title.trim() === sec.title) return;
+    editSections(list => list.map(s => s.id === sec.id ? { ...s, title: title.trim() } : s));
+  };
+  const handleDeleteSection = (sec: TestSection) => {
+    if (!selectedSuite) return;
+    if (!isSectionEmpty(sec.id, sections, selectedSuite.testCases || [])) {
+      onShowToast('⚠️ Move or delete its sub-sections and test cases first (including any in the bin).');
+      return;
+    }
+    if (!confirm(`Delete section "${sec.title}"?`)) return;
+    editSections(list => list.filter(s => s.id !== sec.id));
+    onShowToast('🗑️ Section deleted.');
+  };
+  const handleMoveSuite = (projectId: string) => {
+    if (!selectedSuite) return;
+    onUpdateSuites(suites.map(s => {
+      if (s.id !== selectedSuite.id) return s;
+      const { projectId: _old, ...rest } = s;
+      return projectId ? { ...rest, projectId } : rest;
+    }));
+    const name = projects.find(p => p.id === projectId)?.name;
+    onShowToast(name ? `✅ Moved to project "${name}".` : '✅ Removed from its project.');
+  };
+  const openAddCase = (sectionId?: string) => { setAddCaseSectionId(sectionId); setShowAddCase(true); };
 
   return (
     <div className="flex flex-col h-full">
@@ -1097,6 +1193,18 @@ const TestCasesView: React.FC<{
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-bold text-slate-900">Test Cases</h2>
           <span className="text-xs text-slate-500">Contains <span className="text-slate-900 font-semibold">{totalSections}</span> sections and <span className="text-slate-900 font-semibold">{totalCases}</span> cases.</span>
+          {selectedSuite && (
+            <select aria-label="Project of this suite" value={selectedSuite.projectId ?? ''} onChange={e => handleMoveSuite(e.target.value)}
+              className="ml-2 px-2 py-1 bg-white border border-slate-300 rounded-lg text-[11px] text-slate-700 cursor-pointer">
+              <option value="">No project</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+          {selectedSuite && (
+            <button onClick={() => handleAddSection()} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:border-blue-400 rounded-lg text-[11px] font-semibold text-slate-700">
+              <Plus className="w-3 h-3" /> Section
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={onShowAiModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs">
@@ -1189,7 +1297,7 @@ const TestCasesView: React.FC<{
       </div>
       {/* Suite tabs */}
       <div className="flex gap-1 mb-3 flex-wrap">
-        {suites.map(s => (
+        {visibleSuites.map(s => (
           <button key={s.id} onClick={() => onSelectSuite(s.id)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${s.id === selectedSuiteId ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'}`}>
             {s.title}
@@ -1211,21 +1319,27 @@ const TestCasesView: React.FC<{
       {/* Case list grouped by sections */}
       {selectedSuite ? (
         <div className="flex-1 overflow-y-auto space-y-4 mt-1">
-          {sections.length > 0 ? sections.map(sec => {
-            const secCases = cases.filter(tc =>
-              sec.title === 'Manual Tests' ? tc.type === 'Manual' : tc.type === 'Automated'
-            );
+          {sectionNodes.length > 0 ? sectionNodes.map(({ section: sec, depth }) => {
+            if (isHidden(sec.id)) return null;
+            const secCases = cases.filter(tc => sectionOfCase(tc, sections) === sec.id);
+            const collapsed = collapseAll || collapsedSections.has(sec.id);
             return (
-              <div key={sec.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+              <div key={sec.id} role="group" aria-label={`Section ${sec.title}`}
+                className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs"
+                style={depth ? { marginLeft: `${Math.min(depth, 6) * 20}px` } : undefined}>
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <button className="text-slate-500" aria-label={collapseAll ? 'Expand section' : 'Collapse section'}>
-                    {collapseAll ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <button className="text-slate-500" onClick={() => toggleSection(sec.id)} aria-expanded={!collapsed}
+                    aria-label={`${collapsed ? 'Expand' : 'Collapse'} section ${sec.title}`}>
+                    {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
+                  {depth > 0 && <span className="text-[10px] text-slate-400 uppercase font-semibold">Sub-section</span>}
                   <span className="font-bold text-sm text-slate-800">{sec.title}</span>
                   <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{secCases.length}</span>
-                  <button className="p-0.5 text-slate-400 hover:text-slate-600 ml-1" aria-label="Rename section"><Edit3 className="w-3.5 h-3.5" /></button>
+                  <button className="p-0.5 text-slate-400 hover:text-slate-600 ml-1" onClick={() => handleRenameSection(sec)} aria-label={`Rename section ${sec.title}`}><Edit3 className="w-3.5 h-3.5" /></button>
+                  <button className="p-0.5 text-slate-400 hover:text-blue-600" onClick={() => handleAddSection(sec.id)} aria-label={`Add sub-section to ${sec.title}`} title="Add sub-section"><Plus className="w-3.5 h-3.5" /></button>
+                  <button className="p-0.5 text-slate-400 hover:text-rose-600" onClick={() => handleDeleteSection(sec)} aria-label={`Delete section ${sec.title}`} title="Delete section"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
-                {!collapseAll && (
+                {!collapsed && (
                   <div>
                     <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 bg-slate-100">
                       <div className="col-span-1"></div><div className="col-span-1">ID</div>
@@ -1235,7 +1349,7 @@ const TestCasesView: React.FC<{
                     </div>
                     {secCases.length === 0 && (
                       <div className="px-4 py-3 text-xs text-slate-500">
-                        No test cases. <button className="text-[var(--blue)] hover:underline" onClick={() => setShowAddCase(true)}>Add Case</button>
+                        No test cases. <button className="text-[var(--blue)] hover:underline" onClick={() => openAddCase(sec.id)}>Add Case</button>
                       </div>
                     )}
                     {secCases.map(tc => {
@@ -1321,7 +1435,7 @@ const TestCasesView: React.FC<{
                         </div>
                       );
                     })}
-                    <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
+                    <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>openAddCase(sec.id)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
                   </div>
                 )}
               </div>
@@ -1356,7 +1470,8 @@ const TestCasesView: React.FC<{
       ) : <p className="text-slate-500 text-center py-12">Select a test suite.</p>}
       {(showAddCase||editingCase)&&selectedSuite&&(
         <AddCaseModal suiteId={selectedSuite.id} initial={editingCase||undefined} nextCustomId={nextTestCaseId(suites)}
-          onSave={handleSaveCase} onClose={()=>{setShowAddCase(false);setEditingCase(null);}}/>
+          sections={sections} defaultSectionId={editingCase ? undefined : addCaseSectionId}
+          onSave={handleSaveCase} onClose={()=>{setShowAddCase(false);setEditingCase(null);setAddCaseSectionId(undefined);}}/>
       )}
       {showLibraryModal && (
         <TestCaseLibraryModal onImport={handleImportFromLibrary} onClose={() => setShowLibraryModal(false)} />
@@ -1449,7 +1564,18 @@ const RunDetailView: React.FC<{
     { id:'defects',  label:'Defects' },
   ];
 
-  const sections = suite?.sections || [{ id:'all', title:'All Tests', suiteId: run.suiteId, order: 0 }];
+  // Results grouped like the suite's sections (and sub-sections); results
+  // whose case is no longer in the suite are listed last, not dropped.
+  const suiteSections = suite?.sections || [];
+  const sections: (TestSection & { depth: number })[] = suiteSections.length
+    ? [...sectionTree(suiteSections).map(n => ({ ...n.section, depth: n.depth })),
+       { id: '__other', title: 'Other results', suiteId: run.suiteId, order: 0, depth: 0 }]
+    : [{ id: 'all', title: 'All Tests', suiteId: run.suiteId, order: 0, depth: 0 }];
+  const resultSectionId = (r: TestRunCaseResult): string => {
+    if (!suiteSections.length) return 'all';
+    const tc = (suite?.testCases || []).find(t => t.id === r.caseId);
+    return tc ? sectionOfCase(tc, suiteSections) ?? '__other' : '__other';
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -1522,16 +1648,11 @@ const RunDetailView: React.FC<{
         {activeTab==='results' && (
           <div className="space-y-4">
             {sections.map(sec=>{
-              const secResults = caseResults.filter(r=>
-                suite?.sections?.length
-                  ? sec.title==='Manual Tests'
-                    ? (suite.testCases||[]).find(tc=>tc.id===r.caseId)?.type==='Manual'
-                    : (suite.testCases||[]).find(tc=>tc.id===r.caseId)?.type==='Automated'
-                  : true
-              );
+              const secResults = caseResults.filter(r => resultSectionId(r) === sec.id);
               if(secResults.length===0) return null;
               return (
-                <div key={sec.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                <div key={sec.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs"
+                  style={sec.depth ? { marginLeft: `${Math.min(sec.depth, 6) * 20}px` } : undefined}>
                   <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 border-b border-slate-200">
                     <span className="font-bold text-sm text-slate-800">{sec.title}</span>
                     <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center">{secResults.length}</span>
@@ -2322,12 +2443,28 @@ TC_RTC_004_Drift_Under_Thermal_Throttling
 
 
 // ── Left Panel ─────────────────────────────────────────────────────────────────
+/** The left panel's project picker: one project id, or all / none. */
+type ProjectFilter = string;
+const ALL_PROJECTS = '__all';
+const NO_PROJECT = '__none';
+
+const suitesInProject = (suites: TestSuiteItem[], projects: ProjectItem[], filter: ProjectFilter): TestSuiteItem[] => {
+  if (filter === ALL_PROJECTS) return suites;
+  // A suite whose project no longer exists counts as having none.
+  const known = new Set(projects.map(p => p.id));
+  if (filter === NO_PROJECT) return suites.filter(s => !s.projectId || !known.has(s.projectId));
+  return suites.filter(s => s.projectId === filter);
+};
+
 const LeftPanel: React.FC<{
   view: MainView; onSetView: (v: MainView) => void;
   suites: TestSuiteItem[]; runs: TestRunItem[]; milestones: MilestoneItem[];
   selectedSuiteId: string | null; onSelectSuite: (id: string) => void;
   onAddSuite: () => void;
-}> = ({ view, onSetView, suites, runs, milestones, selectedSuiteId, onSelectSuite, onAddSuite }) => {
+  projects: ProjectItem[]; projectFilter: ProjectFilter; onSelectProject: (f: ProjectFilter) => void;
+  onAddProject: () => void; onDeleteProject: (id: string) => void;
+}> = ({ view, onSetView, suites, runs, milestones, selectedSuiteId, onSelectSuite, onAddSuite,
+        projects, projectFilter, onSelectProject, onAddProject, onDeleteProject }) => {
   const totalCases    = suites.reduce((s,x)=>s+(x.testCases?.length||0),0);
   const openRuns      = runs.filter(r=>r.status==='In Progress').length;
   const openMilestone = milestones.filter(m=>m.status==='open').length;
@@ -2358,6 +2495,24 @@ const LeftPanel: React.FC<{
           </button>
         ))}
       </nav>
+      {/* Project picker (DDS-SRS-012: Projects > Suites > Sections > Cases) */}
+      <div className="p-2 border-t border-slate-200">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <label htmlFor="project-filter" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Project</label>
+          <div className="flex items-center gap-0.5">
+            {projectFilter !== ALL_PROJECTS && projectFilter !== NO_PROJECT && (
+              <button onClick={() => onDeleteProject(projectFilter)} aria-label="Delete project" title="Delete project" className="p-0.5 text-slate-400 hover:text-rose-600 rounded"><Trash2 className="w-3 h-3"/></button>
+            )}
+            <button onClick={onAddProject} aria-label="Add project" title="Add project" className="p-0.5 text-slate-400 hover:text-blue-600 rounded"><Plus className="w-3 h-3"/></button>
+          </div>
+        </div>
+        <select id="project-filter" value={projectFilter} onChange={e => onSelectProject(e.target.value)}
+          className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-[11px] text-slate-700 cursor-pointer">
+          <option value={ALL_PROJECTS}>All projects</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <option value={NO_PROJECT}>No project</option>
+        </select>
+      </div>
       {/* Suite tree */}
       <div className="p-2 border-t border-slate-200">
         <div className="flex items-center justify-between px-2 py-1.5 mb-1">
@@ -2365,6 +2520,7 @@ const LeftPanel: React.FC<{
           <button onClick={onAddSuite} aria-label="Add suite" className="p-0.5 text-slate-400 hover:text-blue-600 rounded"><Plus className="w-3 h-3"/></button>
         </div>
         <div className="space-y-0.5">
+          {suites.length === 0 && <p className="px-2 py-1 text-[10px] text-slate-400">No suites in this project yet.</p>}
           {suites.map(s=>(
             <button key={s.id} onClick={()=>{onSetView('test-cases');onSelectSuite(s.id);}}
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-all ${s.id===selectedSuiteId&&view==='test-cases'?'bg-teal-50 text-teal-700 font-semibold border border-teal-200':'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
@@ -2383,6 +2539,8 @@ const LeftPanel: React.FC<{
 // ── Main TestCaseManager Component ─────────────────────────────────────────────
 const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNavigateToDocCraft, currentDocument }) => {
   const [view,                   setView]                   = useState<MainView>('test-cases');
+  const [projects,               setProjects]               = useState<ProjectItem[]>([]);
+  const [projectFilter,          setProjectFilter]          = useState<ProjectFilter>(ALL_PROJECTS);
   const [suites,                 setSuites]                 = useState<TestSuiteItem[]>([]);
   const [runs,                   setRuns]                   = useState<TestRunItem[]>([]);
   const [milestones,             setMilestones]             = useState<MilestoneItem[]>([]);
@@ -2395,11 +2553,13 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   type LoadState = 'loading' | 'ready' | 'error' | 'unavailable';
   const [loadState,              setLoadState]              = useState<LoadState>(() => isTestManagementAvailable() ? 'loading' : 'unavailable');
   const [loadError,              setLoadError]              = useState('');
-  const synced    = useRef<TestManagementData>({ suites: [], runs: [], milestones: [] });
+  const synced    = useRef<TestManagementData>({ projects: [], suites: [], runs: [], milestones: [] });
   const syncQueue = useRef<Promise<void>>(Promise.resolve());
 
   const applySnapshot = useCallback((data: TestManagementData) => {
-    synced.current = { suites: data.suites, runs: data.runs, milestones: data.milestones };
+    synced.current = { projects: data.projects, suites: data.suites, runs: data.runs, milestones: data.milestones };
+    setProjects(data.projects);
+    setProjectFilter(cur => cur === ALL_PROJECTS || cur === NO_PROJECT || data.projects.some(p => p.id === cur) ? cur : ALL_PROJECTS);
     setSuites(data.suites);
     setRuns(data.runs);
     setMilestones(data.milestones);
@@ -2410,9 +2570,9 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     setLoadState('loading');
     try {
       let snapshot = await loadTestManagement();
-      const empty = !snapshot.suites.length && !snapshot.runs.length && !snapshot.milestones.length;
+      const empty = !snapshot.projects.length && !snapshot.suites.length && !snapshot.runs.length && !snapshot.milestones.length;
       if (!snapshot.seeded && empty) {
-        snapshot = await seedTestManagement({ suites: INITIAL_SUITES, runs: INITIAL_RUNS, milestones: INITIAL_MILESTONES });
+        snapshot = await seedTestManagement({ projects: INITIAL_PROJECTS, suites: INITIAL_SUITES, runs: INITIAL_RUNS, milestones: INITIAL_MILESTONES });
       }
       applySnapshot(snapshot);
       setLoadState('ready');
@@ -2429,8 +2589,8 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   useEffect(() => {
     if (loadState !== 'ready') return;
     const prev = synced.current;
-    if (prev.suites === suites && prev.runs === runs && prev.milestones === milestones) return;
-    const next = { suites, runs, milestones };
+    if (prev.projects === projects && prev.suites === suites && prev.runs === runs && prev.milestones === milestones) return;
+    const next = { projects, suites, runs, milestones };
     synced.current = next;
     syncQueue.current = syncQueue.current.then(async () => {
       const errors = await syncTestManagement(prev, next);
@@ -2441,7 +2601,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       setTimeout(() => setToast(null), 5000);
       try { applySnapshot(await loadTestManagement()); } catch { /* keep the toast */ }
     });
-  }, [suites, runs, milestones, loadState, applySnapshot]);
+  }, [projects, suites, runs, milestones, loadState, applySnapshot]);
   const [showAiModal,            setShowAiModal]            = useState(false);
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
@@ -2449,12 +2609,43 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3500); };
 
+  const visibleSuites = suitesInProject(suites, projects, projectFilter);
+
   const handleAddSuite = () => {
     const name = prompt('New suite name:');
     if (!name?.trim()) return;
     const id = `suite-${Date.now()}`;
-    setSuites(prev=>[...prev,{id,title:name.trim(),description:'',module:'Custom',createdAt:new Date().toISOString(),sections:[{id:`sec-${id}-a`,suiteId:id,title:'Manual Tests',order:0}],testCases:[]}]);
+    // A new suite goes into the project being viewed, if one is.
+    const inProject = projects.some(p => p.id === projectFilter) ? { projectId: projectFilter } : {};
+    setSuites(prev=>[...prev,{id,...inProject,title:name.trim(),description:'',module:'Custom',createdAt:new Date().toISOString(),sections:[{id:`sec-${id}-a`,suiteId:id,title:'Manual Tests',order:0}],testCases:[]}]);
     setSelectedSuiteId(id);
+  };
+
+  const handleSelectProject = (filter: ProjectFilter) => {
+    setProjectFilter(filter);
+    const inView = suitesInProject(suites, projects, filter);
+    setSelectedSuiteId(cur => inView.some(s => s.id === cur) ? cur : inView[0]?.id ?? null);
+  };
+
+  const handleAddProject = () => {
+    const name = prompt('New project name:');
+    if (!name?.trim()) return;
+    const id = `project-${Date.now()}`;
+    setProjects(prev => [...prev, { id, name: name.trim(), createdAt: new Date().toISOString() }]);
+    setProjectFilter(id);
+    setSelectedSuiteId(null);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    if (suites.some(s => s.projectId === id)) {
+      showToast('⚠️ Move or delete this project\'s test suites first.');
+      return;
+    }
+    if (!confirm(`Delete project "${project.name}"?`)) return;
+    setProjects(prev => prev.filter(p => p.id !== id));
+    handleSelectProject(ALL_PROJECTS);
   };
 
   const handleAiGenerate = async (suiteId: string, doc: DocumentModel) => {
@@ -2703,9 +2894,11 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       {/* Left Panel */}
       <LeftPanel
         view={view} onSetView={setView}
-        suites={suites} runs={runs} milestones={milestones}
+        suites={visibleSuites} runs={runs} milestones={milestones}
         selectedSuiteId={selectedSuiteId} onSelectSuite={setSelectedSuiteId}
         onAddSuite={handleAddSuite}
+        projects={projects} projectFilter={projectFilter} onSelectProject={handleSelectProject}
+        onAddProject={handleAddProject} onDeleteProject={handleDeleteProject}
       />
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -2725,7 +2918,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
         <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
           {view==='test-cases' && (
             <TestCasesView
-              suites={suites} selectedSuiteId={selectedSuiteId}
+              suites={suites} selectedSuiteId={selectedSuiteId} projects={projects} visibleSuites={visibleSuites}
               onSelectSuite={setSelectedSuiteId} onUpdateSuites={setSuites}
               onShowToast={showToast} onExportSuiteMd={handleExportSuiteMd}
               onExportRobotSuite={handleExportRobotSuite}

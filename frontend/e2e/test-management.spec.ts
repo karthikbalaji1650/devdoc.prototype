@@ -37,6 +37,90 @@ test.describe('shared on the server', () => {
   });
 });
 
+/** Answers the next prompt()/confirm() with `answer`. */
+function answerNextDialog(page: Page, answer?: string) {
+  page.once('dialog', (d) => void d.accept(answer));
+}
+
+test.describe('projects and sub-sections (DDS-SRS-012)', () => {
+  test('suites are grouped by project, and a new suite lands in the project being viewed', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    const picker = page.getByLabel('Project', { exact: true });
+    const suiteList = page.getByRole('button', { name: /AST2600 RTC Clock/ });
+
+    await picker.selectOption({ label: 'AST2600 BMC Firmware' });
+    await expect(suiteList.first()).toBeVisible();
+
+    answerNextDialog(page, 'Gen5 Platform');
+    await page.getByRole('button', { name: 'Add project' }).click();
+    await expect(picker).toHaveValue(/project-/);
+    await expect(page.getByText('No suites in this project yet.')).toBeVisible();
+    await expect(suiteList).toHaveCount(0);
+
+    answerNextDialog(page, 'PCIe Link Training');
+    await page.getByRole('button', { name: 'Add suite' }).click();
+    await expect(page.getByRole('button', { name: /PCIe Link Training/ }).first()).toBeVisible();
+
+    // Kept on the server: still in its project after a reload.
+    await page.reload();
+    await openTestManagement(page);
+    await page.getByLabel('Project', { exact: true }).selectOption({ label: 'Gen5 Platform' });
+    await expect(page.getByRole('button', { name: /PCIe Link Training/ }).first()).toBeVisible();
+    await expect(suiteList).toHaveCount(0);
+
+    // A project with suites can't be deleted.
+    await page.getByRole('button', { name: 'Delete project' }).click();
+    await expect(page.getByText(/Move or delete this project's test suites first/)).toBeVisible();
+  });
+
+  test('a sub-section holds its own cases, and a section with cases cannot be deleted', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+
+    answerNextDialog(page, 'Boot Sequence');
+    await page.getByRole('button', { name: 'Add sub-section to Manual Tests' }).click();
+    const sub = page.getByRole('group', { name: 'Section Boot Sequence' });
+    await expect(sub).toContainText('Sub-section');
+
+    await sub.getByRole('button', { name: '+ Add Case' }).click();
+    await expect(page.getByLabel('Section', { exact: true })).toHaveValue(/sec-/);
+    await page.getByPlaceholder('Test case title').fill('Cold boot reaches BMC ready');
+    await page.getByRole('button', { name: 'Add Test Case' }).click();
+    await expect(sub).toContainText('Cold boot reaches BMC ready');
+
+    await page.reload();
+    await openTestManagement(page);
+    const subAfter = page.getByRole('group', { name: 'Section Boot Sequence' });
+    await expect(subAfter).toContainText('Cold boot reaches BMC ready');
+    await expect(page.getByRole('group', { name: 'Section Manual Tests' })).not.toContainText('Cold boot reaches BMC ready');
+
+    await subAfter.getByRole('button', { name: 'Delete section Boot Sequence' }).click();
+    await expect(page.getByText(/Move or delete its sub-sections and test cases first/)).toBeVisible();
+
+    // Collapsing the parent hides the sub-section too.
+    await page.getByRole('button', { name: 'Collapse section Manual Tests' }).click();
+    await expect(subAfter).toHaveCount(0);
+  });
+
+  test('a section can be renamed, and an empty one deleted', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    answerNextDialog(page, 'Scratch');
+    await page.getByRole('button', { name: 'Section', exact: true }).click();
+    answerNextDialog(page, 'Scratch Renamed');
+    await page.getByRole('button', { name: 'Rename section Scratch' }).click();
+    await expect(page.getByRole('group', { name: 'Section Scratch Renamed' })).toBeVisible();
+
+    answerNextDialog(page);
+    await page.getByRole('button', { name: 'Delete section Scratch Renamed' }).click();
+    await expect(page.getByRole('group', { name: 'Section Scratch Renamed' })).toHaveCount(0);
+    await page.reload();
+    await openTestManagement(page);
+    await expect(page.getByRole('group', { name: 'Section Scratch Renamed' })).toHaveCount(0);
+  });
+});
+
 test.describe('test case fields (DDS-SRS-013)', () => {
   test('a new case gets a sequential TC id, post-conditions and attachments, and keeps them after reload', async ({ page }) => {
     await signIn(page);
