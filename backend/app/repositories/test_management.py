@@ -162,6 +162,9 @@ class TestManagementStore:
         return [json.loads(r) for r in await self._redis.lrange(_revisions_key(suite_id, case_id), 0, -1)]
 
     # ── projects, runs and milestones ────────────────────────────────────────────
+    async def list_items(self, collection: Collection) -> list[dict[str, Any]]:
+        return _ordered(await self._redis.hgetall(_collection_key(collection)))
+
     async def get_item(self, collection: Collection, item_id: str) -> dict[str, Any] | None:
         return _load(await self._redis.hget(_collection_key(collection), item_id))
 

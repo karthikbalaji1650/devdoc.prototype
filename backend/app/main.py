@@ -27,16 +27,18 @@ from app.repositories.collections import CollectionStore
 from app.repositories.document_cache import CachedDocumentRepository
 from app.repositories.document_history import DocumentHistoryStore
 from app.repositories.postgres import postgres_repositories
+from app.repositories.releases import ReleaseStore
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import TestExecRepository
 from app.repositories.test_management import TestManagementStore
-from app.routers import admin, ai, audit, auth, collections, documents, health, test_exec, test_management
+from app.routers import admin, ai, audit, auth, collections, documents, health, releases, test_exec, test_management
 from app.schemas.openapi import install_openapi
 from app.services.admin import AdminService
 from app.services.ai import AiService
 from app.services.auth import AuthService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
+from app.services.releases import ReleaseService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 
@@ -45,6 +47,7 @@ logger = logging.getLogger("devdoc.api")
 
 def build_services(settings: Settings, repos: Repositories, http_client: httpx.AsyncClient, redis: Redis) -> Services:
     session_audit = SessionAuditStore(redis)
+    test_store = TestManagementStore(redis)
     documents = CachedDocumentRepository(repos.documents, redis)
     return Services(
         auth=AuthService(repos, session_audit),
@@ -54,7 +57,8 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         admin=AdminService(documents, redis),
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
-        test_management=TestManagementService(TestManagementStore(redis)),
+        test_management=TestManagementService(test_store),
+        releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )
@@ -97,7 +101,9 @@ def create_app(
                     await pool.close()
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
-    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections, admin)]
+    routers = [
+        m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections, admin, releases)
+    ]
     for router in routers:
         app.include_router(router)
 

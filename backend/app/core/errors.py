@@ -27,6 +27,7 @@ AUTH_GUARDED_PREFIXES = (
     "/api/audit",
     "/api/collections",
     "/api/admin",
+    "/api/releases",
 )
 
 

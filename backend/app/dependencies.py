@@ -15,6 +15,7 @@ from app.services.ai import AiService
 from app.services.auth import AuthService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
+from app.services.releases import ReleaseService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 
@@ -25,6 +26,7 @@ class Services:
     session_audit: SessionAuditStore
     collections: CollectionService
     admin: AdminService
+    releases: ReleaseService
     documents: DocumentService
     ai: AiService
     test_exec: TestExecService
