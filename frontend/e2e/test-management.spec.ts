@@ -174,6 +174,40 @@ test.describe('revision history (DDS-SRS-014)', () => {
   });
 });
 
+test.describe('creating test runs (DDS-SRS-016)', () => {
+  async function addRun(page: Page, name: string, choose: () => Promise<void>, expectedCount: string) {
+    await page.getByRole('button', { name: 'Add Test Run' }).first().click();
+    await page.getByPlaceholder('e.g. Regression Run Build 240').fill(name);
+    await choose();
+    await expect(page.getByRole('status').filter({ hasText: 'will be included' })).toHaveText(expectedCount);
+    await page.getByRole('button', { name: 'Add Test Run' }).last().click();
+    await page.getByText(name, { exact: true }).click();
+  }
+
+  test('a run can be made from a whole section, or from a filter, and holds only those cases', async ({ page }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    await page.getByRole('button', { name: /Test Runs/ }).first().click();
+
+    await addRun(page, 'Manual section only', async () => {
+      await page.getByText('Select specific test cases').click();
+      await expect(page.getByRole('button', { name: 'Add Test Run' }).last()).toBeDisabled(); // nothing picked yet
+      await page.getByLabel('Whole section Manual Tests').check();
+    }, '1 test case will be included.');
+    await expect(page.getByText('C3', { exact: true })).toBeVisible();
+    await expect(page.getByText('C1', { exact: true })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Back to test runs' }).click();
+    await expect(page.getByRole('heading', { name: 'Test Runs & Results' })).toBeVisible();
+    await addRun(page, 'Critical only', async () => {
+      await page.getByText('Dynamic Filtering').click();
+      await page.getByRole('group', { name: 'Filter by priority' }).getByRole('button', { name: 'Critical' }).click();
+    }, '1 test case will be included.');
+    await expect(page.getByText('C1', { exact: true })).toBeVisible();
+    await expect(page.getByText('C3', { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe('test case fields (DDS-SRS-013)', () => {
   test('a new case gets a sequential TC id, post-conditions and attachments, and keeps them after reload', async ({ page }) => {
     await signIn(page);

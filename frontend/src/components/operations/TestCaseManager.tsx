@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment, ProjectItem, TestSection } from '../../types/operations';
 import { isSectionEmpty, nextSectionOrder, sectionOfCase, sectionTree } from '../../services/testSections';
 import { CaseHistoryModal } from './CaseHistoryModal';
+import { selectRunCases, withSubsections, type CaseFilter, type CaseMode } from '../../services/runCaseSelection';
 import { PRIORITIES, normalizePriority, type TestCasePriority } from '../../services/testCasePriority';
 import { CHANGE_LABELS, comparableRuns, compareRuns, previousRun, type ChangeKind } from '../../services/runComparison';
 import { nextTestCaseId } from '../../services/testCaseIds';
@@ -579,12 +580,30 @@ const AddTestRunModal: React.FC<{
   const [desc, setDesc]           = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate]     = useState('');
-  const [caseMode, setCaseMode]   = useState<'all'|'specific'|'dynamic'>('all');
+  const [caseMode, setCaseMode]   = useState<CaseMode>('all');
+  // DDS-SRS-016: cases picked by hand (or whole sections), or by filter.
+  const [picked, setPicked]       = useState<Set<string>>(() => new Set());
+  const [filter, setFilter]       = useState<CaseFilter>({ sectionIds: [], priorities: [], types: [] });
+  const suite = suites.find(s => s.id === suiteId);
+  const cases = selectRunCases(suite, caseMode, picked, filter);
+  const liveCases = (suite?.testCases || []).filter(tc => !tc.isDeleted);
+  const sectionNodesForRun = sectionTree(suite?.sections || []);
+  const casesInSection = (sectionId: string) => {
+    const ids = suite ? withSubsections(suite, [sectionId]) : new Set<string>();
+    return liveCases.filter(tc => ids.has(sectionOfCase(tc, suite?.sections || []) ?? ''));
+  };
+  const toggleCases = (ids: string[], on: boolean) => setPicked(prev => {
+    const next = new Set(prev);
+    for (const id of ids) { if (on) next.add(id); else next.delete(id); }
+    return next;
+  });
+  const toggleIn = <K extends keyof CaseFilter>(key: K, value: CaseFilter[K][number]) => setFilter(prev => {
+    const list = prev[key] as CaseFilter[K][number][];
+    return { ...prev, [key]: list.includes(value) ? list.filter(v => v !== value) : [...list, value] };
+  });
 
   const handleAdd = () => {
-    if (!name.trim()) return;
-    const suite = suites.find(s => s.id === suiteId);
-    const cases = suite?.testCases || [];
+    if (!name.trim() || cases.length === 0) return;
     const caseResults: TestRunCaseResult[] = cases.map(tc => ({
       caseId: tc.id, customId: tc.customId, title: tc.title,
       status: 'Untested' as TestCaseStatus, assignedTo: assignTo || undefined, labels: tc.labels,
@@ -607,9 +626,6 @@ const AddTestRunModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900">Add Test Run</h2>
           <div className="flex gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 rounded-lg text-xs font-bold">
-              <Play className="w-3.5 h-3.5" /> Execute Automated Tests
-            </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
           </div>
         </div>
@@ -622,7 +638,7 @@ const AddTestRunModal: React.FC<{
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Test Suite</label>
-            <select value={suiteId} onChange={e => setSuiteId(e.target.value)}
+            <select value={suiteId} onChange={e => { setSuiteId(e.target.value); setPicked(new Set()); setFilter({ sectionIds: [], priorities: [], types: [] }); }}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
               {suites.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
             </select>
@@ -674,16 +690,65 @@ const AddTestRunModal: React.FC<{
                     {opt === 'all' ? 'Include all test cases' : opt === 'specific' ? 'Select specific test cases' : 'Dynamic Filtering'}
                   </span>
                   <p className="text-[11px] text-slate-500">
-                    {opt === 'all' ? 'All test cases will be included. New cases are automatically added.' :
-                     opt === 'specific' ? 'Choose which test cases to include. New cases are NOT automatically added.' :
-                     'Automatically add test cases based on filter selection.'}
+                    {opt === 'all' ? 'Every test case in the suite.' :
+                     opt === 'specific' ? 'Pick test cases, or whole sections and sub-sections.' :
+                     'Test cases matching the filters: sections (with their sub-sections), priority and type.'}
                   </p>
                 </div>
               </label>
             ))}
           </div>
+          {caseMode === 'specific' && (
+            <div role="group" aria-label="Test cases to include" className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+              {sectionNodesForRun.length === 0 && liveCases.map(tc => (
+                <label key={tc.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={picked.has(tc.id)} onChange={e => toggleCases([tc.id], e.target.checked)} />{tc.customId} {tc.title}</label>
+              ))}
+              {sectionNodesForRun.map(({ section, depth }) => {
+                const inSection = casesInSection(section.id);
+                const direct = liveCases.filter(tc => sectionOfCase(tc, suite?.sections || []) === section.id);
+                const allOn = inSection.length > 0 && inSection.every(tc => picked.has(tc.id));
+                return (
+                  <div key={section.id} style={{ marginLeft: `${depth * 14}px` }}>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                      <input type="checkbox" aria-label={`Whole section ${section.title}`} checked={allOn} disabled={!inSection.length}
+                        onChange={e => toggleCases(inSection.map(tc => tc.id), e.target.checked)} />
+                      {section.title} <span className="font-normal text-slate-500">({inSection.length})</span>
+                    </label>
+                    {direct.map(tc => (
+                      <label key={tc.id} className="flex items-center gap-2 text-xs ml-5">
+                        <input type="checkbox" checked={picked.has(tc.id)} onChange={e => toggleCases([tc.id], e.target.checked)} />
+                        <span className="font-mono text-[11px] text-slate-500">{tc.customId}</span> {tc.title}
+                      </label>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {caseMode === 'dynamic' && (
+            <div className="border border-slate-200 rounded-lg p-3 space-y-2 text-xs">
+              {([
+                ['Sections', 'sectionIds', sectionNodesForRun.map(n => [n.section.id, `${'· '.repeat(n.depth)}${n.section.title}`])],
+                ['Priority', 'priorities', PRIORITIES.map(p => [p, p])],
+                ['Type', 'types', [['Manual', 'Manual'], ['Automated', 'Automated']]],
+              ] as [string, keyof CaseFilter, string[][]][]).map(([label, key, options]) => (
+                <div key={key} role="group" aria-label={`Filter by ${label.toLowerCase()}`} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-16 font-semibold text-slate-700">{label}</span>
+                  {options.map(([value, text]) => {
+                    const on = (filter[key] as string[]).includes(value);
+                    return (
+                      <button key={value} type="button" aria-pressed={on} onClick={() => toggleIn(key, value as never)}
+                        className={`px-2 py-0.5 rounded border ${on ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-300'}`}>{text}</button>
+                    );
+                  })}
+                </div>
+              ))}
+              <p className="text-[11px] text-slate-500">No choice in a row means any.</p>
+            </div>
+          )}
+          <p role="status" className="text-xs text-slate-600">{cases.length} test case{cases.length === 1 ? '' : 's'} will be included.</p>
           <div className="flex gap-3 pt-2">
-            <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold">
+            <button onClick={handleAdd} disabled={cases.length === 0} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold">
               <Check className="w-3.5 h-3.5" /> Add Test Run
             </button>
             <button onClick={onClose} className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-sm font-semibold">
@@ -1655,8 +1720,10 @@ const RunDetailView: React.FC<{
       {/* Header */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <button onClick={onClose} aria-label="Back to test runs" className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
-        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-xs">
-          {run.id.split('-')[1]?.toUpperCase() || 'R'}
+        {/* Short and clipped: runs created in the app have a 13-digit id, which
+            used to spill over the Back button and swallow its clicks. */}
+        <div aria-hidden="true" className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 shadow-xs overflow-hidden">
+          {run.id.split('-')[1]?.slice(-3).toUpperCase() || 'R'}
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-slate-900 truncate">{run.name}</h2>
