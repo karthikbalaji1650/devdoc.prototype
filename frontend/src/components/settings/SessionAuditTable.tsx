@@ -66,7 +66,7 @@ export const SessionAuditTable: React.FC = () => {
                     {s.status === 'active' ? (
                       <span className="text-emerald-600 font-semibold flex items-center gap-1"><Clock className="w-3 h-3" /> Active</span>
                     ) : s.status === 'expired' ? (
-                      <span className="text-amber-700">Expired {formatTimestamp(s.expiresAt)}</span>
+                      <span className="text-slate-600">Expired {formatTimestamp(s.expiresAt)}</span>
                     ) : (
                       <span className="text-slate-500">{formatTimestamp(s.logoutTime!)}</span>
                     )}

@@ -12,6 +12,7 @@ from app.models.user import User
 from app.repositories.session_audit import SessionAuditStore
 from app.services.ai import AiService
 from app.services.auth import AuthService
+from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
@@ -21,6 +22,7 @@ from app.services.test_management import TestManagementService
 class Services:
     auth: AuthService
     session_audit: SessionAuditStore
+    collections: CollectionService
     documents: DocumentService
     ai: AiService
     test_exec: TestExecService

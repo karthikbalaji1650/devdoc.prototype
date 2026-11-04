@@ -1,54 +1,37 @@
+// The reusable test case library - shared by every user on the server
+// (see sharedCollection.ts), not kept in this browser.
 import type { TestCaseItem } from '../types/operations';
-import { safeSetItem } from './safeStorage';
+import { createSharedCollection } from './sharedCollection';
 
-const LIBRARY_KEY = 'devdoc_studio_test_case_library_v1';
-
-function load(): TestCaseItem[] {
-  try {
-    const raw = localStorage.getItem(LIBRARY_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persist(entries: TestCaseItem[]): void {
-  safeSetItem(LIBRARY_KEY, JSON.stringify(entries));
-}
+export const testCaseLibrary = createSharedCollection<TestCaseItem>('test-case-library');
 
 export function loadLibrary(): TestCaseItem[] {
-  return load();
+  return testCaseLibrary.items();
 }
 
 /** Saves a copy of a test case into the reusable library, keyed by its
  * customId (e.g. "TC-RTC-001") so saving the same one again updates the
  * existing entry instead of piling up duplicates. The copy is detached
  * from any suite/run state (isDeleted, status) so it reimports clean. */
-export function saveToLibrary(testCase: TestCaseItem): void {
-  const library = load();
-  const entry: TestCaseItem = {
-    ...testCase,
+export function saveToLibrary(testCase: TestCaseItem): Promise<void> {
+  const { createdBy: _c, updatedAt: _u, ...rest } = testCase as TestCaseItem & { createdBy?: string; updatedAt?: string };
+  return testCaseLibrary.put({
+    ...rest,
     id: `lib-${testCase.customId}`,
     suiteId: '',
+    sectionId: undefined,
     isDeleted: false,
     status: undefined,
-  };
-  const existingIndex = library.findIndex((tc) => tc.customId === testCase.customId);
-  if (existingIndex >= 0) {
-    library[existingIndex] = entry;
-  } else {
-    library.push(entry);
-  }
-  persist(library);
+  });
 }
 
-export function removeFromLibrary(customId: string): void {
-  persist(load().filter((tc) => tc.customId !== customId));
+export function removeFromLibrary(customId: string): Promise<void> {
+  return testCaseLibrary.remove(`lib-${customId}`);
 }
 
 export function searchLibrary(query: string): TestCaseItem[] {
   const q = query.trim().toLowerCase();
-  const library = load();
+  const library = loadLibrary();
   if (!q) return library;
   return library.filter((tc) =>
     tc.customId.toLowerCase().includes(q) ||

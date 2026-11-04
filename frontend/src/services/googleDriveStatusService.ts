@@ -1,36 +1,31 @@
-// Tracks Google Drive export history so the dashboard can show a real
-// "Google Drive upload status" instead of nothing. Until the app has a
-// real multi-document store, this logs every successful export (by
-// document title/number) rather than a true per-document flag.
-const DRIVE_LOG_KEY = 'devdoc_studio_drive_export_log_v1';
+// Google Drive export history, so the dashboard can show the latest
+// upload. Shared by every user on the server (see sharedCollection.ts);
+// the server keeps the latest 50 and never changes an entry.
+import { createSharedCollection } from './sharedCollection';
 
 export interface DriveExportRecord {
+  id: string;
   docTitle: string;
   docNumber: string;
   driveUrl: string;
   exportedAt: string; // ISO timestamp
 }
 
-function readLog(): DriveExportRecord[] {
-  try {
-    const raw = localStorage.getItem(DRIVE_LOG_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+export const driveExportLog = createSharedCollection<DriveExportRecord>('drive-exports');
+
+export function recordDriveExport(record: Omit<DriveExportRecord, 'id' | 'exportedAt'>): Promise<void> {
+  const exportedAt = new Date().toISOString();
+  // Random suffix: two exports in the same millisecond must not share an id
+  // (the server never overwrites a log entry).
+  return driveExportLog.put({ ...record, id: `export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, exportedAt });
 }
 
-export function recordDriveExport(record: Omit<DriveExportRecord, 'exportedAt'>): void {
-  const log = readLog();
-  log.unshift({ ...record, exportedAt: new Date().toISOString() });
-  localStorage.setItem(DRIVE_LOG_KEY, JSON.stringify(log.slice(0, 50)));
-}
-
+/** Newest first. */
 export function getDriveExportLog(): DriveExportRecord[] {
-  return readLog();
+  return [...driveExportLog.items()].reverse();
 }
 
 export function getLatestDriveExport(): DriveExportRecord | null {
-  const log = readLog();
-  return log[0] ?? null;
+  const items = driveExportLog.items();
+  return items[items.length - 1] ?? null;
 }

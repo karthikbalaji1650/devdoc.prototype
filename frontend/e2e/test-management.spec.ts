@@ -35,6 +35,23 @@ test.describe('shared on the server', () => {
     await expect(other.getByText('Shared across users')).toBeVisible();
     await otherContext.close();
   });
+
+  test('the reusable test case library is shared too', async ({ page, browser }) => {
+    await signIn(page);
+    await openTestManagement(page);
+    await page.getByText('RTC Clock Drift Verification under 1-Hour Stress Load').click();
+    await page.getByRole('button', { name: 'Save to Library' }).click();
+    await expect(page.getByText(/Saved "C1" to the reusable library/)).toBeVisible();
+
+    const otherContext = await browser.newContext();
+    const other = await otherContext.newPage();
+    await signInThroughBackend(other, stack, stack.users[2]);
+    await openTestManagement(other);
+    await other.getByRole('button', { name: 'Import from Library' }).click();
+    const modal = other.getByRole('heading', { name: 'Import from Library' }).locator('xpath=ancestor::div[contains(@class, "max-w-2xl")]');
+    await expect(modal.getByText('RTC Clock Drift Verification under 1-Hour Stress Load')).toBeVisible();
+    await otherContext.close();
+  });
 });
 
 /** Answers the next prompt()/confirm() with `answer`. */

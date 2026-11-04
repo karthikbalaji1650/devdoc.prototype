@@ -11,7 +11,8 @@ import {
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
 import { INITIAL_INCIDENTS, INITIAL_RELEASE_MASTER } from '../../services/jiraService';
-import { getStoredReviewersLog } from '../../services/reviewersLogService';
+import { getStoredReviewersLog, reviewersLog } from '../../services/reviewersLogService';
+import { useSharedCollection } from '../../services/sharedCollection';
 
 interface LandingHubProps {
   user: UserProfile;
@@ -26,6 +27,7 @@ export const LandingHub: React.FC<LandingHubProps> = ({
 }) => {
   const incidents = INITIAL_INCIDENTS;
   const releases = INITIAL_RELEASE_MASTER;
+  useSharedCollection(reviewersLog); // re-render once the shared log loads
   const reviewers = getStoredReviewersLog();
 
   const openIncidents = incidents.filter(i => i.status !== 'Resolved').length;

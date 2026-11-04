@@ -19,7 +19,14 @@ from starlette.responses import Response
 from app.core.http import error_json, express_error_page, express_not_found
 
 NOT_SIGNED_IN = "Not signed in."
-AUTH_GUARDED_PREFIXES = ("/api/documents", "/api/ai", "/api/test-exec", "/api/test-management", "/api/audit")
+AUTH_GUARDED_PREFIXES = (
+    "/api/documents",
+    "/api/ai",
+    "/api/test-exec",
+    "/api/test-management",
+    "/api/audit",
+    "/api/collections",
+)
 
 
 class ApiError(Exception):

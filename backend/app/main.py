@@ -23,14 +23,16 @@ from app.db.pool import create_pool
 from app.db.redis import create_redis
 from app.dependencies import Services
 from app.repositories.base import Repositories
+from app.repositories.collections import CollectionStore
 from app.repositories.postgres import postgres_repositories
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import TestExecRepository
 from app.repositories.test_management import TestManagementStore
-from app.routers import ai, audit, auth, documents, health, test_exec, test_management
+from app.routers import ai, audit, auth, collections, documents, health, test_exec, test_management
 from app.schemas.openapi import install_openapi
 from app.services.ai import AiService
 from app.services.auth import AuthService
+from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
@@ -43,6 +45,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
     return Services(
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
+        collections=CollectionService(CollectionStore(redis)),
         documents=DocumentService(repos.documents),
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
@@ -89,7 +92,7 @@ def create_app(
                     await pool.close()
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
-    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management, audit)]
+    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections)]
     for router in routers:
         app.include_router(router)
 

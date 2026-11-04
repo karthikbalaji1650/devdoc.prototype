@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
-import { getStoredReviewersLog } from '../../services/reviewersLogService';
+import { getStoredReviewersLog, reviewersLog } from '../../services/reviewersLogService';
+import { useSharedCollection } from '../../services/sharedCollection';
 import { listDocuments } from '../../services/documentsStoreService';
 import { visibleDocumentsFor } from '../../services/permissions';
 import { buildTrackedDocuments, countTracked, findDocumentByNumber, type TrackedStatus } from '../../services/documentStats';
 import { isAdmin } from '../../services/permissions';
-import { getLatestDriveExport } from '../../services/googleDriveStatusService';
+import { driveExportLog, getLatestDriveExport } from '../../services/googleDriveStatusService';
 import { AppSidebar } from '../AppSidebar';
 import { WelcomeModal } from '../onboarding/WelcomeModal';
 import { hasSeenWelcome, markWelcomeSeen } from '../../services/onboardingService';
@@ -80,10 +81,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [notifOpen]);
 
-  const reviewers = useMemo(() => getStoredReviewersLog(), []);
+  // Shared on the server: these re-render once loaded.
+  const { items: reviewerItems } = useSharedCollection(reviewersLog);
+  const reviewers = useMemo(() => getStoredReviewersLog(), [reviewerItems]);
   const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
   const inReviewDocs = reviewers.filter(r => r.reviewStatus === 'IN_REVIEW').length;
-  const latestDriveExport = useMemo(() => getLatestDriveExport(), []);
+  const { items: driveExports } = useSharedCollection(driveExportLog);
+  const latestDriveExport = useMemo(() => getLatestDriveExport(), [driveExports]);
   const reviewedDocs = approvedDocs + inReviewDocs;
   const approvalRate = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
   const inReviewRate = reviewedDocs > 0 ? Math.round((inReviewDocs / reviewedDocs) * 100) : 0;

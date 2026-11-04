@@ -25,7 +25,8 @@ import { isBackendConfigured, logoutBackend } from './services/backendAuthServic
 import { createDebouncedSaver } from './services/autosave';
 import { seedSampleDocumentsIfNeeded } from './services/sampleData';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
-import { getStoredReviewersLog } from './services/reviewersLogService';
+import { getStoredReviewersLog, reviewersLog } from './services/reviewersLogService';
+import { useSharedCollection } from './services/sharedCollection';
 import { safeSetItem, STORAGE_ERROR_EVENT } from './services/safeStorage';
 import { canEditDocument, canDeleteDocument, isAdmin, visibleDocumentsFor } from './services/permissions';
 
@@ -112,6 +113,8 @@ export const App: React.FC = () => {
   const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<TrackedStatus, 'OTHER'> | null>(null);
   // Adds the ADR-2026-042 sample once so the dashboard's In review card has a document to open.
   const [documentListVersion, setDocumentListVersion] = useState(() => (seedSampleDocumentsIfNeeded() ? 1 : 0));
+  // The documents list shows review status from the shared reviewers log: re-render once it loads.
+  useSharedCollection(reviewersLog);
 
   // AI Modal States
   const [aiModalOpen, setAiModalOpen] = useState(false);

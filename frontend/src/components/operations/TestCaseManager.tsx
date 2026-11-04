@@ -15,11 +15,13 @@ import {
 } from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
-import { searchLibrary, saveToLibrary, removeFromLibrary } from '../../services/testCaseLibraryService';
+import { searchLibrary, saveToLibrary, removeFromLibrary, testCaseLibrary } from '../../services/testCaseLibraryService';
+import { useSharedCollection, type CollectionStatus } from '../../services/sharedCollection';
 import {
   saveToLibrary as saveSuiteToLibrary,
   removeFromLibrary as removeSuiteFromLibrary,
   searchLibrary as searchSuiteLibrary,
+  testSuiteLibrary,
   instantiateSuiteFromLibrary,
 } from '../../services/testSuiteLibraryService';
 import {
@@ -141,14 +143,21 @@ const EvidenceDropzone: React.FC<{
   );
 };
 
+/** Loading / error / no-backend note for the shared libraries. */
+const LibraryStatus: React.FC<{ status: CollectionStatus; error: string }> = ({ status, error }) =>
+  status === 'loading' ? <span role="status" className="text-[11px] text-slate-500">Loading…</span>
+  : status === 'unavailable' ? <span className="text-[11px] text-slate-600">The library is stored on the server - it needs the backend.</span>
+  : error ? <span role="alert" className="text-[11px] text-rose-600">{error}</span>
+  : null;
+
 const TestCaseLibraryModal: React.FC<{
   onImport: (entries: TestCaseItem[]) => void;
   onClose: () => void;
 }> = ({ onImport, onClose }) => {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [refreshTick, setRefreshTick] = useState(0);
-  const results = React.useMemo(() => searchLibrary(query), [query, refreshTick]);
+  const library = useSharedCollection(testCaseLibrary);
+  const results = React.useMemo(() => searchLibrary(query), [query, library.items]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -158,16 +167,14 @@ const TestCaseLibraryModal: React.FC<{
     });
   };
 
-  const handleRemove = (customId: string) => {
-    removeFromLibrary(customId);
-    setRefreshTick((n) => n + 1);
-  };
+  const handleRemove = (customId: string) => { void removeFromLibrary(customId); };
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Import from Library</h2>
+          <LibraryStatus status={library.status} error={library.error} />
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
@@ -225,19 +232,17 @@ const SuiteLibraryModal: React.FC<{
   onClose: () => void;
 }> = ({ onLoad, onClose }) => {
   const [query, setQuery] = useState('');
-  const [refreshTick, setRefreshTick] = useState(0);
-  const results = React.useMemo(() => searchSuiteLibrary(query), [query, refreshTick]);
+  const library = useSharedCollection(testSuiteLibrary);
+  const results = React.useMemo(() => searchSuiteLibrary(query), [query, library.items]);
 
-  const handleRemove = (title: string) => {
-    removeSuiteFromLibrary(title);
-    setRefreshTick((n) => n + 1);
-  };
+  const handleRemove = (title: string) => { void removeSuiteFromLibrary(title); };
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Load Suite from Library</h2>
+          <LibraryStatus status={library.status} error={library.error} />
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
@@ -293,7 +298,8 @@ const LoadPreviousTestCaseDropdown: React.FC<{ onPick: (tc: TestCaseItem) => voi
     return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
   }, [open]);
 
-  const results = open ? searchLibrary(query) : [];
+  const library = useSharedCollection(testCaseLibrary);
+  const results = open && library.items ? searchLibrary(query) : [];
 
   return (
     <div ref={ref} className="relative inline-block">
@@ -1074,8 +1080,9 @@ const TestCasesView: React.FC<{
           tc.id === caseId ? { ...tc, evidenceImage: undefined, evidenceImageName: undefined } : tc) } : s));
   };
   const handleSaveCaseToLibrary = (tc: TestCaseItem) => {
-    saveToLibrary(tc);
-    onShowToast(`📚 Saved "${tc.customId}" to the reusable library.`);
+    void saveToLibrary(tc).then(() => onShowToast(testCaseLibrary.error()
+      ? `⚠️ Not saved to the library: ${testCaseLibrary.error()}`
+      : `📚 Saved "${tc.customId}" to the reusable library.`));
   };
   // CSV / JSON / XML exchange (DDS-SRS-015).
   const handleExportCases = (format: ExchangeFormat) => {
@@ -1132,8 +1139,10 @@ const TestCasesView: React.FC<{
   };
   const handleSaveSuiteToLibrary = () => {
     if (!selectedSuite) return;
-    saveSuiteToLibrary(selectedSuite);
-    onShowToast(`📚 Saved suite "${selectedSuite.title}" to the reusable library.`);
+    const title = selectedSuite.title;
+    void saveSuiteToLibrary(selectedSuite).then(() => onShowToast(testSuiteLibrary.error()
+      ? `⚠️ Not saved to the library: ${testSuiteLibrary.error()}`
+      : `📚 Saved suite "${title}" to the reusable library.`));
   };
   const handleLoadSuiteFromLibrary = (template: TestSuiteItem) => {
     const instance = instantiateSuiteFromLibrary(template);

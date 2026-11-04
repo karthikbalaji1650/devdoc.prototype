@@ -22,8 +22,10 @@ import {
   exportReviewersLogToExcel,
   getStoredGoogleSheetUrl,
   saveStoredGoogleSheetUrl,
-  DEFAULT_GOOGLE_SHEET_URL
+  DEFAULT_GOOGLE_SHEET_URL,
+  reviewersLog,
 } from '../../services/reviewersLogService';
+import { useSharedCollection } from '../../services/sharedCollection';
 
 interface ReviewersLogProps {
   currentDocument?: DocumentModel;
@@ -31,7 +33,9 @@ interface ReviewersLogProps {
 }
 
 export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onOpenDocCraft }) => {
-  const [logs, setLogs] = useState<ReviewerLogItem[]>([]);
+  // Shared on the server; `logs` is newest first and updates when it loads or changes.
+  const { status: logStatus, error: logError } = useSharedCollection(reviewersLog);
+  const logs = getStoredReviewersLog();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSheetConfigModal, setShowSheetConfigModal] = useState(false);
@@ -52,18 +56,15 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
   const [newStatus, setNewStatus] = useState<ReviewerLogItem['reviewStatus']>('APPROVED');
   const [newComments, setNewComments] = useState('');
 
+  // Only once the log has loaded - against an empty list it would add a
+  // duplicate entry for a document that already has one.
   useEffect(() => {
-    let currentLogs = getStoredReviewersLog();
-    if (currentDocument) {
-      currentLogs = ensureCurrentDocReviewEntry(currentDocument, currentLogs);
-    }
-    setLogs(currentLogs);
-  }, [currentDocument]);
+    if (currentDocument && logStatus === 'ready') ensureCurrentDocReviewEntry(currentDocument, getStoredReviewersLog());
+  }, [currentDocument, logStatus]);
 
   const handleStatusChange = (id: string, newStatus: ReviewerLogItem['reviewStatus']) => {
     const updated = logs.map(l => l.id === id ? { ...l, reviewStatus: newStatus } : l);
-    setLogs(updated);
-    saveStoredReviewersLog(updated);
+    void saveStoredReviewersLog(updated);
   };
 
   const handleAddReviewer = (e: React.FormEvent) => {
@@ -83,8 +84,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
     };
 
     const updated = [newEntry, ...logs];
-    setLogs(updated);
-    saveStoredReviewersLog(updated);
+    void saveStoredReviewersLog(updated);
     setShowAddModal(false);
     setNewReviewerName('');
     setNewComments('');
@@ -127,8 +127,7 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
 
     if (newItems.length > 0) {
       const updated = [...newItems, ...logs];
-      setLogs(updated);
-      saveStoredReviewersLog(updated);
+      void saveStoredReviewersLog(updated);
       setShowPasteModal(false);
       setPastedData('');
     } else {
@@ -175,6 +174,9 @@ export const ReviewersLog: React.FC<ReviewersLogProps> = ({ currentDocument, onO
               Option 3
             </span>
             <h2 className="text-xl font-bold text-slate-900">Document Reviewers Log & Google Sheets Sync</h2>
+            {logStatus === 'unavailable' && <p className="text-xs text-slate-600 mt-1">Showing sample entries: the reviewers log is stored on the server, so changes need the backend (VITE_API_BASE_URL).</p>}
+            {logStatus === 'loading' && <p role="status" className="text-xs text-slate-500 mt-1">Loading the reviewers log…</p>}
+            {logError && <p role="alert" className="text-xs text-rose-600 mt-1">Not saved: {logError}</p>}
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Track peer sign-offs with auto-fetched document titles from DocCraft Studio, and synchronize live with your Google Spreadsheet.

@@ -1,49 +1,33 @@
+// The reusable test suite library - shared by every user on the server
+// (see sharedCollection.ts), not kept in this browser.
 import type { TestSuiteItem } from '../types/operations';
-import { safeSetItem } from './safeStorage';
+import { createSharedCollection } from './sharedCollection';
 
-const LIBRARY_KEY = 'devdoc_studio_test_suite_library_v1';
+export const testSuiteLibrary = createSharedCollection<TestSuiteItem>('test-suite-library');
 
-function load(): TestSuiteItem[] {
-  try {
-    const raw = localStorage.getItem(LIBRARY_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persist(entries: TestSuiteItem[]): void {
-  safeSetItem(LIBRARY_KEY, JSON.stringify(entries));
-}
+const keyOf = (title: string) => title.trim().toLowerCase();
+const idOf = (title: string) => `lib-suite-${keyOf(title).replace(/\s+/g, '-')}`;
 
 export function loadLibrary(): TestSuiteItem[] {
-  return load();
+  return testSuiteLibrary.items();
 }
 
 /** Suites have no human-assigned id like a test case's customId, so
  * entries are keyed by title (case-insensitive) - saving a suite again
- * under the same title updates the template instead of duplicating it. */
-export function saveToLibrary(suite: TestSuiteItem): void {
-  const library = load();
-  const key = suite.title.trim().toLowerCase();
-  const entry: TestSuiteItem = { ...suite, id: `lib-suite-${key.replace(/\s+/g, '-')}` };
-  const existingIndex = library.findIndex((s) => s.title.trim().toLowerCase() === key);
-  if (existingIndex >= 0) {
-    library[existingIndex] = entry;
-  } else {
-    library.push(entry);
-  }
-  persist(library);
+ * under the same title updates the template instead of duplicating it.
+ * The template is not tied to any project. */
+export function saveToLibrary(suite: TestSuiteItem): Promise<void> {
+  const { projectId: _p, createdBy: _c, updatedAt: _u, ...rest } = suite as TestSuiteItem & { createdBy?: string; updatedAt?: string };
+  return testSuiteLibrary.put({ ...rest, id: idOf(suite.title) });
 }
 
-export function removeFromLibrary(title: string): void {
-  const key = title.trim().toLowerCase();
-  persist(load().filter((s) => s.title.trim().toLowerCase() !== key));
+export function removeFromLibrary(title: string): Promise<void> {
+  return testSuiteLibrary.remove(idOf(title));
 }
 
 export function searchLibrary(query: string): TestSuiteItem[] {
   const q = query.trim().toLowerCase();
-  const library = load();
+  const library = loadLibrary();
   if (!q) return library;
   return library.filter((s) =>
     s.title.toLowerCase().includes(q) ||

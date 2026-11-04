@@ -1,6 +1,21 @@
-import { describe, it, expect } from 'vitest';
-import { loadLibrary, saveToLibrary, removeFromLibrary, searchLibrary, instantiateSuiteFromLibrary } from './testSuiteLibraryService';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { TestSuiteItem } from '../types/operations';
+import { installFakeCollectionsApi } from '../test/fakeCollectionsApi';
+
+// A fresh module (and so a fresh in-memory collection) per test.
+let loadLibrary: typeof import('./testSuiteLibraryService')['loadLibrary'];
+let saveToLibrary: typeof import('./testSuiteLibraryService')['saveToLibrary'];
+let removeFromLibrary: typeof import('./testSuiteLibraryService')['removeFromLibrary'];
+let searchLibrary: typeof import('./testSuiteLibraryService')['searchLibrary'];
+let instantiateSuiteFromLibrary: typeof import('./testSuiteLibraryService')['instantiateSuiteFromLibrary'];
+beforeEach(async () => {
+  installFakeCollectionsApi();
+  vi.resetModules();
+  const lib = await import('./testSuiteLibraryService');
+  ({ loadLibrary, saveToLibrary, removeFromLibrary, searchLibrary, instantiateSuiteFromLibrary } = lib);
+  await lib.testSuiteLibrary.load();
+});
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 function makeSuite(overrides: Partial<TestSuiteItem> = {}): TestSuiteItem {
   return {
@@ -20,25 +35,26 @@ describe('testSuiteLibraryService', () => {
     expect(loadLibrary()).toEqual([]);
   });
 
-  it('saves a suite and finds it by title, description or module', () => {
-    saveToLibrary(makeSuite());
+  it('saves a suite and finds it by title, description or module', async () => {
+    await saveToLibrary(makeSuite({ projectId: 'p1' }));
+    expect(loadLibrary()[0].projectId).toBeUndefined(); // templates aren't tied to a project
     expect(searchLibrary('RTC Clock')).toHaveLength(1);
     expect(searchLibrary('drift')).toHaveLength(1);
     expect(searchLibrary('firmware')).toHaveLength(1);
     expect(searchLibrary('no such thing')).toHaveLength(0);
   });
 
-  it('saving the same title again (any case) updates instead of duplicating', () => {
-    saveToLibrary(makeSuite({ description: 'Original' }));
-    saveToLibrary(makeSuite({ title: 'rtc clock suite', description: 'Updated' }));
+  it('saving the same title again (any case) updates instead of duplicating', async () => {
+    await saveToLibrary(makeSuite({ description: 'Original' }));
+    await saveToLibrary(makeSuite({ title: 'rtc clock suite', description: 'Updated' }));
     const results = searchLibrary('clock');
     expect(results).toHaveLength(1);
     expect(results[0].description).toBe('Updated');
   });
 
-  it('removes an entry by title', () => {
-    saveToLibrary(makeSuite());
-    removeFromLibrary('RTC Clock Suite');
+  it('removes an entry by title', async () => {
+    await saveToLibrary(makeSuite());
+    await removeFromLibrary('RTC Clock Suite');
     expect(loadLibrary()).toEqual([]);
   });
 

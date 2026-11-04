@@ -113,7 +113,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     try {
       setIsExportingGoogleDoc(true);
       const docUrl = await exportToGoogleDoc(document);
-      recordDriveExport({
+      void recordDriveExport({
         docTitle: document.metadata.title || 'Untitled Document',
         docNumber: document.metadata.docNumber || '',
         driveUrl: docUrl,

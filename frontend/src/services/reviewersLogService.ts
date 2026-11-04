@@ -1,7 +1,7 @@
 import type { ReviewerLogItem } from '../types/operations';
 import type { DocumentModel } from '../types/document';
+import { createSharedCollection } from './sharedCollection';
 
-const STORAGE_REVIEWERS_KEY = 'devdoc_studio_reviewers_log_v1';
 const STORAGE_SHEET_URL_KEY = 'devdoc_studio_google_sheet_url_v1';
 
 export const DEFAULT_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1jUcXLcc0RAojAv3ZjvHgdmAPOOD2ljx-swatAujvdBA/edit?gid=0#gid=0';
@@ -61,20 +61,22 @@ export const INITIAL_REVIEWERS_LOG: ReviewerLogItem[] = [
   }
 ];
 
+// The log is shared by every user on the server (see sharedCollection.ts),
+// not kept in this browser. The server keeps entries in the order they
+// were added; screens show newest first, so the order is flipped here.
+export const reviewersLog = createSharedCollection<ReviewerLogItem>('reviewers-log', {
+  seed: () => [...INITIAL_REVIEWERS_LOG].reverse(),
+  demo: () => [...INITIAL_REVIEWERS_LOG].reverse(),
+});
+
+/** Newest first. Empty until the log has loaded (see useSharedCollection). */
 export function getStoredReviewersLog(): ReviewerLogItem[] {
-  const saved = localStorage.getItem(STORAGE_REVIEWERS_KEY);
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to parse reviewers log', e);
-    }
-  }
-  return INITIAL_REVIEWERS_LOG;
+  return [...reviewersLog.items()].reverse();
 }
 
-export function saveStoredReviewersLog(logs: ReviewerLogItem[]): void {
-  localStorage.setItem(STORAGE_REVIEWERS_KEY, JSON.stringify(logs));
+/** Saves the log as shown (newest first): only changed entries are sent. */
+export function saveStoredReviewersLog(logs: ReviewerLogItem[]): Promise<void> {
+  return reviewersLog.replaceAll([...logs].reverse());
 }
 
 // Sync with currently active DocCraft document
@@ -93,7 +95,7 @@ export function ensureCurrentDocReviewEntry(currentDoc: DocumentModel, logs: Rev
       comments: 'Initial draft submitted from DocCraft Studio. Pending formal peer sign-off.'
     };
     const updated = [newEntry, ...logs];
-    saveStoredReviewersLog(updated);
+    void saveStoredReviewersLog(updated);
     return updated;
   }
   return logs;
