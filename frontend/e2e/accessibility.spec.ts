@@ -54,7 +54,7 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Settings' }).first().click();
     await page.getByRole('button', { name: /System & Storage/i }).click();
-    await expect(page.getByRole('progressbar', { name: /storage used/i })).toBeVisible();
+    await expect(page.getByText('Download server backup')).toBeVisible();
     expect(await scan(page)).toEqual([]);
   });
 

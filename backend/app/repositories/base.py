@@ -7,7 +7,7 @@ pg-mem played for the Node API, so neither needs a database).
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.models.document import DocumentRecord, DocumentWrite
 from app.models.user import LoginCandidate, User
@@ -41,6 +41,15 @@ class DocumentRepository(Protocol):
     async def soft_delete(self, document_id: str) -> None: ...
 
     async def purge(self, document_id: str) -> None: ...
+
+    async def export_all(self) -> list[dict[str, Any]]:
+        """Every document, deleted ones included: id, document, updatedAt,
+        deletedAt (ISO strings) - for the admin backup."""
+        ...
+
+    async def purge_all(self) -> None:
+        """Deletes every document (the admin reset)."""
+        ...
 
 
 @dataclass

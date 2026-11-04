@@ -30,12 +30,13 @@ describe('ErrorBoundary', () => {
     expect(el.textContent).toBe('fine');
   });
 
-  it('shows a recovery screen with the message and a backup button instead of a blank page', () => {
+  it('shows a recovery screen with the message and a way back instead of a blank page', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const el = render(<ErrorBoundary><Boom /></ErrorBoundary>);
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
     expect(el.textContent).toContain('Something went wrong');
     expect(el.textContent).toContain('kaboom');
-    expect(el.textContent).toContain('Download data backup');
+    expect(el.textContent).toContain('Reload');
+    expect(el.textContent).not.toContain('Download data backup');
   });
 });

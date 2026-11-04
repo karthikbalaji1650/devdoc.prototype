@@ -117,6 +117,20 @@ class MemoryDocumentRepository:
     async def purge(self, document_id: str) -> None:
         self._store.documents.pop(document_id, None)
 
+    async def export_all(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": d.write.id,
+                "document": js_loads(d.write.document_json),
+                "updatedAt": d.updated_at.isoformat(),
+                "deletedAt": d.deleted_at.isoformat() if d.deleted_at else None,
+            }
+            for d in sorted(self._store.documents.values(), key=lambda d: d.updated_at)
+        ]
+
+    async def purge_all(self) -> None:
+        self._store.documents.clear()
+
 
 def memory_repositories(store: MemoryStore) -> Repositories:
     return Repositories(

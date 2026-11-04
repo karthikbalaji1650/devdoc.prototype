@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, signInAs, seedDocuments, serverDocument } from './fixtures';
 
 // Runs against a real API (see fixtures.ts): documents are stored on the
@@ -169,7 +170,7 @@ test.describe('a save the server does not accept', () => {
 });
 
 test.describe('crash recovery', () => {
-  test('a corrupted document shows the recovery screen and a working backup download', async ({ page }) => {
+  test('a corrupted document shows the recovery screen, and Reload gets back to the app', async ({ page }) => {
     await signInAs(page);
     // The server never stores a document like this; feed one in to prove the screen copes.
     await page.route('**/api/documents', (route) => route.fulfill({ json: { documents: [{
@@ -180,9 +181,10 @@ test.describe('crash recovery', () => {
     await page.getByRole('button', { name: 'Document Editor' }).first().click();
     await page.getByText('Corrupt one', { exact: true }).first().click();
     await expect(page.getByRole('alert')).toContainText('Something went wrong');
-    const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download data backup' }).click();
-    expect((await download).suggestedFilename()).toMatch(/^devdoc-studio-backup-.*\.json$/);
+    await expect(page.getByRole('alert')).toContainText('stored on the server');
+    await page.unroute('**/api/documents');
+    await page.getByRole('button', { name: 'Reload' }).click();
+    await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
   });
 });
 
@@ -191,11 +193,11 @@ test.describe('data management access (DDS-SRS-007/008/011)', () => {
     await signInAs(page, 'admin');
     await page.goto('/');
     await page.getByRole('button', { name: 'Data Management' }).click();
-    await expect(page.getByRole('progressbar', { name: /storage used/i })).toBeVisible();
+    await expect(page.getByText('Download server backup')).toBeVisible();
     await expect(page.getByText('User Session Audit Log')).toBeVisible();
     // Settings still opens on its own first tab, not on data management.
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('progressbar', { name: /storage used/i })).toHaveCount(0);
+    await expect(page.getByText('Download server backup')).toHaveCount(0);
   });
 
   for (const role of ['release-manager', 'firmware-lead'] as const) {
@@ -209,6 +211,28 @@ test.describe('data management access (DDS-SRS-007/008/011)', () => {
       await expect(page.getByText('User Session Audit Log')).toHaveCount(0);
     });
   }
+});
+
+test.describe('server backup and reset (DDS-SRS-008)', () => {
+  test('an admin downloads a backup of the server, and a typed confirmation resets it', async ({ page }) => {
+    await signInAs(page, 'admin');
+    await seedDocuments(page, [{ id: 'd1', title: 'Soon gone', docNumber: 'D-1', author: ADMIN }]);
+    await page.getByRole('button', { name: 'Data Management' }).click();
+
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download', exact: true }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^devdoc-studio-server-backup-.*\.json$/);
+    const backup = JSON.parse(readFileSync(await file.path(), 'utf8'));
+    expect(backup.documents.map((d: { id: string }) => d.id)).toEqual(['d1']);
+
+    const reset = page.getByRole('button', { name: 'Reset all data' });
+    await expect(reset).toBeDisabled();
+    await page.getByLabel(/to confirm/).fill('DELETE ALL DATA');
+    await reset.click();
+    await expect(page.getByText(/All data deleted/)).toBeVisible();
+    await expect.poll(async () => (await serverDocument(page, 'd1'))?.metadata.title ?? null).toBeNull();
+  });
 });
 
 test.describe('lazy screens', () => {

@@ -26,6 +26,7 @@ AUTH_GUARDED_PREFIXES = (
     "/api/test-management",
     "/api/audit",
     "/api/collections",
+    "/api/admin",
 )
 
 

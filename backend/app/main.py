@@ -30,8 +30,9 @@ from app.repositories.postgres import postgres_repositories
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import TestExecRepository
 from app.repositories.test_management import TestManagementStore
-from app.routers import ai, audit, auth, collections, documents, health, test_exec, test_management
+from app.routers import admin, ai, audit, auth, collections, documents, health, test_exec, test_management
 from app.schemas.openapi import install_openapi
+from app.services.admin import AdminService
 from app.services.ai import AiService
 from app.services.auth import AuthService
 from app.services.collections import CollectionService
@@ -44,11 +45,13 @@ logger = logging.getLogger("devdoc.api")
 
 def build_services(settings: Settings, repos: Repositories, http_client: httpx.AsyncClient, redis: Redis) -> Services:
     session_audit = SessionAuditStore(redis)
+    documents = CachedDocumentRepository(repos.documents, redis)
     return Services(
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
         collections=CollectionService(CollectionStore(redis)),
-        documents=DocumentService(CachedDocumentRepository(repos.documents, redis), DocumentHistoryStore(redis)),
+        documents=DocumentService(documents, DocumentHistoryStore(redis)),
+        admin=AdminService(documents, redis),
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
         test_management=TestManagementService(TestManagementStore(redis)),
@@ -94,7 +97,7 @@ def create_app(
                     await pool.close()
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
-    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections)]
+    routers = [m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections, admin)]
     for router in routers:
         app.include_router(router)
 

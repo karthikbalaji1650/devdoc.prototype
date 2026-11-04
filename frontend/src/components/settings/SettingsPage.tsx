@@ -11,7 +11,6 @@ import {
   Palette,
   Database,
   Trash2,
-  Download,
   Save,
   ChevronRight,
   Info,
@@ -27,7 +26,7 @@ import {
   type AiConfig,
   type AiProvider,
 } from '../../services/aiService';
-import { getStorageUsage } from '../../services/safeStorage';
+import { ServerDataPanel } from './ServerDataPanel';
 import { SessionAuditTable } from './SessionAuditTable';
 import { canAccessDataManagement } from '../../services/permissions';
 
@@ -156,28 +155,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
     setTimeout(() => setAiSaved(false), 2000);
   };
 
-  const handleClearLocalStorage = () => {
-    if (window.confirm('This will clear all local app data (AI config, documents, session). You will be logged out. Continue?')) {
-      localStorage.clear();
-      window.location.reload();
-    }
-  };
-
-  const handleExportData = () => {
-    const data: Record<string, unknown> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)!;
-      try { data[k] = JSON.parse(localStorage.getItem(k)!); }
-      catch { data[k] = localStorage.getItem(k); }
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `devdoc-studio-data-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -417,24 +394,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             {/* SYSTEM & STORAGE */}
             {activeTab === 'data' && canManageData && (
               <section className="space-y-6">
-                <SectionHeader icon={Database} title="System & Storage" desc="Manage locally stored app data, workspace connectivity, and session audits." />
-
-                {/* Storage Health Indicator */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Local Storage Usage</Label>
-                    <span className="text-xs font-bold text-slate-900">{Math.round(getStorageUsage().fraction * 100)}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-label="Local storage used" aria-valuenow={Math.round(getStorageUsage().fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
-                    <div
-                      className={`h-full transition-all ${getStorageUsage().fraction >= 0.9 ? 'bg-rose-500' : getStorageUsage().fraction >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${Math.min(100, getStorageUsage().fraction * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-500 italic">
-                    Estimated browser storage limit: ~5 MB. {getStorageUsage().fraction >= 0.7 ? 'Warning: Storage nearly full. Please export a backup and clear space.' : 'Storage health is optimal.'}
-                  </p>
-                </div>
+                <SectionHeader icon={Database} title="System & Storage" desc="Back up or reset the server's data, set the workspace connection, and review sign-ins." />
 
                 {/* VS Code Server URL setting */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
@@ -473,41 +433,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   </div>
                 </div>
 
-                {/* Maintenance Actions */}
-                <div className="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-xs">
-                  {/* Export */}
-                  <div className="flex items-center justify-between px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                        <Download className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">Export All Local Data</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">Download a JSON backup of all locally stored data.</div>
-                      </div>
-                    </div>
-                    <button type="button" onClick={handleExportData}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors shrink-0 shadow-2xs">
-                      Export
-                    </button>
-                  </div>
-                  {/* Clear */}
-                  <div className="flex items-center justify-between px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
-                        <Trash2 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-[var(--danger)]">Clear All Local Data</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">Wipes all stored documents, settings, and session. You will be logged out.</div>
-                      </div>
-                    </div>
-                    <button type="button" onClick={handleClearLocalStorage}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition-colors shrink-0 shadow-2xs">
-                      Clear
-                    </button>
-                  </div>
-                </div>
+                {/* Server backup and reset (admins) */}
+                <ServerDataPanel />
 
                 {/* Session Audit Log */}
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">

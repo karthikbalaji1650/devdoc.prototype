@@ -101,6 +101,21 @@ class PgDocumentRepository(_PgRepository):
     async def purge(self, document_id: str) -> None:
         await self._fetch("DELETE FROM documents WHERE id = %s", (document_id,))
 
+    async def export_all(self) -> list[dict[str, Any]]:
+        rows = await self._fetch("SELECT id, document_json, updated_at, deleted_at FROM documents ORDER BY updated_at")
+        return [
+            {
+                "id": r["id"],
+                "document": r["document_json"],
+                "updatedAt": r["updated_at"].isoformat(),
+                "deletedAt": r["deleted_at"].isoformat() if r["deleted_at"] else None,
+            }
+            for r in rows
+        ]
+
+    async def purge_all(self) -> None:
+        await self._fetch("DELETE FROM documents")
+
 
 def postgres_repositories(pool: AsyncConnectionPool) -> Repositories:
     return Repositories(

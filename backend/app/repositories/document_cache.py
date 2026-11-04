@@ -4,6 +4,7 @@ dropped on any write, so Postgres stays the only real copy."""
 
 import json
 from datetime import datetime
+from typing import Any
 
 from redis.asyncio import Redis
 
@@ -62,4 +63,11 @@ class CachedDocumentRepository:
 
     async def purge(self, document_id: str) -> None:
         await self._inner.purge(document_id)
+        await self._redis.delete(LIST_KEY)
+
+    async def export_all(self) -> list[dict[str, Any]]:
+        return await self._inner.export_all()
+
+    async def purge_all(self) -> None:
+        await self._inner.purge_all()
         await self._redis.delete(LIST_KEY)
