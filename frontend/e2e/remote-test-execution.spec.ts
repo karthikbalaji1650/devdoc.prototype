@@ -64,7 +64,7 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill(users[0].password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByText(new RegExp(`Good (Morning|Afternoon|Evening)`))).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await page.getByRole('button', { name: 'Run Test' }).click();

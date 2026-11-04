@@ -47,7 +47,7 @@ test('every screen opens in under 1.5 s', async ({ page }) => {
   await page.getByPlaceholder('engineer@sanmina.com').fill(admin.email);
   await page.getByPlaceholder('Enter your password').fill(admin.password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
 
   // First visits: each screen's code is downloaded on demand, and the
   // server loads its sample data - the slowest a screen ever opens.

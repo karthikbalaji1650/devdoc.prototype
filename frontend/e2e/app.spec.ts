@@ -25,7 +25,7 @@ test.describe('sign in', () => {
     await page.getByPlaceholder('engineer@sanmina.com').fill(stack.users[0].email);
     await page.getByPlaceholder('Enter your password').fill(stack.users[0].password);
     await page.getByRole('button', { name: /sign in to platform/i }).click();
-    await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
   });
 });
 
@@ -184,7 +184,7 @@ test.describe('crash recovery', () => {
     await expect(page.getByRole('alert')).toContainText('stored on the server');
     await page.unroute('**/api/documents');
     await page.getByRole('button', { name: 'Reload' }).click();
-    await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
   });
 });
 

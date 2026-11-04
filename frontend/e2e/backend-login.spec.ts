@@ -74,14 +74,14 @@ test('real backend: the right password signs in, and logout revokes the session 
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill(users[0].password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByText(new RegExp(`Good (Morning|Afternoon|Evening)`))).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
 
   // The cookie was set for API_PORT's origin, invisible to document.cookie
   // (httpOnly) — confirm the session is real by calling /me with it.
   const meWhileIn = await page.request.get(`http://localhost:${API_PORT}/api/auth/me`);
   expect(meWhileIn.ok()).toBe(true);
 
-  await page.getByRole('button', { name: /logout/i }).click();
+  await page.getByRole('button', { name: /log out/i }).click();
   await expect(page.getByRole('button', { name: /sign in to platform/i })).toBeVisible();
   const meAfterLogout = await page.request.get(`http://localhost:${API_PORT}/api/auth/me`);
   expect(meAfterLogout.status()).toBe(401);

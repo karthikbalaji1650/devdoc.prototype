@@ -21,7 +21,7 @@ test('login screen fits without horizontal scrolling', async ({ page }) => {
 test('dashboard: sidebar defaults to collapsed, nav is still usable, and content fits', async ({ page }) => {
   await signInAs(page);
   await page.goto('/');
-  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
 
   // Collapsed means the full-text label isn't shown...
   await expect(page.getByText('Document Editor', { exact: true })).toHaveCount(0);

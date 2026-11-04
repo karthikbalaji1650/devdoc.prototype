@@ -9,7 +9,7 @@ test('any password signs in to the demo', async ({ page }) => {
   await page.goto('/');
   await page.getByPlaceholder('Enter your password').fill('anything');
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
 });
 
 test('shows the sample document read-only, and says edits cannot be saved', async ({ page }) => {
