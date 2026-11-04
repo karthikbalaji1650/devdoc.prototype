@@ -78,7 +78,9 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     await signInAs(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Release Master' }).first().click();
-    await page.waitForTimeout(500);
+    await expect(page.getByRole('tab', { name: /v13\.04\.00/ })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+    await page.getByRole('tab', { name: /^Builds/ }).click();
     expect(await scan(page)).toEqual([]);
   });
 

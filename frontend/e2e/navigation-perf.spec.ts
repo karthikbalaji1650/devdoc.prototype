@@ -19,7 +19,7 @@ test.afterAll(() => stack?.stop());
 const SCREENS: { name: string; text: string }[] = [
   { name: 'Document Editor', text: 'New Document' },
   { name: 'Test Management', text: 'Add Case' },
-  { name: 'Release Master', text: 'Software Release Tracking' },
+  { name: 'Release Master', text: 'Releases, release candidate builds' },
   { name: 'Incident Tracker', text: 'Incident Reporting & Tracking System' },
   { name: 'Reviewers Log', text: 'Document Reviewers Log' },
   { name: 'Coder', text: 'VS Code + Cline Agent' },

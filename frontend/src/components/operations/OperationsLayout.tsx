@@ -6,7 +6,7 @@ import type { IncidentItem } from '../../types/operations';
 
 import { AppSidebar } from '../AppSidebar';
 import { IncidentTracker } from './IncidentTracker';
-import { ReleaseTracker } from './ReleaseTracker';
+import { ReleaseMaster } from './ReleaseMaster';
 import { ReviewersLog } from './ReviewersLog';
 import { TestCaseManager } from './TestCaseManager';
 
@@ -46,7 +46,7 @@ export const OperationsLayout: React.FC<OperationsLayoutProps> = ({
           <IncidentTracker onExportToDocCraftRCA={onExportIncidentToRCA} />
         )}
         {activeTab === 'releases' && (
-          <ReleaseTracker onOpenDocument={(docId) => onLaunchDocCraft(docId)} />
+          <ReleaseMaster />
         )}
         {activeTab === 'reviewers' && (
           <ReviewersLog currentDocument={currentDocument} onOpenDocCraft={() => onLaunchDocCraft()} />
