@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import Response
 
-from app.core.http import JsonResponse, no_content
+from app.core.http import FastJsonResponse, JsonResponse, no_content
 from app.dependencies import CurrentUser, ServicesDep, json_body, require_user
 from app.routers.common import get_route
 from app.schemas.common import ErrorResponse
@@ -46,8 +46,9 @@ def _item(key: str, item: dict[str, Any]) -> Response:
 
 @get_route(router, "", response_model=SnapshotResponse)
 async def snapshot(services: ServicesDep) -> Response:
-    """Every suite (with its sections and testCases), run and milestone."""
-    return JsonResponse(await services.test_management.snapshot())
+    """Every suite (with its sections and testCases), run and milestone.
+    Can be several MB (DDS-SRS-073: 5,000+ case suites), hence the fast encoder."""
+    return FastJsonResponse(await services.test_management.snapshot())
 
 
 @router.post(

@@ -969,6 +969,9 @@ const AddCaseModal: React.FC<{
 };
 
 
+/** Cases drawn per section before "Show more" (DDS-SRS-073). */
+const CASE_PAGE_SIZE = 100;
+
 // ── Test Cases View ────────────────────────────────────────────────────────────
 const TestCasesView: React.FC<{
   suites: TestSuiteItem[]; selectedSuiteId: string | null;
@@ -998,6 +1001,22 @@ const TestCasesView: React.FC<{
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
   const [addCaseSectionId, setAddCaseSectionId] = useState<string | undefined>(undefined);
   const [historyCase, setHistoryCase] = useState<TestCaseItem | null>(null);
+  // DDS-SRS-073: suites can hold 5,000+ cases. Drawing every row at once
+  // took seconds, so each section shows a page at a time; search still
+  // covers every case.
+  const [shownCounts, setShownCounts] = useState<Record<string, number>>({});
+  const shown = (key: string) => shownCounts[key] ?? CASE_PAGE_SIZE;
+  const ShowMore: React.FC<{ listKey: string; total: number; label: string }> = ({ listKey, total, label }) =>
+    total > shown(listKey) ? (
+      <div className="px-4 py-2 text-xs border-t border-slate-200 bg-slate-50 flex items-center gap-3">
+        <span className="text-slate-500">Showing {shown(listKey)} of {total} cases in {label}.</span>
+        <button className="text-[var(--blue)] hover:underline font-medium"
+          onClick={() => setShownCounts(prev => ({ ...prev, [listKey]: shown(listKey) + CASE_PAGE_SIZE }))}>
+          Show {Math.min(CASE_PAGE_SIZE, total - shown(listKey))} more
+        </button>
+        <button className="text-[var(--blue)] hover:underline" onClick={() => setShownCounts(prev => ({ ...prev, [listKey]: total }))}>Show all</button>
+      </div>
+    ) : null;
 
   // No fallback to the first suite: with a project picked, that could be a
   // suite from another project.
@@ -1358,7 +1377,7 @@ const TestCasesView: React.FC<{
                         No test cases. <button className="text-[var(--blue)] hover:underline" onClick={() => openAddCase(sec.id)}>Add Case</button>
                       </div>
                     )}
-                    {secCases.map(tc => {
+                    {secCases.slice(0, shown(sec.id)).map(tc => {
                       const isExpanded = expandedCaseId === tc.id;
                       return (
                         <div key={tc.id} className="border-b border-slate-200 last:border-0">
@@ -1446,6 +1465,7 @@ const TestCasesView: React.FC<{
                         </div>
                       );
                     })}
+                    <ShowMore listKey={sec.id} total={secCases.length} label={sec.title} />
                     <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>openAddCase(sec.id)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
                   </div>
                 )}
@@ -1453,7 +1473,7 @@ const TestCasesView: React.FC<{
             );
           }) : (
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-              {cases.map(tc=>(
+              {cases.slice(0, shown('__all')).map(tc=>(
                 <div key={tc.id} className="border-b border-slate-200 last:border-0">
                   <div className={`grid grid-cols-12 gap-2 px-3 py-2.5 cursor-pointer items-center group ${tc.isDeleted ? 'bg-slate-100/70 opacity-70' : 'hover:bg-slate-50'}`} onClick={()=>setExpandedCaseId(expandedCaseId===tc.id?null:tc.id)}>
                     <div className="col-span-1"><button onClick={e=>{e.stopPropagation();handleToggleFlag(tc.id);}} aria-label="Flag test case" className={`p-0.5 rounded ${tc.isFlagged?'text-amber-500':'text-slate-400 hover:text-amber-500'}`}><Flag className="w-3 h-3"/></button></div>
@@ -1474,6 +1494,7 @@ const TestCasesView: React.FC<{
                   </div>
                 </div>
               ))}
+              <ShowMore listKey="__all" total={cases.length} label="this suite" />
               <div className="px-4 py-2 text-xs flex items-center gap-4"><button className="text-[var(--blue)] hover:underline font-medium" onClick={()=>setShowAddCase(true)}>+ Add Case</button><LoadPreviousTestCaseDropdown onPick={(tc) => handleImportFromLibrary([tc])} /></div>
             </div>
           )}
