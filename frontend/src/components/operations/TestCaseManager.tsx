@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TestSuiteItem, TestRunItem, TestCaseItem, TestCaseStep, TestRunCaseResult, TestCaseStatus, MilestoneItem, TestCaseAttachment, ProjectItem, TestSection } from '../../types/operations';
 import { isSectionEmpty, nextSectionOrder, sectionOfCase, sectionTree } from '../../services/testSections';
 import { CaseHistoryModal } from './CaseHistoryModal';
+import { PRIORITIES, normalizePriority, type TestCasePriority } from '../../services/testCasePriority';
 import { CHANGE_LABELS, comparableRuns, compareRuns, previousRun, type ChangeKind } from '../../services/runComparison';
 import { nextTestCaseId } from '../../services/testCaseIds';
 import { exportTestCases, formatFromFileName, ImportError, parseTestCases, type ExchangeFormat } from '../../services/testCaseExchange';
@@ -77,11 +78,11 @@ const STATUS_ICON: Record<TestCaseStatus, React.ReactNode> = {
   Retest:   <RefreshCw className="w-3.5 h-3.5" />,
 };
 const ALL_STATUSES: TestCaseStatus[] = ['Untested','Passed','Failed','Blocked','Skipped','Retest'];
-const PRIORITY_COLORS: Record<string, string> = {
-  P1: 'bg-rose-50 text-rose-700 border-rose-200',
-  P2: 'bg-orange-50 text-orange-700 border-orange-200',
-  P3: 'bg-amber-50 text-amber-700 border-amber-200',
-  P4: 'bg-slate-100 text-slate-600 border-slate-200',
+const PRIORITY_COLORS: Record<TestCasePriority, string> = {
+  Critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  High: 'bg-orange-50 text-orange-700 border-orange-200',
+  Medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  Low: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
 const StatusBadge: React.FC<{ status: TestCaseStatus; small?: boolean }> = ({ status, small }) => (
@@ -416,9 +417,9 @@ const INITIAL_SUITES: TestSuiteItem[] = [
           { step: 3, action: 'Compare RTC clock against external PTP reference clock', expected: 'Total drift is <= 50ms over 1 hour' },
         ],
         expectedResult: 'RTC drift remains within the strict 50ms threshold under thermal load.',
-        priority: 'P1', type: 'Automated', labels: ['Firmware','RTC'], references: ['WH3-1205'],
+        priority: 'Critical', type: 'Automated', labels: ['Firmware','RTC'], references: ['WH3-1205'],
         estimateMin: 14, automationCandidate: true,
-        robotCode: `*** Settings ***\nDocumentation     RTC Clock Drift Verification\nLibrary           RequestsLibrary\n\n*** Test Cases ***\nTC_RTC_001_Clock_Drift_Verification\n    [Tags]    P1    Firmware    RTC\n    Given BMC System Is Operational    192.168.1.100\n    When Apply Stress Load For 60 Minutes\n    Then Verify RTC Drift Is Less Than    50    ms`,
+        robotCode: `*** Settings ***\nDocumentation     RTC Clock Drift Verification\nLibrary           RequestsLibrary\n\n*** Test Cases ***\nTC_RTC_001_Clock_Drift_Verification\n    [Tags]    Critical    Firmware    RTC\n    Given BMC System Is Operational    192.168.1.100\n    When Apply Stress Load For 60 Minutes\n    Then Verify RTC Drift Is Less Than    50    ms`,
         createdAt: '2026-08-15T08:10:00Z', status: 'Untested',
       },
       {
@@ -431,7 +432,7 @@ const INITIAL_SUITES: TestSuiteItem[] = [
           { step: 3, action: 'Verify failover to secondary NTP server', expected: 'Fallback NTP server synced within 120s' },
         ],
         expectedResult: 'System correctly fails over to secondary NTP within acceptable timeframe.',
-        priority: 'P2', type: 'Automated', labels: ['Firmware','NTP'], references: ['WH3-1205'],
+        priority: 'High', type: 'Automated', labels: ['Firmware','NTP'], references: ['WH3-1205'],
         estimateMin: 30, automationCandidate: true, createdAt: '2026-08-15T08:20:00Z', status: 'Untested',
       },
       {
@@ -443,7 +444,7 @@ const INITIAL_SUITES: TestSuiteItem[] = [
           { step: 2, action: 'Write/read test pattern to RTC I2C register 0x00', expected: 'Data integrity maintained' },
         ],
         expectedResult: 'No I2C bus errors or register corruption after stress test.',
-        priority: 'P3', type: 'Manual', labels: ['Firmware','I2C'], references: ['WH3-1205'],
+        priority: 'Medium', type: 'Manual', labels: ['Firmware','I2C'], references: ['WH3-1205'],
         estimateMin: 20, automationCandidate: false, createdAt: '2026-08-15T08:30:00Z', status: 'Untested',
       },
     ],
@@ -469,7 +470,7 @@ const INITIAL_SUITES: TestSuiteItem[] = [
           { step: 3, action: 'Reboot BMC and verify active flash bank', expected: 'System boots from primary bank with preserved IP config' },
         ],
         expectedResult: 'Firmware flashes and retains IP configuration without reset.',
-        priority: 'P1', type: 'Automated', labels: ['API','Flash'], references: ['WH3-1206'],
+        priority: 'Critical', type: 'Automated', labels: ['API','Flash'], references: ['WH3-1206'],
         estimateMin: 45, automationCandidate: true, createdAt: '2026-08-15T09:40:00Z', status: 'Untested',
       },
       {
@@ -482,7 +483,7 @@ const INITIAL_SUITES: TestSuiteItem[] = [
           { step: 3, action: 'Use expired token for API call', expected: 'HTTP 401 Unauthorized returned' },
         ],
         expectedResult: 'Expired tokens are correctly rejected with 401 response.',
-        priority: 'P2', type: 'Automated', labels: ['API','Security'], references: ['WH3-1206'],
+        priority: 'High', type: 'Automated', labels: ['API','Security'], references: ['WH3-1206'],
         estimateMin: 20, automationCandidate: true, createdAt: '2026-08-15T09:50:00Z', status: 'Untested',
       },
     ],
@@ -802,7 +803,7 @@ const AddCaseModal: React.FC<{
   // edit doesn't record a section change in its history.
   const [sectionId, setSectionId] = useState<string>(() =>
     (initial?.id ? (initial.sectionId && sections.some(s => s.id === initial.sectionId) ? initial.sectionId : '') : defaultSectionId) ?? '');
-  const [priority, setPriority] = useState<'P1'|'P2'|'P3'|'P4'>(initial?.priority || 'P3');
+  const [priority, setPriority] = useState<TestCasePriority>(normalizePriority(initial?.priority));
   const [preconditions, setPreconditions] = useState(initial?.preconditions || '');
   const [expectedResult, setExpectedResult] = useState(initial?.expectedResult || '');
   const [postconditions, setPostconditions] = useState(initial?.postconditions || '');
@@ -883,9 +884,9 @@ const AddCaseModal: React.FC<{
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as 'P1'|'P2'|'P3'|'P4')}
+              <select value={priority} onChange={e => setPriority(e.target.value as TestCasePriority)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
-                <option>P1</option><option>P2</option><option>P3</option><option>P4</option>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div>
@@ -2368,19 +2369,19 @@ Library           RequestsLibrary
 
 *** Test Cases ***
 TC_HPM_001_WebUI_Firmware_Header_Validation
-    [Tags]    P1    Firmware    WebUI    HPM
+    [Tags]    Critical    Firmware    WebUI    HPM
     Given AST2600 BMC WebUI Endpoint Is Responsive    https://192.168.1.100
     When Upload HPM Image Header    v2.04.11-rc1.bin
     Then Verify Header Magic Bytes    0x48504D31
 
 TC_HPM_002_Firmware_Flash_Partition_Lock_Check
-    [Tags]    P1    Firmware    Security
+    [Tags]    Critical    Firmware    Security
     Given AST2600 BMC Flash Lock Active
     When Attempt Unauthorized SPI Write
     Then Expect HTTP Error Code    403
 
 TC_RTC_004_Drift_Under_Thermal_Throttling
-    [Tags]    P2    Firmware    RTC
+    [Tags]    High    Firmware    RTC
     Given Thermal Stress Load Active    85C
     When Measure RTC Epoch Delta    3600
     Then Verify Delta Under Threshold    50ms`;

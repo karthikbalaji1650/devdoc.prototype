@@ -1,4 +1,5 @@
 import type { TestCaseItem, TestSuiteItem } from '../types/operations';
+import { normalizePriority } from './testCasePriority';
 import type { DocumentModel } from '../types/document';
 import { getStoredAiConfig } from './aiService';
 import { isBackendConfigured } from './backendAuthService';
@@ -7,7 +8,7 @@ import { fetchWithTimeout } from './fetchWithTimeout';
 export interface AiTestGenerationOptions {
   moduleName?: string;
   generateRobotCode?: boolean;
-  priorityFilter?: 'All' | 'P1' | 'P2';
+  priorityFilter?: 'All' | 'Critical' | 'High';
   testType?: 'Automated' | 'Manual' | 'All';
 }
 
@@ -119,7 +120,7 @@ Library           SSHLibrary
 *** Test Cases ***
 ${tc1CustomId.replace(/-/g, '_')}_Functional_Verification
     [Documentation]    Validates functional fix described in ${docNumber}.
-    [Tags]             P1    Firmware    Regression
+    [Tags]             Critical    Firmware    Regression
     Given BMC System Is Operational    192.168.1.100
     When Execute Target Fix Command Sequence
     Then Verify Zero Memory Leak And Valid Response Code
@@ -147,7 +148,7 @@ Verify Zero Memory Leak And Valid Response Code
       { step: 3, action: 'Inspect syslog and memory status via dmesg', expected: '0 memory leaks, 0 daemon crashes' }
     ],
     expectedResult: 'System executes operational flow deterministically with 100% pass rate.',
-    priority: 'P1',
+    priority: 'Critical',
     type: 'Automated',
     robotCode: tc1Robot,
     createdAt: new Date().toISOString()
@@ -164,7 +165,7 @@ Library           RequestsLibrary
 *** Test Cases ***
 ${tc2CustomId.replace(/-/g, '_')}_Concurrency_Stress
     [Documentation]    Validates concurrent stress load on ${docNumber}.
-    [Tags]             P2    Stress    REST_API
+    [Tags]             High    Stress    REST_API
     FOR    \${index}    IN RANGE    1    50
         \${resp}=    GET On Session    bmc    /api/v1/system/status
         Should Be Equal As Strings    \${resp.status_code}    200
@@ -182,7 +183,7 @@ ${tc2CustomId.replace(/-/g, '_')}_Concurrency_Stress
       { step: 3, action: 'Verify session teardown cleanly releases socket descriptors', expected: 'No leaked sockets or lingering zombie threads' }
     ],
     expectedResult: 'System handles concurrent burst loads gracefully with zero HTTP 500 errors.',
-    priority: 'P2',
+    priority: 'High',
     type: 'Automated',
     robotCode: tc2Robot,
     createdAt: new Date().toISOString()
@@ -199,7 +200,7 @@ Library           RequestsLibrary
 *** Test Cases ***
 ${tc3CustomId.replace(/-/g, '_')}_Malformed_Payload_Rejection
     [Documentation]    Ensures backend rejects malformed JSON with HTTP 400 Bad Request.
-    [Tags]             P2    Security    Fuzzing
+    [Tags]             High    Security    Fuzzing
     \${headers}=    Create Dictionary    Content-Type=application/json
     \${invalid_body}=    Create Dictionary    preserve_config=INVALID_TYPE
     \${resp}=    POST On Session    bmc    /api/v1/system/firmware/upload    json=\${invalid_body}    headers=\${headers}    expected_status=400
@@ -216,7 +217,7 @@ ${tc3CustomId.replace(/-/g, '_')}_Malformed_Payload_Rejection
       { step: 2, action: 'Send 2MB oversized payload to firmware endpoint', expected: 'HTTP 413 Payload Too Large returned' }
     ],
     expectedResult: 'API daemon rejects invalid inputs with clear JSON error response.',
-    priority: 'P2',
+    priority: 'High',
     type: 'Automated',
     robotCode: tc3Robot,
     createdAt: new Date().toISOString()
@@ -268,7 +269,7 @@ async function generateWithBackendProxy(
     preconditions: tc.preconditions || 'Target hardware active',
     steps: tc.steps || [],
     expectedResult: tc.expectedResult,
-    priority: tc.priority || 'P2',
+    priority: normalizePriority(tc.priority, 'High'),
     type: tc.type || 'Automated',
     robotCode: tc.robotCode,
     createdAt: new Date().toISOString()
@@ -292,7 +293,7 @@ async function generateWithGemini(
   const prompt = `You are a Lead QA Automation Architect specializing in Robot Framework and Embedded Firmware / REST API Testing.
 Parse the following Technical Analysis document and generate:
 1. A Test Suite Title & Description
-2. 3 to 4 detailed Test Cases with TestRail fields (customId, title, preconditions, steps array [step, action, expected], expectedResult, priority P1-P4, type Automated/Manual).
+2. 3 to 4 detailed Test Cases with TestRail fields (customId, title, preconditions, steps array [step, action, expected], expectedResult, priority Critical/High/Medium/Low, type Automated/Manual).
 3. Runnable Robot Framework script (.robot) for each automated test case.
 
 Document Specs:
@@ -310,7 +311,7 @@ Respond ONLY in valid JSON matching this schema:
       "preconditions": "string",
       "steps": [{"step": 1, "action": "string", "expected": "string"}],
       "expectedResult": "string",
-      "priority": "P1",
+      "priority": "Critical",
       "type": "Automated",
       "robotCode": "*** Settings ***\\n..."
     }
@@ -355,7 +356,7 @@ Respond ONLY in valid JSON matching this schema:
       preconditions: tc.preconditions || 'Target hardware active',
       steps: tc.steps || [],
       expectedResult: tc.expectedResult,
-      priority: tc.priority || 'P2',
+      priority: normalizePriority(tc.priority, 'High'),
       type: tc.type || 'Automated',
       robotCode: tc.robotCode,
       createdAt: new Date().toISOString()
@@ -380,7 +381,7 @@ async function generateWithOpenAI(
   const model = config.model || 'gpt-4o-mini';
   const url = 'https://api.openai.com/v1/chat/completions';
 
-  const prompt = `You are a Lead QA Automation Architect. Parse this Technical Analysis document and return a JSON object with suite title, description, module, and array of test cases (customId, title, preconditions, steps array, expectedResult, priority P1-P4, type, robotCode string).
+  const prompt = `You are a Lead QA Automation Architect. Parse this Technical Analysis document and return a JSON object with suite title, description, module, and array of test cases (customId, title, preconditions, steps array, expectedResult, priority Critical/High/Medium/Low, type, robotCode string).
 
 Specs:
 ${context}`;
@@ -426,7 +427,7 @@ ${context}`;
       preconditions: tc.preconditions,
       steps: tc.steps || [],
       expectedResult: tc.expectedResult,
-      priority: tc.priority || 'P2',
+      priority: normalizePriority(tc.priority, 'High'),
       type: tc.type || 'Automated',
       robotCode: tc.robotCode,
       createdAt: new Date().toISOString()

@@ -40,7 +40,7 @@ _REPHRASE_SYSTEM_PROMPT = (
 TEST_CASE_SCHEMA_PROMPT = """You are a Lead QA Automation Architect specializing in Robot Framework and Embedded Firmware / REST API Testing.
 Parse the following Technical Analysis document and generate:
 1. A Test Suite Title & Description
-2. 3 to 4 detailed Test Cases with TestRail fields (customId, title, preconditions, steps array [step, action, expected], expectedResult, priority P1-P4, type Automated/Manual).
+2. 3 to 4 detailed Test Cases with TestRail fields (customId, title, preconditions, steps array [step, action, expected], expectedResult, priority Critical/High/Medium/Low, type Automated/Manual).
 3. Runnable Robot Framework script (.robot) for each automated test case."""  # noqa: E501
 
 _GEMINI_SUITE_SCHEMA = """Respond ONLY in valid JSON matching this schema:
@@ -55,7 +55,7 @@ _GEMINI_SUITE_SCHEMA = """Respond ONLY in valid JSON matching this schema:
       "preconditions": "string",
       "steps": [{"step": 1, "action": "string", "expected": "string"}],
       "expectedResult": "string",
-      "priority": "P1",
+      "priority": "Critical",
       "type": "Automated",
       "robotCode": "*** Settings ***\\n..."
     }
@@ -217,7 +217,8 @@ class AiService:
         else:
             prompt = (
                 f"{TEST_CASE_SCHEMA_PROMPT} Return a JSON object with suiteTitle, suiteDescription, module, and "
-                "testCases (customId, title, preconditions, steps array, expectedResult, priority P1-P4, type, "
+                "testCases (customId, title, preconditions, steps array, expectedResult, "
+                "priority Critical/High/Medium/Low, type, "
                 f"robotCode string).\n\nSpecs:\n{context}"
             )
             raw = await self._openai(

@@ -4,6 +4,7 @@
 // evidence screenshot are left out: they are binary, would bloat CSV
 // cells, and belong to the instance they were captured on.
 import type { TestCaseItem, TestCaseStep } from '../types/operations';
+import { normalizePriority } from './testCasePriority';
 
 export type ExchangeFormat = 'csv' | 'json' | 'xml';
 
@@ -28,7 +29,6 @@ const CSV_COLUMNS = [
   'ID', 'Title', 'Type', 'Priority', 'Preconditions', 'Steps', 'Expected Result',
   'Post-conditions', 'Labels', 'References', 'Estimate (min)', 'Robot Code',
 ] as const;
-const PRIORITIES: TestCaseItem['priority'][] = ['P1', 'P2', 'P3', 'P4'];
 
 export class ImportError extends Error {}
 
@@ -64,8 +64,7 @@ function normalise(raw: Partial<Record<keyof PortableTestCase, unknown>>, where:
   const title = asString(raw.title);
   if (!title) throw new ImportError(`${where}: a title is required.`);
   const type = asString(raw.type).toLowerCase() === 'automated' ? 'Automated' : 'Manual';
-  const p = asString(raw.priority).toUpperCase();
-  const priority = (PRIORITIES as string[]).includes(p) ? (p as TestCaseItem['priority']) : 'P3';
+  const priority = normalizePriority(asString(raw.priority)); // also accepts the old P1-P4
   const steps = Array.isArray(raw.steps)
     ? (raw.steps as Partial<TestCaseStep>[]).map((s, i) => ({ step: i + 1, action: asString(s.action), expected: asString(s.expected) }))
     : parseStepsCell(asString(raw.steps));

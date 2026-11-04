@@ -12,7 +12,7 @@ function bigSuite() {
     id: `tc-${i}`, suiteId: 'big', customId: `TC-${String(i + 1).padStart(5, '0')}`,
     title: `BMC firmware check number ${i + 1} under sustained load`,
     preconditions: 'AST2600 BMC powered on, NTP disabled, PTP reference active',
-    type: i % 3 ? 'Manual' : 'Automated', priority: 'P2', sectionId: i % 2 ? 'sec-a' : 'sec-b',
+    type: i % 3 ? 'Manual' : 'Automated', priority: 'High', sectionId: i % 2 ? 'sec-a' : 'sec-b',
     createdAt: '2026-11-04T00:00:00Z', expectedResult: 'Drift stays below 50 ms',
     labels: ['Firmware', 'RTC'], references: ['WH3-1205'],
     steps: [1, 2, 3, 4].map((s) => ({ step: s, action: `Step ${s}: read the RTC epoch via IPMI and compare`, expected: 'Valid epoch returned' })),

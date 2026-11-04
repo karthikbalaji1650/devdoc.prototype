@@ -89,7 +89,8 @@ export interface TestCaseItem {
   expectedResult: string;
   postconditions?: string;
   attachments?: TestCaseAttachment[];
-  priority: 'P1' | 'P2' | 'P3' | 'P4';
+  /** Critical / High / Medium / Low (see services/testCasePriority.ts). */
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
   type: 'Automated' | 'Manual';
   labels?: string[];
   references?: string[]; // e.g. JIRA ticket IDs

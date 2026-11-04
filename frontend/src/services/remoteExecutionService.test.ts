@@ -17,7 +17,7 @@ const suite: TestSuiteItem = {
   id: 's1', title: 'RTC Suite', description: '', module: 'Firmware', createdAt: '2026-01-01',
   testCases: [{
     id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Drift check', preconditions: '', steps: [],
-    expectedResult: 'OK', priority: 'P2', type: 'Automated', createdAt: '2026-01-01',
+    expectedResult: 'OK', priority: 'High', type: 'Automated', createdAt: '2026-01-01',
   }],
 };
 

@@ -1,4 +1,5 @@
 import type { TestRunItem, TestSuiteItem, TestCaseItem, TestCaseStatus } from '../types/operations';
+import { normalizePriority, priorityInText, type TestCasePriority } from './testCasePriority';
 import type { DocumentModel, TestCaseItem as DocTestCaseItem } from '../types/document';
 import { saveAs } from 'file-saver';
 import { pushFileToVsCodeWorkspace } from './workspaceFileService';
@@ -158,7 +159,7 @@ export function parseRobotScriptText(robotText: string, suiteId: string): TestCa
     const matchId = testTitle.match(/^(TC[_\-A-Z0-9]+)[\s_-]/i);
     const customId = matchId ? matchId[1].replace(/_/g, '-') : `C${Date.now().toString().slice(-3)}${index}`;
 
-    let priority: 'P1' | 'P2' | 'P3' | 'P4' = 'P2';
+    let priority: TestCasePriority = 'High';
     let preconditions = 'Configured in VS Code / Robot Framework environment';
     let expectedResult = 'Passes without errors';
     const stepsList: { step: number; action: string; expected: string }[] = [];
@@ -166,9 +167,7 @@ export function parseRobotScriptText(robotText: string, suiteId: string): TestCa
     lines.slice(1).forEach((line) => {
       const l = line.trim();
       if (l.startsWith('[Tags]')) {
-        if (l.includes('P1')) priority = 'P1';
-        else if (l.includes('P3')) priority = 'P3';
-        else if (l.includes('P4')) priority = 'P4';
+        priority = priorityInText(l.replace('[Tags]', '')) ?? priority; // new names or old P1-P4
       } else if (l.startsWith('[Documentation]')) {
         expectedResult = l.replace('[Documentation]', '').trim();
       } else if (l && !l.startsWith('#')) {
@@ -222,8 +221,8 @@ export function parseMarkdownTestSuiteText(mdText: string, suiteId: string): Tes
     const customId = headingMatch[1] || `TC-MD-${idx + 1}`;
     const title = headingMatch[2] || `Test Case ${idx + 1}`;
 
-    const priorityMatch = trimmed.match(/\*\*Priority:\*\*\s*(P[1-4])/i);
-    const priority = (priorityMatch ? priorityMatch[1].toUpperCase() : 'P2') as 'P1' | 'P2' | 'P3' | 'P4';
+    const priorityMatch = trimmed.match(/\*\*Priority:\*\*\s*(\w+)/i);
+    const priority = normalizePriority(priorityMatch?.[1], 'High');
 
     const preMatch = trimmed.match(/\*\*Preconditions:\*\*\s*(.*)/i);
     const preconditions = preMatch ? preMatch[1].trim() : 'N/A';
@@ -349,7 +348,7 @@ export function backAnnotateTestSuite(
           preconditions: 'Executed in Robot Framework',
           steps: [{ step: 1, action: `Execute Robot Test ${r.title}`, expected: 'Passes cleanly' }],
           expectedResult: r.failureMessage ? `FAIL: ${r.failureMessage}` : 'PASS',
-          priority: 'P2',
+          priority: 'High',
           type: 'Automated',
           status: statusMap[r.status],
           labels: ['Robot-Executed', 'New-From-VSCode'],

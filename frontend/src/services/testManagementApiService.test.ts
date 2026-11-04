@@ -15,7 +15,7 @@ beforeEach(() => {
 afterEach(() => { fetchMock.mockReset(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 function tc(id: string, title = id): TestCaseItem {
-  return { id, suiteId: 's1', customId: id, title, preconditions: '', steps: [], expectedResult: '', priority: 'P2', type: 'Manual', createdAt: 'x' };
+  return { id, suiteId: 's1', customId: id, title, preconditions: '', steps: [], expectedResult: '', priority: 'High', type: 'Manual', createdAt: 'x' };
 }
 function suite(id: string, cases: TestCaseItem[] = [], title = id): TestSuiteItem {
   return { id, title, description: '', module: 'M', createdAt: 'x', sections: [], testCases: cases };
@@ -156,10 +156,10 @@ describe('case revisions', () => {
     const current = { ...tc('c1', 'Now'), postconditions: 'added later', attachments: [{ id: 'a', name: 'n', mimeType: 't', size: 1, dataUrl: 'data:', addedAt: 'x' }], evidenceImage: 'data:img' };
     const restored = restoreCaseRevision(current, {
       revision: 1, savedAt: 'x', savedBy: 'A', changes: [],
-      case: { title: 'Then', customId: 'c1', priority: 'P1', steps: [], attachments: [], evidenceImageHash: 'abc' },
+      case: { title: 'Then', customId: 'c1', priority: 'Critical', steps: [], attachments: [], evidenceImageHash: 'abc' },
     });
     expect(restored.title).toBe('Then');
-    expect(restored.priority).toBe('P1');
+    expect(restored.priority).toBe('Critical');
     expect(restored).not.toHaveProperty('postconditions');
     expect(restored.attachments).toBe(current.attachments);
     expect(restored.evidenceImage).toBe('data:img');

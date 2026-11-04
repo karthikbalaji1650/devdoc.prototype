@@ -24,7 +24,7 @@ function makeSuite(overrides: Partial<TestSuiteItem> = {}): TestSuiteItem {
     sections: [{ id: 'sec-1', suiteId: 's1', title: 'Manual Tests', order: 0 }],
     testCases: [{
       id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Drift check', preconditions: '', steps: [],
-      expectedResult: 'OK', priority: 'P2', type: 'Manual', createdAt: '2026-01-01',
+      expectedResult: 'OK', priority: 'High', type: 'Manual', createdAt: '2026-01-01',
     }],
     ...overrides,
   };

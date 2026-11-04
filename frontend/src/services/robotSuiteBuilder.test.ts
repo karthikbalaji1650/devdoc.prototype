@@ -5,7 +5,7 @@ import type { TestSuiteItem, TestCaseItem } from '../types/operations';
 function makeCase(overrides: Partial<TestCaseItem> = {}): TestCaseItem {
   return {
     id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Drift check', preconditions: '', steps: [],
-    expectedResult: 'OK', priority: 'P2', type: 'Automated', createdAt: '2026-01-01',
+    expectedResult: 'OK', priority: 'High', type: 'Automated', createdAt: '2026-01-01',
     ...overrides,
   };
 }
@@ -33,10 +33,10 @@ describe('buildRobotSuiteText', () => {
   });
 
   it('falls back to a generated stub when a case has no robotCode', () => {
-    const suite = makeSuite([makeCase({ customId: 'TC-042', title: 'Boots cleanly', priority: 'P1', labels: ['Firmware'] })]);
+    const suite = makeSuite([makeCase({ customId: 'TC-042', title: 'Boots cleanly', priority: 'Critical', labels: ['Firmware'] })]);
     const text = buildRobotSuiteText(suite);
     expect(text).toContain('TC-042_Boots_cleanly');
-    expect(text).toContain('[Tags]    P1    Firmware');
+    expect(text).toContain('[Tags]    Critical    Firmware');
   });
 
   it('always leads with the suite title in the Settings block, even with no cases', () => {

@@ -4,7 +4,7 @@ import { exportTestCases, formatFromFileName, ImportError, parseCsv, parseTestCa
 
 const tc = (over: Partial<TestCaseItem> = {}): TestCaseItem => ({
   id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Flash, then reboot "cleanly"',
-  preconditions: 'BMC powered\nNTP synced', type: 'Automated', priority: 'P1',
+  preconditions: 'BMC powered\nNTP synced', type: 'Automated', priority: 'Critical',
   steps: [
     { step: 1, action: 'Upload image, v13.03', expected: 'HTTP 200' },
     { step: 2, action: 'Reboot', expected: '' },
@@ -19,7 +19,7 @@ const tc = (over: Partial<TestCaseItem> = {}): TestCaseItem => ({
 
 describe.each(['csv', 'json', 'xml'] as const)('%s round trip', (format) => {
   it('keeps every portable field, including commas, quotes, newlines and markup', () => {
-    const cases = [tc(), tc({ id: 'tc-2', customId: 'TC-002', title: 'Manual check', type: 'Manual', priority: 'P4', steps: [], labels: [], references: [], estimateMin: undefined, robotCode: undefined, postconditions: '' })];
+    const cases = [tc(), tc({ id: 'tc-2', customId: 'TC-002', title: 'Manual check', type: 'Manual', priority: 'Low', steps: [], labels: [], references: [], estimateMin: undefined, robotCode: undefined, postconditions: '' })];
     const { content } = exportTestCases(cases, 'RTC & Flash', format);
     expect(parseTestCases(content, format)).toEqual(cases.map(toPortable));
   });
@@ -38,14 +38,15 @@ describe('import validation', () => {
   });
 
   it('accepts a bare JSON array and fills defaults for missing fields', () => {
-    const [c] = parseTestCases('[{"title":"Only a title","priority":"high"}]', 'json');
-    expect(c).toMatchObject({ title: 'Only a title', type: 'Manual', priority: 'P3', steps: [], customId: '' });
+    const [c] = parseTestCases('[{"title":"Only a title","priority":"urgent"}]', 'json');
+    expect(c).toMatchObject({ title: 'Only a title', type: 'Manual', priority: 'Medium', steps: [], customId: '' });
+    expect(parseTestCases('[{"title":"t","priority":"high"}]', 'json')[0].priority).toBe('High');
   });
 
   it('reads CSV written by other tools: any column order, steps as numbered lines', () => {
     const [c] = parseTestCases('Title,Steps,Priority\r\nBoot,"1) Power on => LED green\n2. Login",P2\r\n', 'csv');
     expect(c.steps).toEqual([{ step: 1, action: 'Power on', expected: 'LED green' }, { step: 2, action: 'Login', expected: '' }]);
-    expect(c.priority).toBe('P2');
+    expect(c.priority).toBe('High');
   });
 
   it('parses quoted CSV cells', () => {

@@ -1,6 +1,7 @@
 // The reusable test suite library - shared by every user on the server
 // (see sharedCollection.ts), not kept in this browser.
 import type { TestSuiteItem } from '../types/operations';
+import { normalizePriority } from './testCasePriority';
 import { createSharedCollection } from './sharedCollection';
 
 export const testSuiteLibrary = createSharedCollection<TestSuiteItem>('test-suite-library');
@@ -49,6 +50,7 @@ export function instantiateSuiteFromLibrary(template: TestSuiteItem): TestSuiteI
   });
   const testCases = (template.testCases || []).map((tc, i) => ({
     ...tc,
+    priority: normalizePriority(tc.priority),
     id: `tc-${Date.now()}-${i}`,
     suiteId: newSuiteId,
     createdAt: now,

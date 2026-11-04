@@ -26,6 +26,23 @@ _REQUIRED_TEXT: dict[Collection, str] = {"projects": "name", "runs": "name", "mi
 
 
 MAX_REVISIONS = 50
+
+# DDS-SRS-013: test case priorities are Critical / High / Medium / Low.
+# Cases saved before the rename used P1-P4; they are stored under the new
+# names on their next save and shown with them in the meantime.
+PRIORITIES = ("Critical", "High", "Medium", "Low")
+_LEGACY_PRIORITIES = {"P1": "Critical", "P2": "High", "P3": "Medium", "P4": "Low"}
+
+
+def _with_priority(case: dict[str, Any]) -> dict[str, Any]:
+    """The case with its priority as one of PRIORITIES (Medium if unknown)."""
+    value = case.get("priority")
+    text = value.strip() if isinstance(value, str) else ""
+    named = next((p for p in PRIORITIES if p.lower() == text.lower()), None)
+    priority = named or _LEGACY_PRIORITIES.get(text.upper(), "Medium")
+    return case if value == priority else {**case, "priority": priority}
+
+
 # Bookkeeping the server sets on every save: never a "change" by itself.
 _UNTRACKED = frozenset({"id", "suiteId", "createdBy", "updatedAt"})
 
@@ -94,7 +111,10 @@ class TestManagementService:
         self._store = store
 
     async def snapshot(self) -> dict[str, Any]:
-        return {**await self._store.snapshot(), "seeded": await self._store.is_seeded()}
+        data = await self._store.snapshot()
+        for suite in data["suites"]:
+            suite["testCases"] = [_with_priority(c) for c in suite["testCases"]]
+        return {**data, "seeded": await self._store.is_seeded()}
 
     # ── suites ─────────────────────────────────────────────────────────
     async def _owned_suite(self, user: User, suite_id: str, action: str) -> dict[str, Any]:
@@ -170,7 +190,7 @@ class TestManagementService:
         _require_text(body, "title")
         await self._owned_suite(user, suite_id, "edit test cases of")
         existing = await self._store.get_case(suite_id, case_id)
-        case = {**_stamp(user, body, case_id, existing), "suiteId": suite_id}
+        case = _with_priority({**_stamp(user, body, case_id, existing), "suiteId": suite_id})
         await self._store.put_case(suite_id, case)
         await self._record_revision(user, suite_id, case)
         return case
@@ -253,7 +273,7 @@ class TestManagementService:
                     await self._store.put_section(suite_id, stamped)
             for case in suite.get("testCases") or []:
                 if isinstance(case, dict) and isinstance(case.get("id"), str):
-                    stamped = {**_stamp(user, case, case["id"], None), "suiteId": suite_id}
+                    stamped = _with_priority({**_stamp(user, case, case["id"], None), "suiteId": suite_id})
                     await self._store.put_case(suite_id, stamped)
                     await self._record_revision(user, suite_id, stamped)
         for collection, items in (("runs", runs), ("milestones", milestones)):

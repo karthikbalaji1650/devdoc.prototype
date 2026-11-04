@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from tests.conftest import ADMIN, AUTHOR, OTHER, Agent, Api
@@ -17,7 +18,7 @@ def suite(suite_id: str = "s1", **overrides: Any) -> dict[str, Any]:
 
 
 def case(case_id: str = "c1", **overrides: Any) -> dict[str, Any]:
-    return {"id": case_id, "customId": "TC-1", "title": "Clock drift", "steps": [], "priority": "P1", **overrides}
+    return {"id": case_id, "customId": "TC-1", "title": "Clock drift", "steps": [], "priority": "Critical", **overrides}
 
 
 def make_suite(agent: Agent, suite_id: str = "s1") -> None:
@@ -316,3 +317,32 @@ class TestCaseRevisions:
         author = api.sign_in(AUTHOR)
         author.post(f"{BASE}/seed", json={"suites": [suite("s1", testCases=[case()])], "runs": [], "milestones": []})
         assert [r["revision"] for r in self.revisions(author)] == [1]
+
+
+class TestPriorities:
+    """DDS-SRS-013: Critical / High / Medium / Low, renamed from P1-P4."""
+
+    def test_saved_under_the_new_names_and_old_ones_are_converted(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        for case_id, given, stored in (
+            ("a", "P1", "Critical"),
+            ("b", "high", "High"),
+            ("c", "Low", "Low"),
+            ("d", "??", "Medium"),
+        ):
+            res = author.put(f"{BASE}/suites/s1/cases/{case_id}", json=case(case_id, priority=given))
+            assert res.json()["testCase"]["priority"] == stored
+
+    def test_cases_stored_before_the_rename_load_with_the_new_names(self, api: Api) -> None:
+        author = api.sign_in(AUTHOR)
+        make_suite(author)
+        author.put(f"{BASE}/suites/s1/cases/c1", json=case())
+        redis = api.client.app.state.services.test_management._store._redis  # type: ignore[attr-defined]
+
+        async def make_legacy() -> None:
+            raw = json.loads(await redis.hget("dds:tm:suite:s1:cases", "c1"))
+            await redis.hset("dds:tm:suite:s1:cases", "c1", json.dumps({**raw, "priority": "P4"}))
+
+        api.client.portal.call(make_legacy)  # type: ignore[union-attr]
+        assert author.get(BASE).json()["suites"][0]["testCases"][0]["priority"] == "Low"

@@ -1,12 +1,14 @@
 // The reusable test case library - shared by every user on the server
 // (see sharedCollection.ts), not kept in this browser.
 import type { TestCaseItem } from '../types/operations';
+import { normalizePriority } from './testCasePriority';
 import { createSharedCollection } from './sharedCollection';
 
 export const testCaseLibrary = createSharedCollection<TestCaseItem>('test-case-library');
 
+/** Entries saved before the priority rename show the new names. */
 export function loadLibrary(): TestCaseItem[] {
-  return testCaseLibrary.items();
+  return testCaseLibrary.items().map((tc) => ({ ...tc, priority: normalizePriority(tc.priority) }));
 }
 
 /** Saves a copy of a test case into the reusable library, keyed by its

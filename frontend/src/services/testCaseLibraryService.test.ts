@@ -6,7 +6,7 @@ function makeCase(overrides: Partial<TestCaseItem> = {}): TestCaseItem {
   return {
     id: 'tc-1', suiteId: 's1', customId: 'TC-001', title: 'Verify RTC drift',
     preconditions: 'Board powered on', steps: [{ step: 1, action: 'Run test', expected: 'Passes' }],
-    expectedResult: 'No drift', priority: 'P2', type: 'Manual', createdAt: '2026-01-01',
+    expectedResult: 'No drift', priority: 'High', type: 'Manual', createdAt: '2026-01-01',
     ...overrides,
   };
 }

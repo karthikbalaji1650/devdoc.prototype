@@ -8,6 +8,7 @@
 // against the new one and sends only what changed, item by item - which
 // is also what lets the server apply its per-item ownership rules.
 import type { MilestoneItem, ProjectItem, TestCaseItem, TestRunItem, TestSuiteItem } from '../types/operations';
+import { normalizePriority } from './testCasePriority';
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import { sectionTree } from './testSections';
@@ -70,7 +71,10 @@ export async function loadTestManagement(): Promise<TestManagementSnapshot> {
   const data = await request<TestManagementSnapshot>('GET', '');
   return {
     projects: Array.isArray(data?.projects) ? data.projects : [],
-    suites: Array.isArray(data?.suites) ? data.suites : [],
+    // The server already converts old P1-P4 priorities; this guards older servers.
+    suites: Array.isArray(data?.suites)
+      ? data.suites.map((s) => ({ ...s, testCases: s.testCases?.map((tc) => ({ ...tc, priority: normalizePriority(tc.priority) })) }))
+      : [],
     runs: Array.isArray(data?.runs) ? data.runs : [],
     milestones: Array.isArray(data?.milestones) ? data.milestones : [],
     seeded: Boolean(data?.seeded),
