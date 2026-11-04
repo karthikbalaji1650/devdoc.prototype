@@ -22,7 +22,6 @@ import { VersionHistoryModal } from './components/documents/VersionHistoryModal'
 import { snapshotIfDue, recordSnapshot } from './services/versionHistoryService';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
 import { isBackendConfigured, logoutBackend } from './services/backendAuthService';
-import { recordLogin, recordLogout } from './services/sessionAuditService';
 import { createDebouncedSaver } from './services/autosave';
 import { seedSampleDocumentsIfNeeded } from './services/sampleData';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
@@ -262,14 +261,12 @@ export const App: React.FC = () => {
   // Auth Handlers
   const handleLogin = (profile: UserProfile) => {
     loginWithProfile(profile);
-    recordLogin(profile.id, profile.name, profile.role);
     setCurrentUser(profile);
     setCurrentApp('dashboard');
     showToast(`Welcome, ${profile.name}!`);
   };
 
   const handleLogout = () => {
-    if (currentUser) recordLogout(currentUser.id);
     // Best-effort: drops the server-side session row when an API is
     // configured, so the sign-out actually revokes it rather than just
     // clearing the browser's copy. Fire-and-forget — logout must not

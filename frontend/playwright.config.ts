@@ -21,8 +21,8 @@ export default defineConfig({
     // times over would triple-spawn on the same ports. They're about the
     // app talking to the API, not rendering, so one engine is enough;
     // everything else still runs on all three.
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management(-perf)?\.spec\.ts|mobile-smoke\.spec\.ts/ },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management(-perf)?\.spec\.ts|mobile-smoke\.spec\.ts/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management(-perf)?\.spec\.ts|session-audit\.spec\.ts|mobile-smoke\.spec\.ts/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /backend-login\.spec\.ts|remote-test-execution\.spec\.ts|test-management(-perf)?\.spec\.ts|session-audit\.spec\.ts|mobile-smoke\.spec\.ts/ },
     // Not the full suite (it assumes a desktop layout throughout) - a
     // focused smoke check that the app is at least usable on a phone.
     // See the "Mobile" note in the README: this is baseline coverage,

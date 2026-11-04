@@ -8,11 +8,13 @@ from app.core.jscompat import js_opt, js_trim
 from app.core.security import SESSION_TTL_MS, generate_session_id, verify_password
 from app.models.user import User
 from app.repositories.base import Repositories
+from app.repositories.session_audit import SessionAuditStore
 
 
 class AuthService:
-    def __init__(self, repos: Repositories) -> None:
+    def __init__(self, repos: Repositories, audit: SessionAuditStore) -> None:
         self._repos = repos
+        self._audit = audit
 
     async def login(self, body: Any) -> tuple[str, User | None]:
         """Returns (session id, user) or raises ApiError(400/401)."""
@@ -30,13 +32,18 @@ class AuthService:
             raise ApiError(401, "Invalid email or password.")
 
         session_id = generate_session_id()
-        expires_at = datetime.now(UTC) + timedelta(milliseconds=SESSION_TTL_MS)
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(milliseconds=SESSION_TTL_MS)
         await self._repos.sessions.create(session_id, candidate.id, expires_at)
-        return session_id, await self._repos.sessions.find_active_user(session_id)
+        user = await self._repos.sessions.find_active_user(session_id)
+        if user is not None:
+            await self._audit.record_login(session_id, user, now, expires_at)
+        return session_id, user
 
     async def logout(self, session_id: str | None) -> None:
         if session_id:
             await self._repos.sessions.delete(session_id)
+            await self._audit.record_logout(session_id, datetime.now(UTC))
 
     async def user_for_session(self, session_id: str) -> User | None:
         return await self._repos.sessions.find_active_user(session_id)

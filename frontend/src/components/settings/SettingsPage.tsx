@@ -16,8 +16,7 @@ import {
   ChevronRight,
   Info,
   Upload,
-  ShieldAlert,
-  Clock
+  ShieldAlert
 } from 'lucide-react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
@@ -29,7 +28,7 @@ import {
   type AiProvider,
 } from '../../services/aiService';
 import { getStorageUsage } from '../../services/safeStorage';
-import { getSessionAuditLog } from '../../services/sessionAuditService';
+import { SessionAuditTable } from './SessionAuditTable';
 import { canAccessDataManagement } from '../../services/permissions';
 
 /* ─── Props ─── */
@@ -119,18 +118,6 @@ function InfoBanner({ text }: { text: string }) {
       <span>{text}</span>
     </div>
   );
-}
-
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDuration(loginIso: string, logoutIso: string | null): string {
-  const end = logoutIso ? new Date(logoutIso).getTime() : Date.now();
-  const minutes = Math.max(0, Math.round((end - new Date(loginIso).getTime()) / 60000));
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 /* ─── Main Component ─── */
@@ -528,43 +515,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                     <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">User Session Audit Log</span>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-100">
-                        <tr>
-                          <th className="px-5 py-2 font-bold">User</th>
-                          <th className="px-3 py-2 font-bold">Role</th>
-                          <th className="px-3 py-2 font-bold">Login</th>
-                          <th className="px-3 py-2 font-bold">Logout</th>
-                          <th className="px-3 py-2 font-bold">Duration</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {getSessionAuditLog().map((s) => (
-                          <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-5 py-2.5 font-semibold text-slate-800">{s.userName}</td>
-                            <td className="px-3 py-2.5 text-slate-500 capitalize">{s.role.replace('-', ' ')}</td>
-                            <td className="px-3 py-2.5 text-slate-500 font-mono">{formatTimestamp(s.loginTime)}</td>
-                            <td className="px-3 py-2.5 font-mono">
-                              {s.logoutTime ? (
-                                <span className="text-slate-500">{formatTimestamp(s.logoutTime)}</span>
-                              ) : (
-                                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                                  <Clock className="w-3 h-3" /> Active
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-500 font-mono">{formatDuration(s.loginTime, s.logoutTime)}</td>
-                          </tr>
-                        ))}
-                        {getSessionAuditLog().length === 0 && (
-                          <tr>
-                            <td colSpan={5} className="px-5 py-6 text-center text-xs text-slate-400">No session activity recorded yet.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  <SessionAuditTable />
                 </div>
               </section>
             )}
