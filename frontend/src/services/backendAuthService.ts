@@ -68,3 +68,35 @@ export async function logoutBackend(): Promise<void> {
     // offline or the API is unreachable — nothing more to do here
   }
 }
+
+// ── single sign-on and JWT access tokens (DDS-SRS-076) ──────────────────
+
+export interface SsoConfig { enabled: boolean; providerName: string | null }
+
+export async function fetchSsoConfig(): Promise<SsoConfig> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrl()}/api/auth/sso/config`, { retries: 1 });
+    return res.ok ? await res.json() : { enabled: false, providerName: null };
+  } catch {
+    return { enabled: false, providerName: null };
+  }
+}
+
+/** The browser goes here to sign in with the provider; it comes back with ?sso=1 or ?sso_error=. */
+export const ssoLoginUrl = () => `${baseUrl()}/api/auth/sso/login`;
+
+/** The user of the session cookie, after an SSO sign-in sets it. */
+export async function fetchBackendUser(): Promise<UserProfile> {
+  const res = await fetchWithTimeout(`${baseUrl()}/api/auth/me`, { credentials: 'include' });
+  if (!res.ok) throw new Error(await readError(res));
+  return toProfile((await res.json()).user);
+}
+
+export interface AccessToken { accessToken: string; tokenType: 'Bearer'; expiresIn: number }
+
+/** A JWT for scripts and tools: valid for an hour, and only while this session is. */
+export async function createAccessToken(): Promise<AccessToken> {
+  const res = await fetchWithTimeout(`${baseUrl()}/api/auth/token`, { method: 'POST', credentials: 'include' });
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
+}

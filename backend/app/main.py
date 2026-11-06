@@ -63,9 +63,11 @@ from app.services.releases import ReleaseService
 from app.services.remote_runs import RemoteRunPoller, RemoteRunService
 from app.services.repos import RepoService
 from app.services.schedules import ScheduleService
+from app.services.sso import SsoService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
+from app.services.tokens import TokenService, signing_key
 from app.services.trackers import TrackerService
 
 logger = logging.getLogger("devdoc.api")
@@ -96,6 +98,8 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         repos=RepoService(
             redis, SecretBox(settings.secrets_key), http_client, settings.bridge_url, settings.bridge_token
         ),
+        tokens=TokenService(signing_key(settings.jwt_secret, settings.secrets_key)),
+        sso=SsoService(settings, redis, http_client),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )

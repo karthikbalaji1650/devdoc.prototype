@@ -10,11 +10,15 @@ Started and killed by those specs; prints `READY <users json>` once up.
 import base64
 import json
 import os
+import secrets
 import time
 from typing import Any
+from urllib.parse import parse_qs, urlencode
 
 import fakeredis
+import jwt
 import uvicorn
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.main import create_app
 from app.repositories.memory import memory_repositories
@@ -35,6 +39,19 @@ def main() -> None:
         # A real code-editor bridge, if a browser test started one (repos.spec.ts).
         bridge_url=os.environ.get("BRIDGE_URL", ""),
         bridge_token=os.environ.get("BRIDGE_TOKEN", ""),
+        # The fake OpenID provider below, if a browser test asked for it (sso.spec.ts).
+        **(
+            {
+                "oidc_issuer": f"http://localhost:{port}/__e2e/idp",
+                "oidc_client_id": "devdoc-e2e",
+                "oidc_client_secret": "e2e-client-secret",
+                "oidc_redirect_uri": f"http://localhost:{port}/api/auth/sso/callback",
+                "oidc_provider_name": "Test IdP",
+                "oidc_post_login_url": origin + "/",
+            }
+            if os.environ.get("E2E_SSO") == "1"
+            else {}
+        ),
     )
     app = create_app(settings, repositories=memory_repositories(store), redis=redis)
 
@@ -57,6 +74,9 @@ def main() -> None:
             )
             await send({"type": "http.response.body", "body": json.dumps({"fired": fired}).encode()})
             return
+        if scope["type"] == "http" and scope["path"].startswith("/__e2e/idp/"):
+            await fake_idp(scope, receive, send)
+            return
         if scope["type"] == "http" and scope["path"].startswith("/__e2e/jira/"):
             await fake_jira(scope, receive, send)
             return
@@ -66,6 +86,78 @@ def main() -> None:
         await app(scope, receive, send)
 
     testpc: dict[str, Any] = {"last": None}
+
+    idp_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    idp_jwk = {**json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(idp_key.public_key())), "kid": "e2e", "alg": "RS256"}
+    idp_codes: dict[str, dict[str, str]] = {}
+    idp_next: dict[str, str] = {}  # POST /__e2e/idp/next-user {"email"}: who the next sign-in is
+
+    async def fake_idp(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        """A stand-in OpenID provider (DDS-SRS-076): /authorize approves at once
+        as `login_hint` (default: the first test user), /token returns an
+        RS256 ID token with the nonce, /certs publishes the key."""
+        issuer = f"http://localhost:{port}/__e2e/idp"
+        path = scope["path"].removeprefix("/__e2e/idp")
+        body = b""
+        while True:
+            message = await receive()
+            body += message.get("body", b"")
+            if not message.get("more_body"):
+                break
+
+        async def reply(status: int, payload: Any, headers: list[tuple[bytes, bytes]] | None = None) -> None:
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": status,
+                    "headers": [(b"content-type", b"application/json"), *(headers or [])],
+                }
+            )
+            await send({"type": "http.response.body", "body": json.dumps(payload).encode()})
+
+        if path == "/next-user" and scope["method"] == "POST":
+            idp_next["email"] = json.loads(body or b"{}").get("email", "")
+            await reply(200, {"ok": True})
+        elif path == "/.well-known/openid-configuration":
+            await reply(
+                200,
+                {
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": f"{issuer}/certs",
+                },
+            )
+        elif path == "/certs":
+            await reply(200, {"keys": [idp_jwk]})
+        elif path == "/authorize":
+            q = {k: v[0] for k, v in parse_qs(scope["query_string"].decode()).items()}
+            code = secrets.token_urlsafe(16)
+            email = idp_next.pop("email", "") or q.get("login_hint") or TEST_USERS[0].email
+            idp_codes[code] = {"nonce": q.get("nonce", ""), "email": email}
+            target = f"{q['redirect_uri']}?{urlencode({'code': code, 'state': q.get('state', '')})}"
+            await reply(302, {}, [(b"location", target.encode())])
+        elif path == "/token":
+            form = {k: v[0] for k, v in parse_qs(body.decode()).items()}
+            pending = idp_codes.pop(form.get("code", ""), None)
+            if pending is None or form.get("client_secret") != "e2e-client-secret":
+                await reply(400, {"error": "invalid_grant"})
+                return
+            now = int(time.time())
+            claims = {
+                "iss": issuer,
+                "aud": "devdoc-e2e",
+                "sub": pending["email"],
+                "iat": now,
+                "exp": now + 300,
+                "nonce": pending["nonce"],
+                "email": pending["email"],
+                "email_verified": True,
+            }
+            id_token = jwt.encode(claims, idp_key, algorithm="RS256", headers={"kid": "e2e"})
+            await reply(200, {"id_token": id_token, "access_token": "x", "token_type": "Bearer"})
+        else:
+            await reply(404, {})
 
     def jira_issue(key: str, summary: str, priority: str, done: bool) -> dict[str, Any]:
         category = "done" if done else "indeterminate"

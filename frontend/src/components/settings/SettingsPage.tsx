@@ -27,6 +27,8 @@ import {
   type AiProvider,
 } from '../../services/aiService';
 import { ServerDataPanel } from './ServerDataPanel';
+import { AccessTokenPanel } from './AccessTokenPanel';
+import { isBackendConfigured } from '../../services/backendAuthService';
 import { TestServersPanel } from './TestServersPanel';
 import { CiTokensPanel } from './CiTokensPanel';
 import { TrackersPanel } from './TrackersPanel';
@@ -243,6 +245,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   ))}
                 </div>
                 <InfoBanner text="Profile data is read-only from your active session. Log out to switch accounts." />
+                {isBackendConfigured() && <AccessTokenPanel />}
               </section>
             )}
 

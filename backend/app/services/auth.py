@@ -31,10 +31,22 @@ class AuthService:
         if candidate is None or not await to_thread.run_sync(verify_password, password, candidate.password_hash):
             raise ApiError(401, "Invalid email or password.")
 
+        return await self._start_session(candidate.id)
+
+    async def login_sso(self, email: str) -> tuple[str, User | None]:
+        """A session for the existing account with this (provider-verified)
+        email (DDS-SRS-076). Raises ApiError(403) if there is none: single
+        sign-on never creates accounts."""
+        candidate = await self._repos.users.find_login_candidate(email.strip().lower())
+        if candidate is None:
+            raise ApiError(403, f"There is no DevDoc Studio account for {email}. Ask an admin to add you.")
+        return await self._start_session(candidate.id)
+
+    async def _start_session(self, user_id: str) -> tuple[str, User | None]:
         session_id = generate_session_id()
         now = datetime.now(UTC)
         expires_at = now + timedelta(milliseconds=SESSION_TTL_MS)
-        await self._repos.sessions.create(session_id, candidate.id, expires_at)
+        await self._repos.sessions.create(session_id, user_id, expires_at)
         user = await self._repos.sessions.find_active_user(session_id)
         if user is not None:
             await self._audit.record_login(session_id, user, now, expires_at)

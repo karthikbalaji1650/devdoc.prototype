@@ -55,6 +55,14 @@ def test_settings(**overrides: Any) -> Settings:
         "remote_poll_enabled": False,
         "bridge_url": "",
         "bridge_token": "",
+        "jwt_secret": "",
+        "oidc_issuer": "",
+        "oidc_client_id": "",
+        "oidc_client_secret": "",
+        "oidc_redirect_uri": "",
+        "oidc_scopes": "",
+        "oidc_provider_name": "",
+        "oidc_post_login_url": "",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)

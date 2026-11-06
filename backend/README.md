@@ -31,6 +31,8 @@ tests/             pytest suite; parity/ compares against the old Node API
 | Route | Notes |
 |---|---|
 | `GET /api/health` | `{"ok": true}` |
+| `POST /api/auth/token` | A JWT access token for the current session (DDS-SRS-076): HS256, one hour, usable as `Authorization: Bearer` on any route, and revoked when the session signs out (each use checks the session). Key: `JWT_SECRET`, else derived from `SECRETS_KEY`. |
+| `GET /api/auth/sso/config`, `/api/auth/sso/login`, `/api/auth/sso/callback` | Single sign-on with any OpenID Connect provider (`OIDC_*`): authorization code + PKCE, state bound to a cookie, nonce, ID token verified against the provider's JWKS. Signs in only existing accounts by email; never creates users. |
 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | bcrypt check, random session id in an httpOnly `devdoc_sid` cookie, stored in `sessions` so logout revokes it at once. Login is rate-limited: 10 failures per IP per 15 min. |
 | `GET/PUT/DELETE /api/documents[/:id]`, `DELETE /api/documents/:id/purge` | Each route re-checks the frontend's edit/visibility rules server-side. DELETE is a soft delete; purge removes the row. |
 | `GET /api/ai/providers`, `POST /api/ai/rephrase`, `POST /api/ai/generate-test-cases` | Proxies Gemini/OpenAI with server-side keys. |

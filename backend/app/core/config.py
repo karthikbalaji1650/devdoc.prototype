@@ -37,6 +37,20 @@ class Settings(BaseSettings):
     bridge_url: str = ""
     bridge_token: str = ""
 
+    # JWT access tokens (DDS-SRS-076): HS256 key, at least 32 bytes. Without
+    # it the key is derived from SECRETS_KEY; with neither, JWTs are off.
+    jwt_secret: str = ""
+
+    # Single sign-on over OpenID Connect (DDS-SRS-076). Set the first four to
+    # turn it on; OIDC_REDIRECT_URI is this API's /api/auth/sso/callback.
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    oidc_scopes: str = ""
+    oidc_provider_name: str = ""  # the button says "Sign in with <this>"
+    oidc_post_login_url: str = ""  # where the browser lands after; default: the first CORS origin
+
     @property
     def cookie_secure_enabled(self) -> bool:
         return self.cookie_secure == "true"

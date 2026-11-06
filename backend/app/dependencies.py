@@ -20,9 +20,11 @@ from app.services.releases import ReleaseService
 from app.services.remote_runs import RemoteRunService
 from app.services.repos import RepoService
 from app.services.schedules import ScheduleService
+from app.services.sso import SsoService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
+from app.services.tokens import TokenService
 from app.services.trackers import TrackerService
 
 
@@ -43,6 +45,8 @@ class Services:
     ci: CiService
     trackers: TrackerService
     repos: RepoService
+    tokens: TokenService
+    sso: SsoService
     login_limiter: RateLimiter
     cookie_secure: bool
 
@@ -61,11 +65,26 @@ def request_session_id(request: Request) -> str | None:
     return session_id_from("; ".join(request.headers.getlist("cookie")), SESSION_COOKIE)
 
 
+def bearer_token(request: Request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" and token.strip() else None
+
+
 async def current_user_or_none(request: Request) -> User | None:
+    """The session cookie's user, or - without a cookie - the user of a JWT
+    access token (DDS-SRS-076) whose session is still active."""
     state = request.scope.setdefault("state", {})  # cached for the request
     if "user" not in state:
+        services = get_services(request)
         session_id = request_session_id(request)
-        state["user"] = await get_services(request).auth.user_for_session(session_id) if session_id else None
+        user = await services.auth.user_for_session(session_id) if session_id else None
+        token = bearer_token(request) if session_id is None else None
+        if token and not token.startswith("ddsci_"):  # CI tokens are for /api/ci only
+            found = services.tokens.session_of(token)
+            if found is not None:
+                candidate = await services.auth.user_for_session(found[0])
+                user = candidate if candidate is not None and candidate.id == found[1] else None
+        state["user"] = user
     return state["user"]
 
 

@@ -82,6 +82,14 @@ services:
       # without it the bridge's git endpoints accept anyone who can reach port 8081.
       - BRIDGE_URL=http://vscode-cline:8081
       - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
+      # JWT access tokens and single sign-on (DDS-SRS-076); see backend/.env.example.
+      - JWT_SECRET=${JWT_SECRET:-}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-}
+      - OIDC_PROVIDER_NAME=${OIDC_PROVIDER_NAME:-}
+      - OIDC_POST_LOGIN_URL=${OIDC_POST_LOGIN_URL:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
   # ----------------------------------------------------
