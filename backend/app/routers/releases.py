@@ -95,3 +95,15 @@ async def save_blocker(
 async def delete_blocker(release_id: str, blocker_id: str, user: CurrentUser, services: ServicesDep) -> Response:
     await services.releases.delete_blocker(user, release_id, blocker_id)
     return no_content()
+
+
+@router.post("/{release_id}/blockers/lookup", responses={**_write, 502: {"model": ErrorResponse}})
+async def lookup_blocker(release_id: str, request: Request, user: CurrentUser, services: ServicesDep) -> Response:
+    """Links a Jira (PROJ-123) or GitHub (owner/repo#123) issue as a blocker, read from the tracker (044)."""
+    return JsonResponse({"blocker": await services.releases.lookup_blocker(user, release_id, json_body(request))})
+
+
+@router.post("/{release_id}/blockers/sync", responses=_write)
+async def sync_blockers(release_id: str, user: CurrentUser, services: ServicesDep) -> Response:
+    """Syncs blockers from the release's Jira / GitHub query now; the worker also does every 5 minutes."""
+    return JsonResponse(await services.releases.sync_blockers_now(user, release_id))

@@ -29,6 +29,7 @@ import {
 import { ServerDataPanel } from './ServerDataPanel';
 import { TestServersPanel } from './TestServersPanel';
 import { CiTokensPanel } from './CiTokensPanel';
+import { TrackersPanel } from './TrackersPanel';
 import { SessionAuditTable } from './SessionAuditTable';
 import { canAccessDataManagement } from '../../services/permissions';
 
@@ -440,6 +441,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
 
                 {/* CI/CD tokens and pipeline commands (DDS-SRS-026/027, admins) */}
                 <CiTokensPanel />
+
+                {/* Jira / GitHub for release blockers (DDS-SRS-044, admins) */}
+                <TrackersPanel />
 
                 {/* Server backup and reset (admins) */}
                 <ServerDataPanel />

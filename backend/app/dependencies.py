@@ -22,6 +22,7 @@ from app.services.schedules import ScheduleService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
+from app.services.trackers import TrackerService
 
 
 @dataclass
@@ -39,6 +40,7 @@ class Services:
     remote_runs: RemoteRunService
     schedules: ScheduleService
     ci: CiService
+    trackers: TrackerService
     login_limiter: RateLimiter
     cookie_secure: bool
 

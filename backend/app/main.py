@@ -49,6 +49,7 @@ from app.routers import (
     test_management,
     test_schedules,
     test_servers,
+    trackers,
 )
 from app.schemas.openapi import install_openapi
 from app.services.admin import AdminService
@@ -63,6 +64,7 @@ from app.services.schedules import ScheduleService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
+from app.services.trackers import TrackerService
 
 logger = logging.getLogger("devdoc.api")
 
@@ -72,6 +74,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
     test_store = TestManagementStore(redis)
     documents = CachedDocumentRepository(repos.documents, redis)
     test_servers = TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client)
+    trackers = TrackerService(redis, SecretBox(settings.secrets_key), http_client)
     remote_runs = RemoteRunService(RemoteJobStore(redis), test_servers, redis, test_store)
     return Services(
         auth=AuthService(repos, session_audit),
@@ -86,7 +89,8 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         remote_runs=remote_runs,
         schedules=ScheduleService(ScheduleStore(redis), test_store, test_servers, remote_runs),
         ci=CiService(CiTokenStore(redis), test_store, test_servers, remote_runs),
-        releases=ReleaseService(ReleaseStore(redis), test_store),
+        releases=ReleaseService(ReleaseStore(redis), test_store, trackers),
+        trackers=trackers,
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )
@@ -122,7 +126,9 @@ def create_app(
             app.state.services = build_services(settings, repos, http_client, redis_client)
             # The background worker that polls remote test runs (DDS-SRS-021).
             services = app.state.services
-            poller = RemoteRunPoller(services.remote_runs, also=(services.schedules.fire_due,))
+            poller = RemoteRunPoller(
+                services.remote_runs, also=(services.schedules.fire_due, services.releases.sync_all_due)
+            )
             if settings.remote_poll_enabled:
                 poller.start()
             try:
@@ -146,6 +152,7 @@ def create_app(
             test_management,
             test_servers,
             test_schedules,
+            trackers,
             ci,
             audit,
             collections,

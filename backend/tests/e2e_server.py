@@ -50,12 +50,53 @@ def main() -> None:
             )
             await send({"type": "http.response.body", "body": json.dumps({"fired": fired}).encode()})
             return
+        if scope["type"] == "http" and scope["path"].startswith("/__e2e/jira/"):
+            await fake_jira(scope, receive, send)
+            return
         if scope["type"] == "http" and scope["path"].startswith("/__e2e/testpc"):
             await fake_test_pc(scope, receive, send)
             return
         await app(scope, receive, send)
 
     testpc: dict[str, Any] = {"last": None}
+
+    def jira_issue(key: str, summary: str, priority: str, done: bool) -> dict[str, Any]:
+        category = "done" if done else "indeterminate"
+        status = {"name": "Done" if done else "In Progress", "statusCategory": {"key": category}}
+        return {"key": key, "fields": {"summary": summary, "priority": {"name": priority}, "status": status}}
+
+    jira_issues = {
+        "FW-101": jira_issue("FW-101", "BMC hangs after warm reset", "Highest", False),
+        "FW-102": jira_issue("FW-102", "Fan curve ignores ambient sensor", "High", False),
+        "FW-103": jira_issue("FW-103", "Typo in SEL message", "Low", True),
+        "FW-200": jira_issue("FW-200", "Watchdog not re-armed", "Medium", False),
+    }
+
+    async def fake_jira(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        """A stand-in Jira Cloud (DDS-SRS-044) for the browser tests: token
+        `e2e-jira-token` for qa@example.com; JQL search returns FW-101..103."""
+        path, method = scope["path"].removeprefix("/__e2e/jira"), scope["method"]
+        headers = {k.decode().lower(): v.decode() for k, v in scope["headers"]}
+        while (await receive()).get("more_body"):
+            pass
+
+        async def reply(status: int, payload: Any) -> None:
+            await send(
+                {"type": "http.response.start", "status": status, "headers": [(b"content-type", b"application/json")]}
+            )
+            await send({"type": "http.response.body", "body": json.dumps(payload).encode()})
+
+        expected = "Basic " + base64.b64encode(b"qa@example.com:e2e-jira-token").decode()
+        if headers.get("authorization") != expected:
+            await reply(401, {"errorMessages": ["Unauthorized"]})
+        elif path == "/rest/api/3/myself":
+            await reply(200, {"displayName": "QA Bot"})
+        elif path == "/rest/api/3/search/jql" and method == "POST":
+            await reply(200, {"issues": [jira_issues[k] for k in ("FW-101", "FW-102", "FW-103")], "isLast": True})
+        elif path.startswith("/rest/api/3/issue/") and path.split("/")[-1] in jira_issues:
+            await reply(200, jira_issues[path.split("/")[-1]])
+        else:
+            await reply(404, {"errorMessages": ["Issue does not exist"]})
 
     async def fake_test_pc(scope: dict[str, Any], receive: Any, send: Any) -> None:
         """A stand-in remote Test PC (docs/test-pc-api.md) for the browser

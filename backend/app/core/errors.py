@@ -30,6 +30,7 @@ AUTH_GUARDED_PREFIXES = (
     "/api/releases",
     "/api/test-servers",
     "/api/test-schedules",
+    "/api/trackers",
 )
 
 
