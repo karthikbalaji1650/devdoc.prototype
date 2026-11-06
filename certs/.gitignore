@@ -1,0 +1,5 @@
+# TLS certificate for the web-app container (DDS-SRS-074): put tls.crt and
+# tls.key here. Without them a self-signed certificate is made at start.
+# scripts/make-dev-cert.sh makes a locally trusted one. Never commit keys.
+*
+!.gitignore

@@ -12,8 +12,10 @@ services:
       POSTGRES_DB: platform_db
       POSTGRES_USER: platform_admin
       POSTGRES_PASSWORD: platform_secure_password_2026
+    # Plain TCP: this machine only (DDS-SRS-074). The app reaches it on the
+    # compose network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -34,7 +36,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -55,8 +57,10 @@ services:
       dockerfile: Dockerfile
     container_name: devdoc-studio-api
     restart: unless-stopped
+    # Browsers reach the API through web-app's HTTPS (/api/). This plain-HTTP
+    # port is for this machine only - the dev server and local tools.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -70,7 +74,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
       - REDIS_URL=redis://redis:6379/0
-      - CORS_ORIGINS=http://localhost:5173
+      # The HTTPS app is the same origin as the API behind it; the dev server
+      # (web-app-dev, plain HTTP on this machine) still calls it directly.
+      - CORS_ORIGINS=https://localhost:${HTTPS_PORT:-8443},http://localhost:5174
+      # Session cookies only travel over HTTPS (DDS-SRS-074).
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
       # Optional: set in your shell or a root .env before `docker compose up`
       # to let the frontend's AI rephrase feature use this server as a key-
       # holding proxy instead of a per-browser key. Unset by default.
@@ -105,11 +113,18 @@ services:
         # docker compose up now produces a frontend that can actually reach
         # the backend, not just one running next to it. Override in your
         # shell or a root .env for a different deployment.
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://localhost:8443}
     container_name: devdoc-studio-app
     restart: unless-stopped
+    # HTTPS, TLS 1.3 (DDS-SRS-074): https://localhost:8443. The old
+    # http://localhost:5173 now only redirects there.
     ports:
+      - "${HTTPS_PORT:-8443}:443"
       - "5173:80"
+    volumes:
+      # Your certificate as tls.crt + tls.key; without one a self-signed
+      # certificate is made at start (frontend/docker/15-devdoc-tls.sh).
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -119,7 +134,9 @@ services:
       - NODE_ENV=production
       # Same origin as the build arg above, so the CSP (see
       # nginx.conf.template) actually allows the frontend to call it.
-      - BACKEND_ORIGIN=${VITE_API_BASE_URL:-http://localhost:8000}
+      - BACKEND_ORIGIN=${VITE_API_BASE_URL:-https://localhost:8443}
+      - HTTPS_PORT=${HTTPS_PORT:-8443}
+      - TLS_HOSTNAME=${TLS_HOSTNAME:-localhost}
 
   # ----------------------------------------------------
   # 2b. Dev server (hot reload) — opt-in via `--profile dev`,
@@ -153,9 +170,11 @@ services:
       dockerfile: Dockerfile
     container_name: devdoc-vscode-cline
     restart: unless-stopped
+    # Browsers reach code-server and the bridge through web-app's HTTPS
+    # (/vscode/, /bridge/); these plain ports are for this machine only.
     ports:
-      - "8080:8080"
-      - "8081:8081"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-""}
       - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
