@@ -84,14 +84,58 @@ export type RemoteExecutionUpdate =
   | { state: 'completed'; results: RobotResultsJson }
   | { state: 'error'; message: string };
 
-/** Pushes the suite's current script, starts a run, then polls until it
- * completes, calling onUpdate at each transition. Every 5 seconds by
- * default: each check only reads what the backend's worker last polled
- * from the test server (DDS-SRS-021), never the Test PC itself. */
+/** Applies one status to onUpdate; true once the run has finished. */
+function report(result: RunPollResult, onUpdate: (update: RemoteExecutionUpdate) => void): boolean {
+  if (result.status === 'completed') {
+    onUpdate({ state: 'completed', results: result.results });
+    return true;
+  }
+  if (result.status === 'failed') {
+    onUpdate({ state: 'error', message: result.error || 'The test server reported the run failed.' });
+    return true;
+  }
+  if (result.phase) onUpdate({ state: 'running', phase: result.phase, progress: result.progress, pollError: result.pollError });
+  return false;
+}
+
+/** Live updates for a run on a registered test server (DDS-SRS-022): the
+ * server pushes each status change over server-sent events. Resolves true
+ * once the run has finished, or false if the stream could not be used -
+ * the caller then falls back to polling. */
+function listenForUpdates(jobId: string, onUpdate: (update: RemoteExecutionUpdate) => void): Promise<boolean> {
+  if (typeof EventSource === 'undefined') return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const source = new EventSource(`${baseUrl()}/api/test-exec/runs/${encodeURIComponent(jobId)}/events`, { withCredentials: true });
+    source.addEventListener('status', (event) => {
+      let result: RunPollResult;
+      try {
+        result = JSON.parse((event as MessageEvent<string>).data);
+      } catch {
+        return;
+      }
+      if (report(result, onUpdate)) {
+        source.close();
+        resolve(true);
+      }
+    });
+    // Closed before the run finished (network, proxy, server restart):
+    // stop the browser's own reconnect loop and let the caller poll.
+    source.onerror = () => {
+      source.close();
+      resolve(false);
+    };
+  });
+}
+
+/** Pushes the suite's current script, starts a run, then follows it until
+ * it finishes, calling onUpdate at each transition. Runs on a registered
+ * test server get pushed updates (DDS-SRS-022); otherwise - and whenever
+ * the stream drops - it checks every 5 seconds, which only reads what the
+ * backend's worker last polled (DDS-SRS-021), never the Test PC itself. */
 export async function runRemoteExecution(
   suite: TestSuiteItem,
   onUpdate: (update: RemoteExecutionUpdate) => void,
-  opts: { pollIntervalMs?: number; serverId?: string; runId?: string } = {},
+  opts: { pollIntervalMs?: number; serverId?: string; runId?: string; live?: boolean } = {},
 ): Promise<void> {
   const pollIntervalMs = opts.pollIntervalMs ?? 5_000;
   try {
@@ -99,18 +143,11 @@ export async function runRemoteExecution(
     const jobId = await startRun(suite.id, opts.serverId, opts.runId);
     onUpdate({ state: 'running' });
 
+    if (opts.serverId && opts.live !== false && await listenForUpdates(jobId, onUpdate)) return;
+
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-      const result = await pollRunStatus(jobId);
-      if (result.status === 'completed') {
-        onUpdate({ state: 'completed', results: result.results });
-        return;
-      }
-      if (result.status === 'failed') {
-        onUpdate({ state: 'error', message: result.error || 'The test server reported the run failed.' });
-        return;
-      }
-      if (result.phase) onUpdate({ state: 'running', phase: result.phase, progress: result.progress, pollError: result.pollError });
+      if (report(await pollRunStatus(jobId), onUpdate)) return;
     }
   } catch (err) {
     onUpdate({ state: 'error', message: err instanceof Error ? err.message : 'Remote execution failed.' });

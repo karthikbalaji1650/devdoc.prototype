@@ -11,6 +11,11 @@
   failed and execution % = completed / total * 100.
 - `status()` only reads what the worker stored, so the browser can check
   often without ever touching the Test PC.
+- `events()` pushes it instead (DDS-SRS-022): a server-sent event stream
+  that sends the current state, then every change the worker stores
+  (announced over Redis pub/sub, so it works across API instances), until
+  the run finishes. A comment line every HEARTBEAT_S keeps proxies from
+  closing an idle stream.
 - When a job finishes, the worker also writes the outcome into the linked
   test run, so results land even if nobody has the page open.
 - A per-job lock in Redis keeps two API instances from polling the same
@@ -20,9 +25,11 @@
 
 import asyncio
 import contextlib
+import json
 import logging
 import math
 import time
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
@@ -41,6 +48,7 @@ logger = logging.getLogger("devdoc.remote_runs")
 POLL_CONCURRENCY = 25
 MAX_POLL_FAILURES = 20
 TICK_S = 1.0
+HEARTBEAT_S = 15.0
 ACTIVE = ("QUEUED", "RUNNING")
 TERMINAL = ("COMPLETED", "FAILED")
 MAX_RESULTS = 20_000
@@ -207,6 +215,55 @@ class RemoteRunService:
             out["error"] = job.get("error") or "The run failed."
         return out
 
+    # ── live updates (022) ─────────────────────────────────────────────
+    @staticmethod
+    def _channel(job_id: str) -> str:
+        return f"dds:texec:events:{job_id}"
+
+    async def _publish(self, job_id: str) -> None:
+        await self._redis.publish(self._channel(job_id), "changed")
+
+    async def events(self, job_id: str, heartbeat_s: float = HEARTBEAT_S) -> AsyncIterator[str] | None:
+        """A server-sent event stream of the job's status, or None if there
+        is no such remote job. Subscribes before the first read, so no change
+        can slip between the two."""
+        pubsub = self._redis.pubsub()
+        await pubsub.subscribe(self._channel(job_id))
+        first = await self.status(job_id)
+        if first is None:
+            await pubsub.aclose()
+            return None
+
+        def event(status: dict[str, Any]) -> str:
+            return f"event: status\ndata: {json.dumps(status, separators=(',', ':'))}\n\n"
+
+        def key(status: dict[str, Any]) -> str:  # what counts as a change
+            return json.dumps({k: v for k, v in status.items() if k != "lastPolledAt"}, sort_keys=True)
+
+        async def stream() -> AsyncIterator[str]:
+            try:
+                yield "retry: 3000\n\n"  # how long a browser waits before reconnecting
+                yield event(first)
+                sent = key(first)
+                if first["status"] != "running":
+                    return
+                while True:
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=heartbeat_s)
+                    status = await self.status(job_id)  # re-read on a message, and on each heartbeat
+                    if status is None:
+                        return
+                    if key(status) != sent:
+                        yield event(status)
+                        sent = key(status)
+                    elif message is None:
+                        yield ": keep-alive\n\n"
+                    if status["status"] != "running":
+                        return
+            finally:
+                await pubsub.aclose()
+
+        return stream()
+
     # ── the polling worker ─────────────────────────────────────────────
     async def poll_due(self, now: float | None = None) -> int:
         """Polls every active job whose next poll is due; returns how many."""
@@ -273,6 +330,7 @@ class RemoteRunService:
         job["lastPolledAt"] = _now_iso()
         job["nextPollAt"] = now + interval
         await self._jobs.put(job_id, job)
+        await self._publish(job_id)
         await self._update_run(job)
         return True
 
@@ -289,6 +347,7 @@ class RemoteRunService:
             job["progress"] = progress(s["total"], s["total"], s["passed"], s["failed"])
         await self._jobs.put(job_id, job)
         await self._jobs.deactivate(job_id)
+        await self._publish(job_id)
         await self._update_run(job)
 
     async def _update_run(self, job: dict[str, Any]) -> None:

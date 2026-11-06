@@ -164,6 +164,7 @@ def test_openapi_documents_every_route_with_camel_case_fields(api: Api) -> None:
         "/api/test-exec/scripts",
         "/api/test-exec/runs",
         "/api/test-exec/runs/{job_id}",
+        "/api/test-exec/runs/{job_id}/events",
         "/api/test-management",
         "/api/audit/sessions",
         "/api/admin/backup",

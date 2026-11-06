@@ -84,6 +84,10 @@ class TestExecService:
         self._run_delay_s = run_delay_s
         self._remote = remote
 
+    @property
+    def remote(self) -> RemoteRunService | None:
+        return self._remote
+
     def push_script(self, body: Any) -> dict[str, bool]:
         suite_id, suite_title, robot_code = (js_opt(body, k) for k in ("suiteId", "suiteTitle", "robotCode"))
         if not is_nonblank_string(suite_id):

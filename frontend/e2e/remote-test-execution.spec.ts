@@ -90,7 +90,7 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
   await expect(page.getByText(/Remote execution failed/)).toHaveCount(0);
 });
 
-test('Run Test sends the suite to a registered test server and follows it to completion (DDS-SRS-020, 021)', async ({ page }) => {
+test('Run Test sends the suite to a registered test server and follows it live to completion (DDS-SRS-020, 021, 022)', async ({ page }) => {
   test.setTimeout(60_000);
   const api = `http://localhost:${API_PORT}`;
   await skipWelcomeGuide(page);
@@ -108,6 +108,10 @@ test('Run Test sends the suite to a registered test server and follows it to com
     },
   });
   expect(created.ok()).toBeTruthy();
+
+  // Which status requests the page makes: the live stream (DDS-SRS-022), not polling.
+  const statusRequests: string[] = [];
+  page.on('request', (r) => { if (/\/api\/test-exec\/runs\/[^/]+/.test(r.url())) statusRequests.push(new URL(r.url()).pathname); });
 
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await page.getByRole('button', { name: 'Run Test' }).click();
@@ -129,4 +133,6 @@ test('Run Test sends the suite to a registered test server and follows it to com
   await expect(progress).toContainText(/Running on Fake Lab PC · 1 of 2 executed \(50%\)/, { timeout: 20_000 });
   await expect(progress).toContainText('Completed on Fake Lab PC · 2 of 2 executed (100%) · 1 passed · 1 failed', { timeout: 20_000 });
   await expect(page.getByText(/Run complete — 1 passed, 1 failed/)).toBeVisible();
+  expect(statusRequests.length).toBeGreaterThan(0);
+  expect(statusRequests.every((p) => p.endsWith('/events'))).toBe(true);
 });

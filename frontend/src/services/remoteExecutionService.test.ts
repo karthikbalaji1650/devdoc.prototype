@@ -143,3 +143,72 @@ describe('runRemoteExecution', () => {
     expect(updates).toEqual([{ state: 'error', message: 'suiteId is required.' }]);
   });
 });
+
+describe('live updates (DDS-SRS-022)', () => {
+  class FakeEventSource {
+    static last: FakeEventSource | null = null;
+    listeners: Record<string, ((e: { data: string }) => void)[]> = {};
+    onerror: (() => void) | null = null;
+    closed = false;
+    url: string;
+    init: { withCredentials?: boolean };
+    constructor(url: string, init: { withCredentials?: boolean }) { this.url = url; this.init = init; FakeEventSource.last = this; }
+    addEventListener(type: string, fn: (e: { data: string }) => void) { (this.listeners[type] ??= []).push(fn); }
+    emit(data: unknown) { for (const fn of this.listeners.status ?? []) fn({ data: JSON.stringify(data) }); }
+    close() { this.closed = true; }
+  }
+  beforeEach(() => { FakeEventSource.last = null; vi.stubGlobal('EventSource', FakeEventSource); });
+
+  const started = () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job 9' }));
+  };
+  const opened = async () => { await vi.waitFor(() => expect(FakeEventSource.last).not.toBeNull()); return FakeEventSource.last!; };
+
+  it('follows pushed status events, with no polling', async () => {
+    started();
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    const done = runRemoteExecution(suite, (u) => updates.push(u), { serverId: 'srv-1' });
+    const source = await opened();
+    expect(source.url).toBe('http://localhost:4000/api/test-exec/runs/job%209/events');
+    expect(source.init.withCredentials).toBe(true);
+
+    const progress = { total: 2, completed: 1, passed: 1, failed: 0, percent: 50 };
+    source.emit({ status: 'running', phase: 'RUNNING', progress });
+    const results = { _schema: 'devdoc-robot-results-v1', suiteTitle: 'RTC Suite', executedAt: 'x', environment: 'Lab PC', summary: { total: 2, passed: 2, failed: 0, skipped: 0 }, results: [] };
+    source.emit({ status: 'completed', phase: 'COMPLETED', results });
+    await done;
+
+    expect(updates).toEqual([
+      { state: 'running' },
+      { state: 'running', phase: 'RUNNING', progress, pollError: undefined },
+      { state: 'completed', results },
+    ]);
+    expect(source.closed).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // push + start only
+  });
+
+  it('falls back to polling if the stream drops', async () => {
+    started();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'failed', phase: 'FAILED', error: 'stopped' }));
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    const done = runRemoteExecution(suite, (u) => updates.push(u), { serverId: 'srv-1', pollIntervalMs: 1 });
+    const source = await opened();
+    source.onerror!();
+    await done;
+    expect(source.closed).toBe(true);
+    expect(fetchMock.mock.calls[2][0]).toBe('http://localhost:4000/api/test-exec/runs/job 9');
+    expect(updates).toEqual([{ state: 'running' }, { state: 'error', message: 'stopped' }]);
+  });
+
+  it('runs on the simulated Test PC keep polling', async () => {
+    started();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'failed', error: 'x' }));
+    const { runRemoteExecution } = await load();
+    await runRemoteExecution(suite, () => {}, { pollIntervalMs: 1 });
+    expect(FakeEventSource.last).toBeNull();
+  });
+});

@@ -345,3 +345,57 @@ def test_tracks_100_concurrent_runs_within_one_tick(keyed_api: Api, testpc: resp
     per_read_ms = (time.perf_counter() - t0) / len(job_ids) * 1000
     assert per_read_ms < 50, f"status read took {per_read_ms:.1f} ms"
     print(f"\n100 runs: one tick {tick * 1000:.0f} ms, status read {per_read_ms:.1f} ms each")
+
+
+# ── live updates (022) ───────────────────────────────────────────────
+
+
+def _events(chunks: list[str]) -> list[dict[str, Any]]:
+    return [json.loads(c.split("data: ", 1)[1]) for c in chunks if c.startswith("event: status")]
+
+
+def test_event_stream_pushes_each_change_until_the_run_finishes(keyed_api: Api, testpc: respx.MockRouter) -> None:
+    _, job_id = started(keyed_api, testpc)
+    route = testpc.get(STATUS_URL)
+    remote_runs = keyed_api.client.app.state.services.remote_runs  # type: ignore[attr-defined]
+
+    async def scenario() -> list[str]:
+        stream = await remote_runs.events(job_id, heartbeat_s=0.05)
+        chunks = [await anext(stream), await anext(stream)]  # retry hint, current state
+        t = time.time()
+        route.mock(return_value=httpx.Response(200, json={"status": "RUNNING", "total": 4, "completed": 1}))
+        await remote_runs.poll_due(t)
+        chunks.append(await anext(stream))
+        chunks.append(await anext(stream))  # nothing changed: a keep-alive comment
+        await keyed_api.client.app.state.services.remote_runs._redis.delete(  # type: ignore[attr-defined]
+            f"dds:texec:lock:{job_id}"
+        )
+        route.mock(return_value=httpx.Response(200, json={"status": "FAILED", "error": "BMC unreachable"}))
+        await remote_runs.poll_due(t + 10)
+        chunks.extend([c async for c in stream])  # the last event, then the stream ends
+        return chunks
+
+    chunks = keyed_api.client.portal.call(scenario)  # type: ignore[union-attr]
+    assert chunks[0] == "retry: 3000\n\n"
+    assert chunks[3] == ": keep-alive\n\n"
+    events = _events(chunks)
+    assert [e["phase"] for e in events] == ["QUEUED", "RUNNING", "FAILED"]
+    assert events[1]["progress"]["percent"] == 25.0
+    assert events[2]["error"] == "BMC unreachable"
+
+
+def test_event_stream_over_http(keyed_api: Api, testpc: respx.MockRouter) -> None:
+    agent, job_id = started(keyed_api, testpc)
+    testpc.get(STATUS_URL).mock(return_value=httpx.Response(200, json={"status": "COMPLETED", "results": []}))
+    poll(keyed_api)
+    res = agent.get(f"/api/test-exec/runs/{job_id}/events")  # finished: one event, then it closes
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/event-stream")
+    assert res.headers["cache-control"] == "no-cache"
+    [event] = _events(res.text.split("\n\n"))
+    assert event["status"] == "completed" and event["phase"] == "COMPLETED"
+
+
+def test_event_stream_needs_a_remote_run_and_sign_in(keyed_api: Api) -> None:
+    assert keyed_api.sign_in(ADMIN).get("/api/test-exec/runs/nope/events").status_code == 404
+    assert keyed_api.anonymous().get("/api/test-exec/runs/nope/events").status_code == 401
