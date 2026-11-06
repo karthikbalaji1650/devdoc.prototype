@@ -100,6 +100,20 @@ describe('runRemoteExecution', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it('sends the run to a registered test server and reports its failure', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: true })) // push
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job-9' })) // start
+      .mockResolvedValueOnce(jsonResponse({ status: 'failed', error: 'BMC unreachable' }));
+
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    await runRemoteExecution(suite, (u) => updates.push(u), { pollIntervalMs: 1, serverId: 'srv-1' });
+
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ suiteId: 's1', serverId: 'srv-1' });
+    expect(updates).toEqual([{ state: 'running' }, { state: 'error', message: 'BMC unreachable' }]);
+  });
+
   it('reports a failure via onUpdate instead of throwing, if pushing the script fails', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'suiteId is required.' }, 400));
     const { runRemoteExecution } = await load();

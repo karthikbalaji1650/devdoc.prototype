@@ -13,6 +13,7 @@ class PushScriptRequest(WireModel):
 
 class StartRunRequest(WireModel):
     suiteId: str
+    serverId: str | None = None  # a registered test server; omitted -> the mock Test PC
 
 
 class StartRunResponse(WireModel):
@@ -45,5 +46,6 @@ class RobotResultsJson(WireModel):
 
 
 class RunStatusResponse(WireModel):
-    status: Literal["running", "completed"]
+    status: Literal["running", "completed", "failed"]
     results: RobotResultsJson | None = None  # present only once completed
+    error: str | None = None  # present only when failed

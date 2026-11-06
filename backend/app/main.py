@@ -30,7 +30,7 @@ from app.repositories.document_history import DocumentHistoryStore
 from app.repositories.postgres import postgres_repositories
 from app.repositories.releases import ReleaseStore
 from app.repositories.session_audit import SessionAuditStore
-from app.repositories.test_exec import TestExecRepository
+from app.repositories.test_exec import RemoteJobStore, TestExecRepository
 from app.repositories.test_management import TestManagementStore
 from app.repositories.test_servers import TestServerStore
 from app.routers import (
@@ -64,6 +64,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
     session_audit = SessionAuditStore(redis)
     test_store = TestManagementStore(redis)
     documents = CachedDocumentRepository(repos.documents, redis)
+    test_servers = TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client)
     return Services(
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
@@ -71,9 +72,9 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         documents=DocumentService(documents, DocumentHistoryStore(redis)),
         admin=AdminService(documents, redis),
         ai=AiService(settings, http_client),
-        test_exec=TestExecService(TestExecRepository()),
         test_management=TestManagementService(test_store),
-        test_servers=TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client),
+        test_servers=test_servers,
+        test_exec=TestExecService(TestExecRepository(), remote_jobs=RemoteJobStore(redis), servers=test_servers),
         releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,

@@ -1,7 +1,12 @@
-"""Mock remote Test PC: the frontend pushes a suite's Robot Framework
-script, starts a run, and polls for results. Nothing here touches real
-hardware - a future real Test PC integration replaces this service behind
-the same routes, with no client-side changes."""
+"""Remote test execution: the frontend pushes a suite's Robot Framework
+script, starts a run, and polls for results.
+
+- With a `serverId` (DDS-SRS-020), the run goes to that registered remote
+  test server, authenticated with its stored credentials (see
+  services/test_servers.py), using the Test PC API in docs/test-pc-api.md:
+  POST {endpoint}/runs starts it, GET {endpoint}/runs/{id} reports it.
+- Without one, a mock Test PC answers with random results - the demo
+  setup, where there is no real hardware."""
 
 import asyncio
 import math
@@ -11,11 +16,13 @@ import string
 import time
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from app.core.errors import ApiError
 from app.core.jscompat import JS_WS_CLASS, is_nonblank_string, js_iso_date, js_opt, js_trim
 from app.models.test_exec import Job, PushedScript
-from app.repositories.test_exec import TestExecRepository
+from app.repositories.test_exec import RemoteJobStore, TestExecRepository
+from app.services.test_servers import TestServerService
 
 # How long the mock pretends a run takes. Real hardware takes far longer
 # (hence the frontend's 30-minute poll); this only has to let a poll see
@@ -69,9 +76,17 @@ def _job_id() -> str:
 class TestExecService:
     __test__ = False
 
-    def __init__(self, repo: TestExecRepository, run_delay_s: float = MOCK_RUN_DELAY_S) -> None:
+    def __init__(
+        self,
+        repo: TestExecRepository,
+        run_delay_s: float = MOCK_RUN_DELAY_S,
+        remote_jobs: RemoteJobStore | None = None,
+        servers: TestServerService | None = None,
+    ) -> None:
         self._repo = repo
         self._run_delay_s = run_delay_s
+        self._remote_jobs = remote_jobs
+        self._servers = servers
 
     def push_script(self, body: Any) -> dict[str, bool]:
         suite_id, suite_title, robot_code = (js_opt(body, k) for k in ("suiteId", "suiteTitle", "robotCode"))
@@ -84,13 +99,19 @@ class TestExecService:
         self._repo.save_script(PushedScript(suite_id, suite_title, robot_code))
         return {"ok": True}
 
-    def start_run(self, body: Any) -> dict[str, str]:
+    async def start_run(self, body: Any, user_name: str = "") -> dict[str, str]:
         suite_id = js_opt(body, "suiteId")
         if not is_nonblank_string(suite_id):
             raise ApiError(400, "suiteId is required.")
         script = self._repo.get_script(suite_id)
         if script is None:
             raise ApiError(400, "No script has been pushed for this suite yet.")
+
+        server_id = js_opt(body, "serverId")
+        if server_id is not None:
+            if not is_nonblank_string(server_id):
+                raise ApiError(400, "serverId must be a test server id.")
+            return await self._start_remote(server_id, script, user_name)
 
         job_id = _job_id()
         self._repo.save_job(job_id, Job(suite_id=suite_id, status="running"))
@@ -118,10 +139,137 @@ class TestExecService:
             ),
         )
 
-    def run_status(self, job_id: str) -> dict[str, Any]:
+    async def run_status(self, job_id: str) -> dict[str, Any]:
+        if self._remote_jobs is not None:
+            remote = await self._remote_jobs.get(job_id)
+            if remote is not None:
+                return await self._remote_status(remote)
         job = self._repo.get_job(job_id)
         if job is None:
             raise ApiError(404, "No run found with that id.")
         if job.status == "running":
             return {"status": "running"}
         return {"status": "completed", "results": job.results}
+
+    # Remote test servers (DDS-SRS-020)
+
+    def _require_remote(self) -> tuple[RemoteJobStore, TestServerService]:
+        if self._remote_jobs is None or self._servers is None:
+            raise ApiError(501, "Remote test servers are not available on this server.")
+        return self._remote_jobs, self._servers
+
+    async def _start_remote(self, server_id: str, script: PushedScript, user_name: str) -> dict[str, str]:
+        jobs, servers = self._require_remote()
+        server = await servers.get_server(server_id)
+        res = await servers.call(
+            server,
+            "POST",
+            "/runs",
+            {
+                "suiteId": script.suite_id,
+                "suiteTitle": script.suite_title,
+                "robotCode": script.robot_code,
+                "parameters": server.get("payload", {}),
+            },
+        )
+        if res.status_code >= 400:
+            raise ApiError(502, _remote_error(server, res, "did not start the run"))
+        remote_job_id = _json(res).get("jobId")
+        if not isinstance(remote_job_id, (str, int)) or str(remote_job_id) == "":
+            raise ApiError(502, f'Test server "{server["name"]}" did not return a jobId.')
+        job_id = _job_id()
+        await jobs.put(
+            job_id,
+            {
+                "serverId": server_id,
+                "serverName": server["name"],
+                "remoteJobId": str(remote_job_id),
+                "suiteId": script.suite_id,
+                "suiteTitle": script.suite_title,
+                "startedBy": user_name,
+                "startedAt": js_iso_date(datetime.now(UTC)),
+            },
+        )
+        return {"jobId": job_id}
+
+    async def _remote_status(self, job: dict[str, Any]) -> dict[str, Any]:
+        _, servers = self._require_remote()
+        server = await servers.get_server(job["serverId"])
+        res = await servers.call(server, "GET", f"/runs/{quote(job['remoteJobId'], safe='')}")
+        if res.status_code >= 400:
+            raise ApiError(502, _remote_error(server, res, "could not report the run"))
+        body = _json(res)
+        status = str(body.get("status", "")).upper()
+        if status in ("QUEUED", "RUNNING"):
+            return {"status": "running"}
+        if status == "FAILED":
+            error = body.get("error")
+            message = error if isinstance(error, str) and error.strip() else "The test server reported the run failed."
+            return {"status": "failed", "error": message[:1000]}
+        if status == "COMPLETED":
+            return {"status": "completed", "results": _normalise_results(body, job, server["name"])}
+        raise ApiError(502, f'Test server "{server["name"]}" returned an unknown run status: {status or "none"}.')
+
+
+def _json(res: Any) -> dict[str, Any]:
+    try:
+        body = res.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _remote_error(server: dict[str, Any], res: Any, what: str) -> str:
+    if res.status_code in (401, 403):
+        return f'Test server "{server["name"]}" rejected the credentials (HTTP {res.status_code}).'
+    return f'Test server "{server["name"]}" {what} (HTTP {res.status_code}).'
+
+
+_STATUS_MAP = {"PASS": "PASS", "PASSED": "PASS", "FAIL": "FAIL", "FAILED": "FAIL", "SKIP": "SKIP", "SKIPPED": "SKIP"}
+MAX_RESULTS = 20_000
+
+
+def _normalise_results(body: dict[str, Any], job: dict[str, Any], server_name: str) -> dict[str, Any]:
+    """The server's results in the shape the frontend reads
+    (devdoc-robot-results-v1); entries it cannot read are rejected, so a
+    malformed reply never reaches the UI half-parsed."""
+    raw = body.get("results")
+    if isinstance(raw, dict):  # a full devdoc-robot-results-v1 document
+        raw = raw.get("results")
+    if not isinstance(raw, list):
+        raise ApiError(502, f'Test server "{server_name}" completed the run without a results list.')
+    if len(raw) > MAX_RESULTS:
+        raise ApiError(502, f'Test server "{server_name}" returned more than {MAX_RESULTS} results.')
+    results: list[dict[str, Any]] = []
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ApiError(502, f'Test server "{server_name}" returned an unreadable result (#{i + 1}).')
+        status = _STATUS_MAP.get(str(entry.get("status", "")).upper())
+        title = entry.get("title")
+        if status is None or not isinstance(title, str) or not title.strip():
+            raise ApiError(502, f'Test server "{server_name}" returned an unreadable result (#{i + 1}).')
+        custom_id = entry.get("customId")
+        elapsed = entry.get("elapsedTimeMs")
+        result: dict[str, Any] = {
+            "customId": custom_id.strip() if isinstance(custom_id, str) and custom_id.strip() else f"TC-{i + 1}",
+            "title": title.strip(),
+            "status": status,
+            "elapsedTimeMs": int(elapsed) if isinstance(elapsed, (int, float)) and elapsed >= 0 else 0,
+        }
+        message = entry.get("failureMessage")
+        if status == "FAIL":
+            result["failureMessage"] = message[:2000] if isinstance(message, str) and message else "Failed."
+        results.append(result)
+    return {
+        "_schema": "devdoc-robot-results-v1",
+        "suiteTitle": job["suiteTitle"],
+        "executedAt": js_iso_date(datetime.now(UTC)),
+        "environment": server_name,
+        "summary": {
+            "total": len(results),
+            "passed": sum(r["status"] == "PASS" for r in results),
+            "failed": sum(r["status"] == "FAIL" for r in results),
+            "skipped": sum(r["status"] == "SKIP" for r in results),
+        },
+        "results": results,
+    }

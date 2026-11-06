@@ -28,6 +28,10 @@ function waitForLine(proc: ChildProcessWithoutNullStreams, pattern: RegExp, time
   });
 }
 
+// One API + dev server on fixed ports for the whole file, so its tests run
+// one after another (the first expects no test servers registered yet).
+test.describe.configure({ mode: 'serial' });
+
 let apiProc: ChildProcessWithoutNullStreams;
 let frontendProc: ChildProcessWithoutNullStreams;
 let users: { email: string; password: string; name: string }[];
@@ -68,8 +72,13 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
 
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await page.getByRole('button', { name: 'Run Test' }).click();
+  // No servers registered: the simulated Test PC is the only choice.
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No test servers are registered yet.', { exact: false })).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: /Simulated Test PC/ })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
-  await expect(page.getByText(/Run started/)).toBeVisible();
+  await expect(page.getByText(/Run started on Simulated Test PC/)).toBeVisible();
   await expect(page.getByText('Remote Execution Run')).toBeVisible();
 
   // The push + start calls happen in the background (not awaited by the
@@ -78,5 +87,39 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
   // network calls succeeded, not just that the UI optimistically showed
   // an "In Progress" placeholder.
   await page.waitForTimeout(1000);
+  await expect(page.getByText(/Remote execution failed/)).toHaveCount(0);
+});
+
+test('Run Test sends the suite to a registered test server with its credentials (DDS-SRS-020)', async ({ page }) => {
+  const api = `http://localhost:${API_PORT}`;
+  await skipWelcomeGuide(page);
+  await page.goto(`http://localhost:${FRONTEND_PORT}`);
+  await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
+  await page.getByPlaceholder('Enter your password').fill(users[0].password);
+  await page.getByRole('button', { name: /sign in to platform/i }).click();
+  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+
+  // Register the harness's fake Test PC (backend/tests/e2e_server.py) as the admin.
+  const created = await page.request.post(`${api}/api/test-servers`, {
+    data: {
+      name: 'Fake Lab PC', endpointUrl: `${api}/__e2e/testpc`, authType: 'apiKey',
+      auth: { apiKey: 'e2e-testpc-key' }, payload: { bmcIp: '10.0.0.5' },
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+
+  await page.getByRole('button', { name: 'Test Management', exact: true }).click();
+  await page.getByRole('button', { name: 'Run Test' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('radio', { name: /Fake Lab PC/ })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
+  await expect(page.getByText(/Run started on Fake Lab PC/)).toBeVisible();
+
+  // What the fake Test PC received: the suite's Robot script, the payload
+  // parameters and the API key, sent by the backend (never the browser).
+  await expect.poll(async () => (await (await page.request.get(`${api}/__e2e/testpc/last`)).json())?.apiKey).toBe('e2e-testpc-key');
+  const last = await (await page.request.get(`${api}/__e2e/testpc/last`)).json();
+  expect(last.body.parameters).toEqual({ bmcIp: '10.0.0.5' });
+  expect(last.body.robotCode).toContain('*** Test Cases ***');
   await expect(page.getByText(/Remote execution failed/)).toHaveCount(0);
 });

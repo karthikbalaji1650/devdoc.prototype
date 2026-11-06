@@ -16,6 +16,7 @@ import {
   type TestManagementData,
 } from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
+import { RunTargetModal, type RunTarget } from './RunTargetModal';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary, testCaseLibrary } from '../../services/testCaseLibraryService';
 import { useSharedCollection, type CollectionStatus } from '../../services/sharedCollection';
@@ -2811,6 +2812,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
   const [lastRunResults,         setLastRunResults]         = useState<{run:TestRunItem;results:ParsedRobotTestResult[];suiteName:string}|null>(null);
+  const [runTargetSuite,         setRunTargetSuite]         = useState<TestSuiteItem|null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3500); };
 
@@ -2977,21 +2979,25 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
   // Both "Run Test" (Test Cases toolbar) and "Execute Automated Tests"
   // (Test Runs toolbar) call this, scoped to the currently selected
-  // suite. Pushes the suite's script to the remote execution backend
-  // (a mock today - see server/src/testExec.ts), shows an "In Progress"
-  // run immediately, then updates it in place once results sync back.
+  // suite. Asks which test server to use (DDS-SRS-020), pushes the suite's
+  // script to the backend, which sends it to that server (or its simulated
+  // Test PC), shows an "In Progress" run immediately, then updates it in
+  // place once results sync back.
   const handleRunTest = (suite: TestSuiteItem) => {
     if (!isRemoteExecutionConfigured()) {
-      showToast('⚠️ Remote execution needs a backend - see server/README.md.');
+      showToast('⚠️ Remote execution needs the backend (VITE_API_BASE_URL) - see backend/README.md.');
       return;
     }
+    setRunTargetSuite(suite);
+  };
 
+  const startRemoteRun = (suite: TestSuiteItem, target: RunTarget) => {
     const runId = `run-${Date.now()}`;
     const placeholderRun: TestRunItem = {
       id: runId,
       name: `${suite.title} Remote Execution Run`,
       suiteId: suite.id,
-      environment: 'Remote Test PC',
+      environment: target.name,
       status: 'In Progress',
       passedCount: 0,
       failedCount: 0,
@@ -3000,7 +3006,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     };
     setRuns(prev => [placeholderRun, ...prev]);
     setView('runs');
-    showToast('🚀 Run started — this can take a while; results sync automatically.');
+    showToast(`🚀 Run started on ${target.name} — this can take a while; results sync automatically.`);
 
     runRemoteExecution(suite, (update: RemoteExecutionUpdate) => {
       if (update.state === 'error') {
@@ -3035,7 +3041,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
         showToast(`✅ Run complete — ${update.results.summary.passed} passed, ${update.results.summary.failed} failed.`);
       }
-    });
+    }, { serverId: target.serverId });
   };
 
   const handleExportProtocolExcel = async () => {
@@ -3161,6 +3167,14 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
         <AiGenerateModal
           suites={suites} selectedSuiteId={selectedSuiteId}
           onGenerate={handleAiGenerate} onClose={()=>setShowAiModal(false)}
+        />
+      )}
+      {/* Run Test: choose the test server (DDS-SRS-020) */}
+      {runTargetSuite && (
+        <RunTargetModal
+          suiteTitle={runTargetSuite.title}
+          onRun={(target) => { const suite = runTargetSuite; setRunTargetSuite(null); startRemoteRun(suite, target); }}
+          onClose={() => setRunTargetSuite(null)}
         />
       )}
       {/* Back Annotate Modal */}

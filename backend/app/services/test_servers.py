@@ -10,8 +10,8 @@ rest (DDS-SRS-075).
   AES-256-GCM before they are stored and are never returned by the API;
   responses only say whether one is set. On an edit, leaving a secret out
   keeps the stored one.
-- `auth_headers()` is what run triggering (DDS-SRS-020) uses to call the
-  server; `check()` uses it now to test the connection.
+- `call()` is how run triggering (DDS-SRS-020) talks to a server, with
+  its stored credentials; `check()` tests the connection.
 """
 
 import base64
@@ -252,3 +252,22 @@ class TestServerService:
         elif not ok:
             error = f"The server answered HTTP {res.status_code}."
         return {"ok": ok, "status": res.status_code, "latencyMs": latency, "error": error}
+
+    async def get_server(self, server_id: str) -> dict[str, Any]:
+        """The stored record, secrets sealed - for server-side use only, never a response."""
+        return await self._get(server_id)
+
+    async def call(
+        self, server: dict[str, Any], method: str, path: str, json_body: Any = None, timeout_s: float = 30.0
+    ) -> httpx.Response:
+        """An authenticated request to `{endpointUrl}{path}` on a registered
+        server (DDS-SRS-020). Connection problems become a 502 ApiError."""
+        headers = await self.auth_headers(server)
+        url = server["endpointUrl"].rstrip("/") + path
+        try:
+            res = await self._http.request(
+                method, url, headers=headers, json=json_body, timeout=timeout_s, follow_redirects=False
+            )
+        except httpx.HTTPError as exc:
+            raise ApiError(502, f'Could not reach test server "{server["name"]}" ({type(exc).__name__}).') from exc
+        return res
