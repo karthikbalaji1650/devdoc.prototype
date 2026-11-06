@@ -4,11 +4,14 @@ failureMessage}) - for results a CI pipeline uploads after running the
 tests itself (DDS-SRS-026).
 
 - A test's outcome is its own <status> (the last direct child), not the
-  first nested keyword's.
+  first nested keyword's. PASS, FAIL and SKIP map directly; NOT RUN (the
+  test was not executed) counts as SKIP.
 - Elapsed time comes from `elapsed` (RF 7, seconds) or starttime/endtime
   (RF 4 - 6); 0 when neither is there.
-- The ID is read from the test name the way the frontend's import does
-  ("TC_HPM_001 Title" -> "TC-HPM-001"); otherwise TC-<position>.
+- The ID is read from the test name ("TC_HPM_001 Title" -> "TC-HPM-001");
+  otherwise TC-<position>.
+- The frontend's import (robotOutputParserService.ts) follows the same rules;
+  tests/fixtures/robot_output_* pin both to the same expected results.
 - Parsed with defusedxml: entity expansion and external entities are refused.
 """
 
@@ -58,7 +61,7 @@ def parse_robot_output(xml_text: bytes | str) -> dict[str, Any]:
         statuses = test.findall("status")
         status_el = statuses[-1] if statuses else None
         raw = status_el.get("status") if status_el is not None else "FAIL"
-        status = raw if raw in ("PASS", "SKIP") else "FAIL"  # FAIL and NOT RUN count as failed
+        status = {"PASS": "PASS", "SKIP": "SKIP", "NOT RUN": "SKIP"}.get(raw or "", "FAIL")
         match = _ID.match(title)
         result: dict[str, Any] = {
             "customId": match.group(1).replace("_", "-") if match else f"TC-{i + 1}",

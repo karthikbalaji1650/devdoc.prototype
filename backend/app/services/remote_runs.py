@@ -371,7 +371,8 @@ class RemoteRunService:
                 status="Completed" if s["failed"] == 0 else "Failed",
                 passedCount=s["passed"],
                 failedCount=s["failed"],
-                blockedCount=s["skipped"],
+                blockedCount=0,
+                skippedCount=s["skipped"],
                 caseResults=[
                     {
                         "caseId": f"tc-{i}",

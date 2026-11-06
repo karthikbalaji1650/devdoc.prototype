@@ -221,7 +221,7 @@ def test_uploading_output_xml_records_a_completed_run(keyed_api: Api) -> None:
     assert body["summary"] == {"total": 3, "passed": 1, "failed": 1, "skipped": 1}
     [run] = [r for r in runs(admin) if r["id"] == body["runId"]]
     assert run["status"] == "Failed" and run["environment"] == "Bitbucket Pipelines"
-    assert run["passedCount"] == 1 and run["failedCount"] == 1 and run["blockedCount"] == 1
+    assert run["passedCount"] == 1 and run["failedCount"] == 1 and run["skippedCount"] == 1 and run["blockedCount"] == 0
     assert [c["status"] for c in run["caseResults"]] == ["Passed", "Failed", "Skipped"]
     assert run["ci"]["commit"] == "deadbeef" and run["ci"]["buildNumber"] == "17"
 
@@ -266,3 +266,13 @@ def test_upload_validation(
         f"/api/ci/results{query}", content=content, headers={**bearer(token), "Content-Type": content_type}
     )
     assert res.status_code == status and message in res.json()["error"], res.text
+
+
+@pytest.mark.parametrize("name", ["robot_output_rf7.xml", "robot_output_rf6.xml"])
+def test_parser_matches_the_shared_expected_results(name: str) -> None:
+    """The frontend's import reads the same files to the same results."""
+    from pathlib import Path
+
+    fixtures = Path(__file__).parent / "fixtures"
+    expected = json.loads((fixtures / "robot_output.expected.json").read_text())[name]
+    assert parse_robot_output((fixtures / name).read_bytes()) == expected

@@ -17,6 +17,9 @@ import {
 } from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
 import { RunTargetModal, type RunTarget } from './RunTargetModal';
+import { RunEditModal } from './RunEditModal';
+import { getStoredSession } from '../../services/authService';
+import { rerunOf, closeRun, reopenRun } from '../../services/runActions';
 import { ScheduleModal } from './ScheduleModal';
 import { TrendCharts } from './TrendCharts';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
@@ -52,6 +55,7 @@ import {
   FileSpreadsheet, Folder,
   HelpCircle, ImagePlus, Library, BookmarkPlus, Paperclip, Bug,
   CalendarClock,
+  RotateCcw,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -1624,8 +1628,14 @@ const RunDetailView: React.FC<{
   run: TestRunItem; runs: TestRunItem[]; suites: TestSuiteItem[];
   onUpdate: (run: TestRunItem) => void; onClose: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
-}> = ({ run, runs, suites, onUpdate, onClose, onUpdateSuites }) => {
+  /** Adds a new run (Rerun) and opens it. */
+  onRerun: (run: TestRunItem) => void;
+  onRunTest: (suite: TestSuiteItem) => void;
+}> = ({ run, runs, suites, onUpdate, onClose, onUpdateSuites, onRerun, onRunTest }) => {
   const [activeTab, setActiveTab] = useState<RunDetailTab>('results');
+  const [editing, setEditing] = useState(false);
+  const currentUser = getStoredSession()?.user.name;
+  const isOpen = run.status === 'In Progress';
   // Historical trends (DDS-SRS-025): which earlier run of the suite to compare with.
   const baselines = comparableRuns(runs, run);
   const [baselineId, setBaselineId] = useState<string>(() => baselines[0]?.id ?? '');
@@ -1658,7 +1668,7 @@ const RunDetailView: React.FC<{
 
   const handleStatusChange = (caseId: string, status: TestCaseStatus) => {
     const newResults = caseResults.map(r => r.caseId === caseId
-      ? { ...r, status, testedBy: 'Manivannan T.', testedAt: new Date().toISOString() } : r);
+      ? { ...r, status, testedBy: currentUser, testedAt: new Date().toISOString() } : r);
     onUpdate({
       ...run, caseResults: newResults,
       passedCount:  newResults.filter(r => r.status === 'Passed').length,
@@ -1735,7 +1745,7 @@ const RunDetailView: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-slate-900 truncate">{run.name}</h2>
-          <p className="text-xs text-slate-500">Created by Manivannan T. on {new Date(run.executedAt).toLocaleDateString()}</p>
+          <p className="text-xs text-slate-500">{run.createdBy ? `Created by ${run.createdBy} on ` : 'Created on '}{new Date(run.executedAt).toLocaleDateString()}{!isOpen && ' · Closed'}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select aria-label="Download test summary report" value="" onChange={e => { if (e.target.value) handleDownloadReport(e.target.value as 'html' | 'csv' | 'pdf'); }}
@@ -1745,13 +1755,21 @@ const RunDetailView: React.FC<{
             <option value="html">HTML</option>
             <option value="csv">CSV</option>
           </select>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Check className="w-3.5 h-3.5" /> Close</button>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><RefreshCw className="w-3.5 h-3.5" /> Rerun</button>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs"><Play className="w-3.5 h-3.5" /> Execute Automated Tests</button>
+          <button onClick={() => onUpdate(isOpen ? closeRun(run) : reopenRun(run))}
+            title={isOpen ? 'Finish the run: its status follows its results' : 'Open the run again for testing'}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs">
+            {isOpen ? <><Check className="w-3.5 h-3.5" /> Close</> : <><RotateCcw className="w-3.5 h-3.5" /> Reopen</>}
+          </button>
+          <button onClick={() => onRerun(rerunOf(run))} title="Start a new run of the same test cases, all untested"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><RefreshCw className="w-3.5 h-3.5" /> Rerun</button>
+          <button onClick={() => setEditing(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
+          <button onClick={() => suite && onRunTest(suite)} disabled={!suite} title={suite ? 'Run this suite\'s automated tests on a test server' : 'The run\'s suite no longer exists'}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50"><Play className="w-3.5 h-3.5" /> Execute Automated Tests</button>
         </div>
       </div>
       {reportNote && <p role="status" className="text-xs text-[var(--blue)] -mt-2 mb-3">{reportNote}</p>}
+      {editing && <RunEditModal run={run} onSave={(r) => { onUpdate(r); setEditing(false); }} onClose={() => setEditing(false)} />}
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 shadow-xs">
@@ -1995,7 +2013,8 @@ const TestRunsView: React.FC<{
   const [inputXml,      setInputXml]      = useState(SAMPLE_ROBOT_XML);
 
   const selectedRun = runs.find(r => r.id === selectedRunId);
-  if (selectedRun) return <RunDetailView run={selectedRun} runs={runs} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}/>;
+  if (selectedRun) return <RunDetailView run={selectedRun} runs={runs} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}
+    onRerun={(r)=>{ onAddRun(r); setSelectedRunId(r.id); }} onRunTest={onRunTest}/>;
 
   const openRuns      = runs.filter(r => r.status === 'In Progress');
   const completedRuns = runs.filter(r => r.status !== 'In Progress');
@@ -2043,7 +2062,7 @@ const TestRunsView: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
           <h3 className={`text-sm font-bold mb-1 ${open?'text-blue-700':'text-slate-800 group-hover:text-slate-900'}`}>{run.name}</h3>
-          <p className="text-[11px] text-slate-500 mb-1">By Manivannan T. · {new Date(run.executedAt).toLocaleDateString()}</p>
+          <p className="text-[11px] text-slate-500 mb-1">{run.createdBy ? `By ${run.createdBy} · ` : ''}{new Date(run.executedAt).toLocaleDateString()}</p>
           <p className="text-[11px] text-slate-500">{run.passedCount} Passed · {run.failedCount} Failed · {run.blockedCount} Blocked · {run.untestedCount??0} Untested</p>
           {run.remote && <RemoteProgressLine remote={run.remote} />}
           {run.ci && <CiBuildLine ci={run.ci} />}
@@ -2969,7 +2988,8 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
   const handleProcessXml = (xml: string) => {
     try {
-      const suite = suites[0];
+      // The suite being viewed, as on the rest of the Test Runs screen.
+      const suite = suites.find(s => s.id === selectedSuiteId) ?? suites[0];
       const { run: parsedRun, results } = parseRobotOutputXml(xml, suite?.id||'');
       if (results.length===0){showToast('⚠️ No test results found in XML.');return;}
       const caseResults: TestRunCaseResult[] = results.map((r,i)=>({
@@ -3114,7 +3134,8 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
           status: update.results.summary.failed === 0 ? 'Completed' : 'Failed',
           passedCount: update.results.summary.passed,
           failedCount: update.results.summary.failed,
-          blockedCount: update.results.summary.skipped,
+          blockedCount: 0,
+          skippedCount: update.results.summary.skipped,
           caseResults,
         };
         setRuns(prev => prev.map(r => r.id === runId ? updatedRun : r));

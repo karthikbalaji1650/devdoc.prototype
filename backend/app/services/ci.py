@@ -216,7 +216,8 @@ class CiService:
             "status": "Completed" if summary["failed"] == 0 else "Failed",
             "passedCount": summary["passed"],
             "failedCount": summary["failed"],
-            "blockedCount": summary["skipped"],
+            "blockedCount": 0,
+            "skippedCount": summary["skipped"],
             "executedAt": _now_iso(),
             "caseResults": [
                 {

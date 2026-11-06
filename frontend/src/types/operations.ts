@@ -176,6 +176,8 @@ export interface TestRunItem {
   remote?: RemoteRunState;
   /** Runs started or recorded by a CI/CD pipeline (DDS-SRS-026/027). */
   ci?: CiBuildInfo;
+  /** Who created the run; set by the server. */
+  createdBy?: string;
 }
 
 export interface CiBuildInfo {

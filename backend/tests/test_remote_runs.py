@@ -300,6 +300,7 @@ def test_the_linked_test_run_is_updated_without_the_browser(keyed_api: Api, test
                 "results": [
                     {"customId": "TC-001", "title": "TC-001 Drift", "status": "PASS"},
                     {"customId": "TC-002", "title": "TC-002 Alarm", "status": "FAIL"},
+                    {"customId": "TC-003", "title": "TC-003 Leap year", "status": "SKIP"},
                 ],
             },
         )
@@ -308,7 +309,8 @@ def test_the_linked_test_run_is_updated_without_the_browser(keyed_api: Api, test
     poll(keyed_api, t + 10)
     stored = _run(agent, "run-1")
     assert stored["status"] == "Failed" and stored["passedCount"] == 1 and stored["failedCount"] == 1
-    assert [c["status"] for c in stored["caseResults"]] == ["Passed", "Failed"]
+    assert stored["skippedCount"] == 1 and stored["blockedCount"] == 0  # skipped is not blocked
+    assert [c["status"] for c in stored["caseResults"]] == ["Passed", "Failed", "Skipped"]
     assert stored["remote"]["phase"] == "COMPLETED"
 
 

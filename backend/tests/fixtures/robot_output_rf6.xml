@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 6.1" generated="20261106 10:00:00.000" rpa="false" schemaversion="4">
+<suite id="s1" name="Old Suite"><test id="s1-t1" name="TC_A_1 One">
+<kw name="Log"><status status="PASS" starttime="20261106 10:00:00.000" endtime="20261106 10:00:00.010"/></kw>
+<status status="PASS" starttime="20261106 10:00:00.000" endtime="20261106 10:00:02.500"/>
+</test></suite></robot>

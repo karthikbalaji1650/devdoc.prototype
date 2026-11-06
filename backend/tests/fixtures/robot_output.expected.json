@@ -1,0 +1,17 @@
+{
+  "robot_output_rf7.xml": {
+    "suiteTitle": "RTC Timing",
+    "results": [
+      {"customId": "TC-RTC-001", "title": "TC_RTC_001 Drift check", "status": "PASS", "elapsedTimeMs": 1250},
+      {"customId": "TC-2", "title": "Alarm fires", "status": "FAIL", "elapsedTimeMs": 300, "failureMessage": "Alarm did not fire: 1 != 2"},
+      {"customId": "TC-RTC-003", "title": "TC-RTC-003 Leap year", "status": "SKIP", "elapsedTimeMs": 0},
+      {"customId": "TC-RTC-004", "title": "TC_RTC_004 Not reached", "status": "SKIP", "elapsedTimeMs": 0}
+    ]
+  },
+  "robot_output_rf6.xml": {
+    "suiteTitle": "Old Suite",
+    "results": [
+      {"customId": "TC-A-1", "title": "TC_A_1 One", "status": "PASS", "elapsedTimeMs": 2500}
+    ]
+  }
+}
