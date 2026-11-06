@@ -4,7 +4,7 @@ The DevDoc Studio backend, in Python on FastAPI: server-checked login,
 shared document storage on Postgres, a key-holding AI proxy, and a mock
 remote test-execution service. It replaced the original Node/Express API
 with an identical HTTP contract ([docs/api-contract.md](../docs/api-contract.md)),
-so the React frontend talks to it unchanged.
+
 
 The frontend still runs without it: leave `VITE_API_BASE_URL` unset and
 DevDoc Studio is the browser-only demo (mock login, localStorage).
