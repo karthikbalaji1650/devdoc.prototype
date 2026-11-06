@@ -28,7 +28,14 @@ def main() -> None:
     store = seeded_store()
     # A fresh key per run, so test-server credentials can be stored (DDS-SRS-075).
     secrets_key = os.environ.get("SECRETS_KEY") or base64.b64encode(os.urandom(32)).decode()
-    settings = test_settings(cors_origins=origin, secrets_key=secrets_key, remote_poll_enabled=True)
+    settings = test_settings(
+        cors_origins=origin,
+        secrets_key=secrets_key,
+        remote_poll_enabled=True,
+        # A real code-editor bridge, if a browser test started one (repos.spec.ts).
+        bridge_url=os.environ.get("BRIDGE_URL", ""),
+        bridge_token=os.environ.get("BRIDGE_TOKEN", ""),
+    )
     app = create_app(settings, repositories=memory_repositories(store), redis=redis)
 
     async def with_reset(scope: dict[str, Any], receive: Any, send: Any) -> None:

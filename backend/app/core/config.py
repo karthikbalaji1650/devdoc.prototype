@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # Tests turn it off and drive polling directly.
     remote_poll_enabled: bool = True
 
+    # The code editor's file bridge (sandbox/file_bridge.py), for cloning
+    # existing repositories into its workspace (DDS-SRS-030), and the token
+    # it requires if BRIDGE_TOKEN is set there too.
+    bridge_url: str = ""
+    bridge_token: str = ""
+
     @property
     def cookie_secure_enabled(self) -> bool:
         return self.cookie_secure == "true"

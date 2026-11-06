@@ -45,6 +45,7 @@ from app.routers import (
     documents,
     health,
     releases,
+    repos,
     test_exec,
     test_management,
     test_schedules,
@@ -60,6 +61,7 @@ from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
 from app.services.remote_runs import RemoteRunPoller, RemoteRunService
+from app.services.repos import RepoService
 from app.services.schedules import ScheduleService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
@@ -91,6 +93,9 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         ci=CiService(CiTokenStore(redis), test_store, test_servers, remote_runs),
         releases=ReleaseService(ReleaseStore(redis), test_store, trackers),
         trackers=trackers,
+        repos=RepoService(
+            redis, SecretBox(settings.secrets_key), http_client, settings.bridge_url, settings.bridge_token
+        ),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )
@@ -153,6 +158,7 @@ def create_app(
             test_servers,
             test_schedules,
             trackers,
+            repos,
             ci,
             audit,
             collections,

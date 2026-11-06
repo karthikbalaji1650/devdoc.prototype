@@ -77,6 +77,11 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       # Encrypts stored test-server credentials (see backend/.env.example).
       - SECRETS_KEY=${SECRETS_KEY:-}
+      # The code editor's file bridge, for connecting existing repositories
+      # (DDS-SRS-030). Set BRIDGE_TOKEN (any long random string) in a root .env:
+      # without it the bridge's git endpoints accept anyone who can reach port 8081.
+      - BRIDGE_URL=http://vscode-cline:8081
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
   # ----------------------------------------------------
@@ -146,6 +151,8 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-""}
       - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
+      # Same value as the api service's: required by the bridge's git endpoints when set.
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
     volumes:
       - ./workspace-qa:/home/coder/project
 

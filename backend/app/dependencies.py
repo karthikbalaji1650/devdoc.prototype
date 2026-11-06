@@ -18,6 +18,7 @@ from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
 from app.services.remote_runs import RemoteRunService
+from app.services.repos import RepoService
 from app.services.schedules import ScheduleService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
@@ -41,6 +42,7 @@ class Services:
     schedules: ScheduleService
     ci: CiService
     trackers: TrackerService
+    repos: RepoService
     login_limiter: RateLimiter
     cookie_secure: bool
 

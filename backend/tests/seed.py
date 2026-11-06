@@ -53,6 +53,8 @@ def test_settings(**overrides: Any) -> Settings:
         "openai_model": "",
         "secrets_key": "",
         "remote_poll_enabled": False,
+        "bridge_url": "",
+        "bridge_token": "",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
