@@ -17,6 +17,7 @@ import {
 } from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
 import { RunTargetModal, type RunTarget } from './RunTargetModal';
+import { ScheduleModal } from './ScheduleModal';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary, testCaseLibrary } from '../../services/testCaseLibraryService';
 import { useSharedCollection, type CollectionStatus } from '../../services/sharedCollection';
@@ -49,6 +50,7 @@ import {
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
   HelpCircle, ImagePlus, Library, BookmarkPlus, Paperclip, Bug,
+  CalendarClock,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -1061,8 +1063,9 @@ const TestCasesView: React.FC<{
   onShowAiModal: () => void;
   onShowBackAnnotateModal: () => void;
   onRunTest: (suite: TestSuiteItem) => void;
+  onSchedule: (suite: TestSuiteItem) => void;
 }> = ({ suites, selectedSuiteId, projects, visibleSuites, onSelectSuite, onUpdateSuites, onShowToast,
-        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest }) => {
+        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest, onSchedule }) => {
   const [collapseAll, setCollapseAll]       = useState(false);
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
   const [showAddCase, setShowAddCase]       = useState(false);
@@ -1322,6 +1325,9 @@ const TestCasesView: React.FC<{
           </button>
           <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5" /> Run Test
+          </button>
+          <button onClick={() => selectedSuite && onSchedule(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-50">
+            <CalendarClock className="w-3.5 h-3.5" /> Schedule
           </button>
           {selectedSuite && <>
             <button onClick={onExportSuiteMd} className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg text-xs font-semibold">
@@ -1978,8 +1984,9 @@ const TestRunsView: React.FC<{
   onProcessXml: (xml: string) => void; onDownloadResultJson: () => void; onExportRunReport: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
   onRunTest: (suite: TestSuiteItem) => void;
+  onSchedule: (suite: TestSuiteItem) => void;
 }> = ({ runs, suites, milestones, selectedSuiteId, onAddRun, onUpdateRun, onDeleteRun,
-        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites, onRunTest }) => {
+        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites, onRunTest, onSchedule }) => {
   const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const [showAddModal,  setShowAddModal]  = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string|null>(null);
@@ -2054,6 +2061,9 @@ const TestRunsView: React.FC<{
           </button>
           <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5"/> Execute Automated Tests
+          </button>
+          <button onClick={() => selectedSuite && onSchedule(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-50">
+            <CalendarClock className="w-3.5 h-3.5" /> Schedule
           </button>
         </div>
       </div>
@@ -2822,11 +2832,32 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       try { applySnapshot(await loadTestManagement()); } catch { /* keep the toast */ }
     });
   }, [projects, suites, runs, milestones, loadState, applySnapshot]);
+
+  // Runs the server adds or fills in by itself - scheduled runs (DDS-SRS-028)
+  // and remote results (DDS-SRS-021) - show up while the Runs view is open.
+  // Skipped whenever a local change is still being saved, so it never
+  // overwrites an edit; taking the server's runs as the new baseline means
+  // nothing is sent back.
+  useEffect(() => {
+    if (loadState !== 'ready' || view !== 'runs') return;
+    const timer = setInterval(async () => {
+      let snapshot: TestManagementData;
+      try { snapshot = await loadTestManagement(); } catch { return; }
+      await syncQueue.current;
+      setRuns(local => {
+        if (local !== synced.current.runs) return local;
+        synced.current = { ...synced.current, runs: snapshot.runs };
+        return snapshot.runs;
+      });
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [loadState, view]);
   const [showAiModal,            setShowAiModal]            = useState(false);
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
   const [lastRunResults,         setLastRunResults]         = useState<{run:TestRunItem;results:ParsedRobotTestResult[];suiteName:string}|null>(null);
   const [runTargetSuite,         setRunTargetSuite]         = useState<TestSuiteItem|null>(null);
+  const [scheduleSuite,          setScheduleSuite]          = useState<TestSuiteItem|null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3500); };
 
@@ -3005,6 +3036,15 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     setRunTargetSuite(suite);
   };
 
+  // Scheduled runs (DDS-SRS-028) need the backend's worker and a registered server.
+  const handleSchedule = (suite: TestSuiteItem) => {
+    if (!isRemoteExecutionConfigured()) {
+      showToast('⚠️ Scheduled runs need the backend (VITE_API_BASE_URL) - see backend/README.md.');
+      return;
+    }
+    setScheduleSuite(suite);
+  };
+
   const startRemoteRun = (suite: TestSuiteItem, target: RunTarget) => {
     const runId = `run-${Date.now()}`;
     const placeholderRun: TestRunItem = {
@@ -3168,6 +3208,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onShowAiModal={()=>setShowAiModal(true)}
               onShowBackAnnotateModal={()=>setShowBackAnnotateModal(true)}
               onRunTest={handleRunTest}
+              onSchedule={handleSchedule}
             />
           )}
           {view==='runs' && (
@@ -3182,6 +3223,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onExportRunReport={handleExportRunReport}
               onUpdateSuites={setSuites}
               onRunTest={handleRunTest}
+              onSchedule={handleSchedule}
             />
           )}
           {view==='milestones' && (
@@ -3206,6 +3248,9 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
           onRun={(target) => { const suite = runTargetSuite; setRunTargetSuite(null); startRemoteRun(suite, target); }}
           onClose={() => setRunTargetSuite(null)}
         />
+      )}
+      {scheduleSuite && (
+        <ScheduleModal suiteId={scheduleSuite.id} suiteTitle={scheduleSuite.title} onClose={() => setScheduleSuite(null)} />
       )}
       {/* Back Annotate Modal */}
       {showBackAnnotateModal && (

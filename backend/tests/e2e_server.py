@@ -10,6 +10,7 @@ Started and killed by those specs; prints `READY <users json>` once up.
 import base64
 import json
 import os
+import time
 from typing import Any
 
 import fakeredis
@@ -39,6 +40,15 @@ def main() -> None:
             store.documents.clear()
             await send({"type": "http.response.start", "status": 204, "headers": []})
             await send({"type": "http.response.body", "body": b""})
+            return
+        if scope["type"] == "http" and scope["path"] == "/__e2e/fire-schedules" and scope["method"] == "POST":
+            # Fires every enabled schedule as if a week had passed (DDS-SRS-028),
+            # so a browser test need not wait for the clock.
+            fired = await app.state.services.schedules.fire_due(time.time() + 8 * 24 * 3600)
+            await send(
+                {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"application/json")]}
+            )
+            await send({"type": "http.response.body", "body": json.dumps({"fired": fired}).encode()})
             return
         if scope["type"] == "http" and scope["path"].startswith("/__e2e/testpc"):
             await fake_test_pc(scope, receive, send)

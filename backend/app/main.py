@@ -29,6 +29,7 @@ from app.repositories.document_cache import CachedDocumentRepository
 from app.repositories.document_history import DocumentHistoryStore
 from app.repositories.postgres import postgres_repositories
 from app.repositories.releases import ReleaseStore
+from app.repositories.schedules import ScheduleStore
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import RemoteJobStore, TestExecRepository
 from app.repositories.test_management import TestManagementStore
@@ -44,6 +45,7 @@ from app.routers import (
     releases,
     test_exec,
     test_management,
+    test_schedules,
     test_servers,
 )
 from app.schemas.openapi import install_openapi
@@ -54,6 +56,7 @@ from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
 from app.services.remote_runs import RemoteRunPoller, RemoteRunService
+from app.services.schedules import ScheduleService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
@@ -78,6 +81,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         test_servers=test_servers,
         test_exec=TestExecService(TestExecRepository(), remote=remote_runs),
         remote_runs=remote_runs,
+        schedules=ScheduleService(ScheduleStore(redis), test_store, test_servers, remote_runs),
         releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
@@ -113,7 +117,8 @@ def create_app(
         async with httpx.AsyncClient() as http_client:
             app.state.services = build_services(settings, repos, http_client, redis_client)
             # The background worker that polls remote test runs (DDS-SRS-021).
-            poller = RemoteRunPoller(app.state.services.remote_runs)
+            services = app.state.services
+            poller = RemoteRunPoller(services.remote_runs, also=(services.schedules.fire_due,))
             if settings.remote_poll_enabled:
                 poller.start()
             try:
@@ -136,6 +141,7 @@ def create_app(
             test_exec,
             test_management,
             test_servers,
+            test_schedules,
             audit,
             collections,
             admin,

@@ -29,7 +29,7 @@ import json
 import logging
 import math
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
@@ -388,11 +388,18 @@ class RemoteRunService:
 
 class RemoteRunPoller:
     """The background worker: one loop per API process, started and
-    stopped with the app."""
+    stopped with the app. Each tick polls remote runs, then runs any
+    `also` jobs (firing due schedules, DDS-SRS-028)."""
 
-    def __init__(self, service: RemoteRunService, tick_s: float = TICK_S) -> None:
+    def __init__(
+        self,
+        service: RemoteRunService,
+        tick_s: float = TICK_S,
+        also: tuple[Callable[[], Awaitable[Any]], ...] = (),
+    ) -> None:
         self._service = service
         self._tick_s = tick_s
+        self._also = also
         self._task: asyncio.Task[None] | None = None
 
     def start(self) -> None:
@@ -406,10 +413,11 @@ class RemoteRunPoller:
 
     async def _loop(self) -> None:
         while True:
-            try:
-                await self._service.poll_due()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("Remote run polling failed; retrying on the next tick.")
+            for job in (self._service.poll_due, *self._also):
+                try:
+                    await job()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Background job failed; retrying on the next tick.")
             await asyncio.sleep(self._tick_s)

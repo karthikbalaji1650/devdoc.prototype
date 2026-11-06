@@ -136,3 +136,36 @@ test('Run Test sends the suite to a registered test server and follows it live t
   expect(statusRequests.length).toBeGreaterThan(0);
   expect(statusRequests.every((p) => p.endsWith('/events'))).toBe(true);
 });
+
+test('a scheduled run fires on the server and its results show up (DDS-SRS-028)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const api = `http://localhost:${API_PORT}`;
+  await skipWelcomeGuide(page);
+  await page.goto(`http://localhost:${FRONTEND_PORT}`);
+  await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
+  await page.getByPlaceholder('Enter your password').fill(users[0].password);
+  await page.getByRole('button', { name: /sign in to platform/i }).click();
+  await page.getByRole('button', { name: 'Test Management', exact: true }).click();
+
+  // "Fake Lab PC" was registered by the previous test.
+  await page.getByRole('button', { name: 'Schedule' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No scheduled runs for this suite yet.')).toBeVisible();
+  await dialog.getByLabel('Repeat').selectOption('weekly');
+  await dialog.getByLabel(/^Time/).fill('03:15');
+  await dialog.getByRole('button', { name: 'Add schedule' }).click();
+  await expect(dialog.getByText(/^Mon, Tue, Wed, Thu, Fri at 03:15 on Fake Lab PC$/)).toBeVisible();
+  await expect(dialog.getByText(/^Next: /)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // The server's worker fires it (fast-forwarded here), runs it on the fake
+  // Test PC and fills in the run; the open Runs view picks it up.
+  await page.getByRole('button', { name: /Test Runs/ }).first().click();
+  const fired = await (await page.request.post(`${api}/__e2e/fire-schedules`)).json();
+  expect(fired.fired).toBe(1);
+  const card = page.getByText(/Scheduled Run$/).first();
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  // The card's heading and progress line share a parent.
+  await expect(card.locator('xpath=..').getByTestId('remote-progress'))
+    .toHaveText('Completed on Fake Lab PC · 2 of 2 executed (100%) · 1 passed · 1 failed', { timeout: 45_000 });
+});

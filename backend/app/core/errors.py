@@ -29,6 +29,7 @@ AUTH_GUARDED_PREFIXES = (
     "/api/admin",
     "/api/releases",
     "/api/test-servers",
+    "/api/test-schedules",
 )
 
 

@@ -179,6 +179,8 @@ def test_openapi_documents_every_route_with_camel_case_fields(api: Api) -> None:
         "/api/releases/{release_id}/builds/{build_id}/signoffs",
         "/api/releases/{release_id}/builds/{build_id}/promote",
         "/api/test-servers",
+        "/api/test-schedules",
+        "/api/test-schedules/{schedule_id}",
         "/api/test-servers/{server_id}",
         "/api/test-servers/{server_id}/check",
         "/api/releases/{release_id}/blockers/{blocker_id}",
