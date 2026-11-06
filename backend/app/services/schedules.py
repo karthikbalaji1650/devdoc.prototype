@@ -16,7 +16,6 @@
 """
 
 import logging
-import random
 import re
 import string
 import time
@@ -28,13 +27,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.errors import ApiError
 from app.core.jscompat import js_iso_date
-from app.models.test_exec import PushedScript
 from app.models.user import User
 from app.repositories.schedules import ScheduleStore
 from app.repositories.test_management import TestManagementStore
 from app.services.permissions import is_admin
 from app.services.remote_runs import RemoteRunService
-from app.services.robot_suite import build_robot_suite_text
+from app.services.suite_runs import SuiteRunStarter
 from app.services.test_servers import TestServerService
 
 logger = logging.getLogger("devdoc.schedules")
@@ -74,10 +72,6 @@ def next_occurrence(schedule: dict[str, Any], after: float) -> float | None:
     return None
 
 
-def _run_id() -> str:
-    return f"run-sched-{int(time.time() * 1000)}-{''.join(random.choices(_BASE36, k=6))}"
-
-
 class ScheduleService:
     def __init__(
         self,
@@ -89,7 +83,7 @@ class ScheduleService:
         self._store = store
         self._test_store = test_store
         self._servers = servers
-        self._remote_runs = remote_runs
+        self._starter = SuiteRunStarter(test_store, servers, remote_runs)
 
     # ── CRUD ───────────────────────────────────────────────────────────
     async def list(self, suite_id: str | None = None) -> dict[str, Any]:
@@ -217,38 +211,12 @@ class ScheduleService:
         return fired
 
     async def _fire(self, schedule: dict[str, Any]) -> str:
-        suite = await self._test_store.get_suite(schedule["suiteId"])
-        if suite is None:
-            raise ApiError(400, "The suite was deleted.")
-        cases = [c for c in await self._test_store.list_cases(schedule["suiteId"]) if not c.get("isDeleted")]
-        script = PushedScript(suite["id"], suite.get("title", ""), build_robot_suite_text(suite, cases))
-        server = await self._servers.get_server(schedule["serverId"])
-        run_id = _run_id()
-        await self._test_store.put_item(
-            "runs",
-            {
-                "id": run_id,
-                "name": f"{script.suite_title} Scheduled Run",
-                "suiteId": suite["id"],
-                "environment": server["name"],
-                "status": "In Progress",
-                "passedCount": 0,
-                "failedCount": 0,
-                "blockedCount": 0,
-                "executedAt": _now_iso(),
-                "remote": {"server": server["name"], "phase": "QUEUED"},
-                "scheduleId": schedule["id"],
-                "createdBy": schedule["createdBy"],
-                "updatedAt": _now_iso(),
-            },
+        run_id, _ = await self._starter.start(
+            suite_id=schedule["suiteId"],
+            server_id=schedule["serverId"],
+            owner=schedule["createdBy"],
+            kind="Scheduled Run",
+            name=None,
+            extra={"scheduleId": schedule["id"]},
         )
-        job_id = f"job-sched-{run_id.removeprefix('run-sched-')}"
-        try:
-            await self._remote_runs.start(server["id"], script, job_id, schedule["createdBy"], run_id)
-        except ApiError as exc:
-            run = await self._test_store.get_item("runs", run_id)
-            if run is not None:
-                run.update(status="Failed", remote={"server": server["name"], "phase": "FAILED", "error": exc.message})
-                await self._test_store.put_item("runs", run)
-            raise
         return run_id

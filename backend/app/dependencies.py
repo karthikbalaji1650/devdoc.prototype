@@ -13,6 +13,7 @@ from app.repositories.session_audit import SessionAuditStore
 from app.services.admin import AdminService
 from app.services.ai import AiService
 from app.services.auth import AuthService
+from app.services.ci import CiService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
@@ -37,6 +38,7 @@ class Services:
     test_servers: TestServerService
     remote_runs: RemoteRunService
     schedules: ScheduleService
+    ci: CiService
     login_limiter: RateLimiter
     cookie_secure: bool
 

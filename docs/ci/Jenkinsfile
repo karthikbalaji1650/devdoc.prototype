@@ -1,0 +1,43 @@
+// DevDoc Studio in a Jenkins pipeline (DDS-SRS-026, 027). Copy the stages
+// you need into your Jenkinsfile; see docs/ci/README.md for setup.
+//
+// Needs on the agent: curl, python3, and ci/devdoc-ci.sh from the
+// DevDoc Studio repository (vendored into your repo, or fetched).
+// Credentials: a "Secret text" credential holding a DevDoc CI token.
+
+pipeline {
+  agent any
+
+  environment {
+    DEVDOC_URL      = 'https://devdoc.example.com:8000'   // your DevDoc Studio API
+    DEVDOC_CI_TOKEN = credentials('devdoc-ci-token')     // Secret text credential id
+    DEVDOC_SUITE    = 'suite-123'                         // from Data Management -> CI tokens -> Pipeline commands
+    DEVDOC_SERVER   = 'paste-test-server-id'              // same place (only for the hardware stage)
+  }
+
+  stages {
+    // A: run the suite on the lab's registered test server, and fail the
+    // build if any test fails. Progress is printed as the run goes.
+    stage('Hardware regression (DevDoc)') {
+      steps {
+        sh './ci/devdoc-ci.sh run "$DEVDOC_SUITE" "$DEVDOC_SERVER" "Jenkins #$BUILD_NUMBER regression"'
+      }
+    }
+
+    // B: run Robot Framework here on the agent, then record the results in
+    // DevDoc Studio. The upload runs even when tests failed, and the stage
+    // fails if any did.
+    stage('Robot tests on the agent') {
+      steps {
+        sh 'pip install --quiet robotframework robotframework-requests'
+        sh 'robot --outputdir results --nostatusrc tests/'
+      }
+      post {
+        always {
+          sh './ci/devdoc-ci.sh upload "$DEVDOC_SUITE" results/output.xml "Jenkins #$BUILD_NUMBER agent tests"'
+          archiveArtifacts artifacts: 'results/*', allowEmptyArchive: true
+        }
+      }
+    }
+  }
+}

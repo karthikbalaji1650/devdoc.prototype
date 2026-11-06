@@ -2019,6 +2019,21 @@ const TestRunsView: React.FC<{
     );
   };
 
+  // DDS-SRS-026/027: the pipeline build a run came from.
+  const CiBuildLine: React.FC<{ ci: NonNullable<TestRunItem['ci']> }> = ({ ci }) => {
+    const label = [ci.pipeline ?? 'CI', ci.buildNumber && `#${ci.buildNumber}`].filter(Boolean).join(' ');
+    const where = [ci.repository, ci.branch && ci.commit ? `${ci.branch} @ ${ci.commit.slice(0, 10)}` : ci.branch || ci.commit?.slice(0, 10)].filter(Boolean).join(' · ');
+    const safeUrl = ci.buildUrl && /^https?:\/\//i.test(ci.buildUrl) ? ci.buildUrl : undefined;
+    return (
+      <p className="text-[11px] mt-0.5 text-[var(--text-dim)]" data-testid="ci-build">
+        {safeUrl
+          ? <a href={safeUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[var(--blue)] hover:underline">{label}</a>
+          : label}
+        {where && ` · ${where}`}
+      </p>
+    );
+  };
+
   const RunCard: React.FC<{ run: TestRunItem; open?: boolean }> = ({ run, open }) => (
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 cursor-pointer group shadow-xs" onClick={()=>setSelectedRunId(run.id)}>
       <div className="flex items-start gap-3">
@@ -2030,6 +2045,7 @@ const TestRunsView: React.FC<{
           <p className="text-[11px] text-slate-500 mb-1">By Manivannan T. · {new Date(run.executedAt).toLocaleDateString()}</p>
           <p className="text-[11px] text-slate-500">{run.passedCount} Passed · {run.failedCount} Failed · {run.blockedCount} Blocked · {run.untestedCount??0} Untested</p>
           {run.remote && <RemoteProgressLine remote={run.remote} />}
+          {run.ci && <CiBuildLine ci={run.ci} />}
           <RegressionBadge run={run} />
         </div>
         <div className="flex items-center gap-3 w-44 flex-shrink-0">

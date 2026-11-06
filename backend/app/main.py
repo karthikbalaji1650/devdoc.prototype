@@ -24,6 +24,7 @@ from app.db.pool import create_pool
 from app.db.redis import create_redis
 from app.dependencies import Services
 from app.repositories.base import Repositories
+from app.repositories.ci_tokens import CiTokenStore
 from app.repositories.collections import CollectionStore
 from app.repositories.document_cache import CachedDocumentRepository
 from app.repositories.document_history import DocumentHistoryStore
@@ -39,6 +40,7 @@ from app.routers import (
     ai,
     audit,
     auth,
+    ci,
     collections,
     documents,
     health,
@@ -52,6 +54,7 @@ from app.schemas.openapi import install_openapi
 from app.services.admin import AdminService
 from app.services.ai import AiService
 from app.services.auth import AuthService
+from app.services.ci import CiService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
@@ -82,6 +85,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         test_exec=TestExecService(TestExecRepository(), remote=remote_runs),
         remote_runs=remote_runs,
         schedules=ScheduleService(ScheduleStore(redis), test_store, test_servers, remote_runs),
+        ci=CiService(CiTokenStore(redis), test_store, test_servers, remote_runs),
         releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
@@ -142,6 +146,7 @@ def create_app(
             test_management,
             test_servers,
             test_schedules,
+            ci,
             audit,
             collections,
             admin,

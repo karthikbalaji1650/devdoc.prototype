@@ -28,6 +28,7 @@ import {
 } from '../../services/aiService';
 import { ServerDataPanel } from './ServerDataPanel';
 import { TestServersPanel } from './TestServersPanel';
+import { CiTokensPanel } from './CiTokensPanel';
 import { SessionAuditTable } from './SessionAuditTable';
 import { canAccessDataManagement } from '../../services/permissions';
 
@@ -436,6 +437,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
 
                 {/* Remote test execution servers (DDS-SRS-019, admins) */}
                 <TestServersPanel />
+
+                {/* CI/CD tokens and pipeline commands (DDS-SRS-026/027, admins) */}
+                <CiTokensPanel />
 
                 {/* Server backup and reset (admins) */}
                 <ServerDataPanel />

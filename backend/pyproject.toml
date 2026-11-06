@@ -16,6 +16,7 @@ dependencies = [
     "redis>=5.2",
     "cryptography>=43",
     "tzdata>=2024.1",
+    "defusedxml>=0.7",
 ]
 
 [dependency-groups]

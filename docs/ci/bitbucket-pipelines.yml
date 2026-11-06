@@ -1,0 +1,45 @@
+# DevDoc Studio in Bitbucket Pipelines (DDS-SRS-026, 027). Copy the steps
+# you need into your bitbucket-pipelines.yml; see docs/ci/README.md.
+#
+# Repository variables (Repository settings -> Repository variables):
+#   DEVDOC_URL        your DevDoc Studio API, e.g. https://devdoc.example.com:8000
+#   DEVDOC_CI_TOKEN   a DevDoc CI token - mark it "Secured"
+#   DEVDOC_SUITE      suite id    } both shown under Data Management ->
+#   DEVDOC_SERVER     server id   } CI tokens -> Pipeline commands
+#
+# ci/devdoc-ci.sh must be in the repository (vendored from DevDoc Studio).
+
+image: python:3.12-slim
+
+definitions:
+  steps:
+    # A: run the suite on the lab's registered test server; the step fails
+    # if any test fails.
+    - step: &devdoc-hardware
+        name: Hardware regression (DevDoc)
+        script:
+          - apt-get update -qq && apt-get install -y -qq curl > /dev/null
+          - sh ci/devdoc-ci.sh run "$DEVDOC_SUITE" "$DEVDOC_SERVER" "Bitbucket #$BITBUCKET_BUILD_NUMBER regression"
+
+    # B: run Robot Framework in the pipeline and record the results.
+    - step: &devdoc-robot
+        name: Robot tests (recorded in DevDoc)
+        script:
+          - apt-get update -qq && apt-get install -y -qq curl > /dev/null
+          - pip install --quiet robotframework robotframework-requests
+          - robot --outputdir results --nostatusrc tests/
+          - sh ci/devdoc-ci.sh upload "$DEVDOC_SUITE" results/output.xml "Bitbucket #$BITBUCKET_BUILD_NUMBER"
+        artifacts:
+          - results/**
+
+pipelines:
+  pull-requests:
+    '**':
+      - step: *devdoc-robot
+  branches:
+    main:
+      - step: *devdoc-robot
+      - step: *devdoc-hardware
+  custom:
+    hardware-regression:          # Run pipeline -> hardware-regression
+      - step: *devdoc-hardware
