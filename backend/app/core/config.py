@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # (AES-256-GCM, DDS-SRS-075). Unset, servers without credentials still work.
     secrets_key: str = ""
 
+    # The background worker that polls remote test runs (DDS-SRS-021).
+    # Tests turn it off and drive polling directly.
+    remote_poll_enabled: bool = True
+
     @property
     def cookie_secure_enabled(self) -> bool:
         return self.cookie_secure == "true"

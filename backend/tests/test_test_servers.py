@@ -98,7 +98,7 @@ class TestRegistration:
         created = create(keyed_api)
         manager = keyed_api.sign_in(AUTHOR)
         assert manager.get(BASE).json()["servers"] == [
-            {"id": created["id"], "name": "Lab Test PC 1", "endpointUrl": ENDPOINT}
+            {"id": created["id"], "name": "Lab Test PC 1", "endpointUrl": ENDPOINT, "pollIntervalSeconds": 10}
         ]
         assert manager.post(BASE, json=server()).status_code == 403
         assert manager.put(f"{BASE}/{created['id']}", json=server()).status_code == 403

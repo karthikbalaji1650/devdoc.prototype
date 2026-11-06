@@ -19,6 +19,10 @@ export const SECRET_FIELD: Partial<Record<TestServerAuthType, 'apiKey' | 'passwo
   oauth2: 'clientSecret',
 };
 
+/** How often the server's worker checks a run on this test server (DDS-SRS-021). */
+export const POLL_INTERVALS = [5, 10, 30] as const;
+export type PollInterval = (typeof POLL_INTERVALS)[number];
+
 export interface TestServerAuth {
   headerName?: string;
   username?: string;
@@ -31,6 +35,7 @@ export interface TestServer {
   id: string;
   name: string;
   endpointUrl: string;
+  pollIntervalSeconds?: PollInterval;
   /** The fields below are only sent to admins. */
   authType?: TestServerAuthType;
   auth?: TestServerAuth;
@@ -49,6 +54,7 @@ export interface TestServerInput {
   /** Include the secret field only to set or replace it. */
   auth: TestServerAuth & { apiKey?: string; password?: string; clientSecret?: string };
   payload: Record<string, unknown>;
+  pollIntervalSeconds: PollInterval;
 }
 
 export interface ConnectionCheck { ok: boolean; status: number | null; latencyMs: number | null; error: string | null }

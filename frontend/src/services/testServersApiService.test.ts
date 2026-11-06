@@ -13,7 +13,7 @@ afterEach(() => { fetchMock.mockReset(); vi.unstubAllGlobals(); vi.unstubAllEnvs
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const input: TestServerInput = {
   name: 'Lab PC', endpointUrl: 'https://pc.example.com/api', authType: 'apiKey',
-  auth: { headerName: 'X-API-Key', apiKey: 'k' }, payload: { bmcIp: '10.0.0.5' },
+  auth: { headerName: 'X-API-Key', apiKey: 'k' }, payload: { bmcIp: '10.0.0.5' }, pollIntervalSeconds: 10,
 };
 
 describe('testServersApiService', () => {

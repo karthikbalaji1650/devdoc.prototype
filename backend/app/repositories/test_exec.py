@@ -33,13 +33,16 @@ class TestExecRepository:
 
 
 class RemoteJobStore:
-    """Runs sent to a registered remote test server (DDS-SRS-020), in Redis
-    so they survive a restart, unlike the mock's jobs:
+    """Runs sent to a registered remote test server (DDS-SRS-020, 021), in
+    Redis so they survive a restart, unlike the mock's jobs:
 
-        dds:texec:remote    hash  job id -> {serverId, remoteJobId, suiteId, ...}
+        dds:texec:remote          hash  job id -> job JSON (status, progress, results, ...)
+        dds:texec:active          set   job ids still QUEUED or RUNNING (the poller's work list)
+        dds:texec:lock:{job id}   short-lived lock held while one API instance polls the job
     """
 
     KEY = "dds:texec:remote"
+    ACTIVE = "dds:texec:active"
 
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
@@ -50,3 +53,19 @@ class RemoteJobStore:
     async def get(self, job_id: str) -> dict[str, Any] | None:
         raw = await self._redis.hget(self.KEY, job_id)
         return json.loads(raw) if raw else None
+
+    async def get_many(self, job_ids: list[str]) -> dict[str, dict[str, Any] | None]:
+        raws = await self._redis.hmget(self.KEY, job_ids)
+        return {i: (json.loads(r) if r else None) for i, r in zip(job_ids, raws, strict=True)}
+
+    async def activate(self, job_id: str) -> None:
+        await self._redis.sadd(self.ACTIVE, job_id)
+
+    async def deactivate(self, job_id: str) -> None:
+        await self._redis.srem(self.ACTIVE, job_id)
+
+    async def active_ids(self) -> list[str]:
+        return sorted(await self._redis.smembers(self.ACTIVE))
+
+    async def lock(self, job_id: str, ttl_s: int) -> bool:
+        return bool(await self._redis.set(f"dds:texec:lock:{job_id}", "1", nx=True, ex=ttl_s))

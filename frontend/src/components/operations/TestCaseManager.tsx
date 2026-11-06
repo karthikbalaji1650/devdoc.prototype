@@ -1999,6 +1999,19 @@ const TestRunsView: React.FC<{
     return n ? <span className="inline-block mt-1 px-1.5 py-0.5 rounded border text-[10px] font-bold bg-rose-50 text-rose-700 border-rose-200">▼ {n} regression{n === 1 ? '' : 's'} vs {prev!.name}</span> : null;
   };
 
+  // DDS-SRS-021: what the server last polled from the remote test server.
+  const RemoteProgressLine: React.FC<{ remote: NonNullable<TestRunItem['remote']> }> = ({ remote }) => {
+    const p = remote.progress;
+    const phase = { QUEUED: 'Queued', RUNNING: 'Running', COMPLETED: 'Completed', FAILED: 'Failed' }[remote.phase];
+    return (
+      <p className={`text-[11px] mt-0.5 ${remote.phase === 'FAILED' ? 'text-[var(--danger)]' : 'text-[var(--blue)]'}`} data-testid="remote-progress">
+        {phase} on {remote.server}
+        {p && p.total > 0 && ` · ${p.completed} of ${p.total} executed (${p.percent}%) · ${p.passed} passed · ${p.failed} failed`}
+        {remote.phase === 'FAILED' && remote.error && ` · ${remote.error}`}
+      </p>
+    );
+  };
+
   const RunCard: React.FC<{ run: TestRunItem; open?: boolean }> = ({ run, open }) => (
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 cursor-pointer group shadow-xs" onClick={()=>setSelectedRunId(run.id)}>
       <div className="flex items-start gap-3">
@@ -2009,6 +2022,7 @@ const TestRunsView: React.FC<{
           <h3 className={`text-sm font-bold mb-1 ${open?'text-blue-700':'text-slate-800 group-hover:text-slate-900'}`}>{run.name}</h3>
           <p className="text-[11px] text-slate-500 mb-1">By Manivannan T. · {new Date(run.executedAt).toLocaleDateString()}</p>
           <p className="text-[11px] text-slate-500">{run.passedCount} Passed · {run.failedCount} Failed · {run.blockedCount} Blocked · {run.untestedCount??0} Untested</p>
+          {run.remote && <RemoteProgressLine remote={run.remote} />}
           <RegressionBadge run={run} />
         </div>
         <div className="flex items-center gap-3 w-44 flex-shrink-0">
@@ -2998,6 +3012,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       name: `${suite.title} Remote Execution Run`,
       suiteId: suite.id,
       environment: target.name,
+      ...(target.serverId ? { remote: { server: target.name, phase: 'QUEUED' as const } } : {}),
       status: 'In Progress',
       passedCount: 0,
       failedCount: 0,
@@ -3009,8 +3024,19 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     showToast(`🚀 Run started on ${target.name} — this can take a while; results sync automatically.`);
 
     runRemoteExecution(suite, (update: RemoteExecutionUpdate) => {
+      if (update.state === 'running') {
+        // Progress the server's worker polled from the test server (DDS-SRS-021).
+        if (update.phase) {
+          setRuns(prev => prev.map(r => r.id === runId
+            ? { ...r, remote: { server: target.name, phase: update.phase!, progress: update.progress ?? r.remote?.progress } }
+            : r));
+        }
+        return;
+      }
       if (update.state === 'error') {
-        setRuns(prev => prev.map(r => r.id === runId ? { ...r, status: 'Failed' } : r));
+        setRuns(prev => prev.map(r => r.id === runId
+          ? { ...r, status: 'Failed', ...(r.remote ? { remote: { ...r.remote, phase: 'FAILED' as const, error: update.message } } : {}) }
+          : r));
         showToast(`❌ Remote execution failed: ${update.message}`);
         return;
       }
@@ -3022,6 +3048,10 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
         }));
         const updatedRun: TestRunItem = {
           ...placeholderRun,
+          ...(placeholderRun.remote ? { remote: { server: target.name, phase: 'COMPLETED' as const, progress: {
+            total: update.results.summary.total, completed: update.results.summary.total,
+            passed: update.results.summary.passed, failed: update.results.summary.failed, percent: 100,
+          } } } : {}),
           status: update.results.summary.failed === 0 ? 'Completed' : 'Failed',
           passedCount: update.results.summary.passed,
           failedCount: update.results.summary.failed,
@@ -3041,7 +3071,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
         showToast(`✅ Run complete — ${update.results.summary.passed} passed, ${update.results.summary.failed} failed.`);
       }
-    }, { serverId: target.serverId });
+    }, { serverId: target.serverId, runId });
   };
 
   const handleExportProtocolExcel = async () => {

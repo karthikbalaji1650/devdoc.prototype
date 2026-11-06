@@ -3,7 +3,7 @@
 // the run to that registered test server (DDS-SRS-020, see
 // docs/test-pc-api.md); without one it uses its mock Test PC. Same
 // optional, VITE_API_BASE_URL-gated pattern as the rest of the backend.
-import type { TestSuiteItem } from '../types/operations';
+import type { RemoteRunProgress, RemoteRunState, TestSuiteItem } from '../types/operations';
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import { buildRobotSuiteText } from './robotSuiteBuilder';
@@ -48,12 +48,12 @@ export async function pushScript(suite: TestSuiteItem): Promise<void> {
   if (!response.ok) throw await errorFromResponse(response, 'Failed to push the script');
 }
 
-export async function startRun(suiteId: string, serverId?: string): Promise<string> {
+export async function startRun(suiteId: string, serverId?: string, runId?: string): Promise<string> {
   const response = await fetchWithTimeout(`${baseUrl()}/api/test-exec/runs`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(serverId ? { suiteId, serverId } : { suiteId }),
+    body: JSON.stringify(serverId ? { suiteId, serverId, ...(runId ? { runId } : {}) } : { suiteId }),
     timeoutMs: 20_000,
   });
   if (!response.ok) throw await errorFromResponse(response, 'Failed to start the run');
@@ -61,10 +61,13 @@ export async function startRun(suiteId: string, serverId?: string): Promise<stri
   return data.jobId;
 }
 
-export type RunPollResult =
+/** Remote runs also carry what the server's background worker last polled
+ * (DDS-SRS-021): phase, progress and any retried check failure. */
+interface RemoteFields { phase?: RemoteRunState['phase']; server?: string; progress?: RemoteRunProgress; pollError?: string }
+export type RunPollResult = RemoteFields & (
   | { status: 'running' }
   | { status: 'completed'; results: RobotResultsJson }
-  | { status: 'failed'; error: string };
+  | { status: 'failed'; error: string });
 
 export async function pollRunStatus(jobId: string): Promise<RunPollResult> {
   const response = await fetchWithTimeout(`${baseUrl()}/api/test-exec/runs/${jobId}`, {
@@ -77,25 +80,23 @@ export async function pollRunStatus(jobId: string): Promise<RunPollResult> {
 }
 
 export type RemoteExecutionUpdate =
-  | { state: 'running' }
+  | { state: 'running'; phase?: RemoteRunState['phase']; progress?: RemoteRunProgress; pollError?: string }
   | { state: 'completed'; results: RobotResultsJson }
   | { state: 'error'; message: string };
 
 /** Pushes the suite's current script, starts a run, then polls until it
- * completes, calling onUpdate at each transition. Polls every 30
- * minutes by default, matching how long a real remote Test PC run is
- * expected to take - pollIntervalMs exists so tests can inject a short
- * interval instead of waiting 30 minutes for real; production code
- * never overrides the default. */
+ * completes, calling onUpdate at each transition. Every 5 seconds by
+ * default: each check only reads what the backend's worker last polled
+ * from the test server (DDS-SRS-021), never the Test PC itself. */
 export async function runRemoteExecution(
   suite: TestSuiteItem,
   onUpdate: (update: RemoteExecutionUpdate) => void,
-  opts: { pollIntervalMs?: number; serverId?: string } = {},
+  opts: { pollIntervalMs?: number; serverId?: string; runId?: string } = {},
 ): Promise<void> {
-  const pollIntervalMs = opts.pollIntervalMs ?? 30 * 60 * 1000;
+  const pollIntervalMs = opts.pollIntervalMs ?? 5_000;
   try {
     await pushScript(suite);
-    const jobId = await startRun(suite.id, opts.serverId);
+    const jobId = await startRun(suite.id, opts.serverId, opts.runId);
     onUpdate({ state: 'running' });
 
     for (;;) {
@@ -109,6 +110,7 @@ export async function runRemoteExecution(
         onUpdate({ state: 'error', message: result.error || 'The test server reported the run failed.' });
         return;
       }
+      if (result.phase) onUpdate({ state: 'running', phase: result.phase, progress: result.progress, pollError: result.pollError });
     }
   } catch (err) {
     onUpdate({ state: 'error', message: err instanceof Error ? err.message : 'Remote execution failed.' });

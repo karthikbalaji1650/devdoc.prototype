@@ -16,6 +16,7 @@ from app.services.auth import AuthService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
+from app.services.remote_runs import RemoteRunService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
@@ -33,6 +34,7 @@ class Services:
     test_exec: TestExecService
     test_management: TestManagementService
     test_servers: TestServerService
+    remote_runs: RemoteRunService
     login_limiter: RateLimiter
     cookie_secure: bool
 

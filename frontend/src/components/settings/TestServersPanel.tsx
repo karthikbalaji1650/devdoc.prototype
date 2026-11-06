@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Server, Trash2, Pencil, Plug, Lock } from 'lucide-react';
 import {
   AUTH_TYPE_LABELS,
+  POLL_INTERVALS,
   SECRET_FIELD,
   checkTestServer,
   deleteTestServer,
@@ -9,6 +10,7 @@ import {
   listTestServers,
   saveTestServer,
   type ConnectionCheck,
+  type PollInterval,
   type TestServer,
   type TestServerAuthType,
   type TestServerInput,
@@ -29,6 +31,7 @@ interface Draft {
   scope: string;
   secret: string;
   payloadText: string;
+  pollIntervalSeconds: PollInterval;
   /** A secret is already stored for this auth method. */
   secretStored: boolean;
   storedAuthType?: TestServerAuthType;
@@ -36,7 +39,7 @@ interface Draft {
 
 const EMPTY: Draft = {
   name: '', endpointUrl: '', authType: 'apiKey', headerName: 'X-API-Key', username: '', tokenUrl: '',
-  clientId: '', scope: '', secret: '', payloadText: '{\n  \n}', secretStored: false,
+  clientId: '', scope: '', secret: '', payloadText: '{\n  \n}', pollIntervalSeconds: 10, secretStored: false,
 };
 
 const SECRET_LABEL: Record<string, string> = { apiKey: 'API key', password: 'Password', clientSecret: 'Client secret' };
@@ -54,6 +57,7 @@ function draftFrom(s: TestServer): Draft {
     scope: s.auth?.scope ?? '',
     secret: '',
     payloadText: JSON.stringify(s.payload ?? {}, null, 2),
+    pollIntervalSeconds: s.pollIntervalSeconds ?? 10,
     secretStored: Boolean(s.secretSet),
     storedAuthType: s.authType,
   };
@@ -79,7 +83,7 @@ function inputFrom(d: Draft): TestServerInput {
   }
   const field = SECRET_FIELD[d.authType];
   if (field && d.secret) auth[field] = d.secret;
-  return { name: d.name.trim(), endpointUrl: d.endpointUrl.trim(), authType: d.authType, auth, payload: payload as Record<string, unknown> };
+  return { name: d.name.trim(), endpointUrl: d.endpointUrl.trim(), authType: d.authType, auth, payload: payload as Record<string, unknown>, pollIntervalSeconds: d.pollIntervalSeconds };
 }
 
 const inputCls = 'w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500';
@@ -190,6 +194,11 @@ export const TestServersPanel: React.FC = () => {
                 {(Object.keys(AUTH_TYPE_LABELS) as TestServerAuthType[]).map((t) => <option key={t} value={t}>{AUTH_TYPE_LABELS[t]}</option>)}
               </select>
             </Field>
+            <Field id="ts-interval" label="Check runs every" hint="How often the server polls this test server for a run's status and progress.">
+              <select id="ts-interval" className={inputCls} value={draft.pollIntervalSeconds} onChange={(e) => set({ pollIntervalSeconds: Number(e.target.value) as PollInterval })}>
+                {POLL_INTERVALS.map((n) => <option key={n} value={n}>{n} seconds</option>)}
+              </select>
+            </Field>
             {draft.authType === 'apiKey' && (
               <Field id="ts-header" label="Header name">
                 <input id="ts-header" className={`${inputCls} font-mono`} value={draft.headerName} onChange={(e) => set({ headerName: e.target.value })} />
@@ -248,6 +257,7 @@ export const TestServersPanel: React.FC = () => {
                   <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
                     {s.authType && s.authType !== 'none' && <Lock className="w-3 h-3" aria-hidden />}
                     {AUTH_TYPE_LABELS[s.authType ?? 'none']}
+                    {` · checked every ${s.pollIntervalSeconds ?? 10} s`}
                     {s.payload && Object.keys(s.payload).length > 0 && ` · ${Object.keys(s.payload).length} payload parameter${Object.keys(s.payload).length === 1 ? '' : 's'}`}
                   </div>
                   {check && (

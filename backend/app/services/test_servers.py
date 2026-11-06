@@ -4,8 +4,8 @@ rest (DDS-SRS-075).
 - Admins register, edit and remove servers; everyone signed in can list
   them (to choose where a run goes), without any credential.
 - A server has an API endpoint URL, an auth method (none, API key, Basic,
-  or OAuth2 client credentials) and payload parameters - a JSON object sent
-  with every run request.
+  or OAuth2 client credentials), payload parameters - a JSON object sent
+  with every run request - and how often its runs are polled (5/10/30 s).
 - Secret fields (API key, password, client secret) are sealed with
   AES-256-GCM before they are stored and are never returned by the API;
   responses only say whether one is set. On an edit, leaving a secret out
@@ -35,6 +35,9 @@ AUTH_TYPES = ("none", "apiKey", "basic", "oauth2")
 # The one secret field each auth method has.
 SECRET_FIELD = {"apiKey": "apiKey", "basic": "password", "oauth2": "clientSecret"}
 DEFAULT_API_KEY_HEADER = "X-API-Key"
+# How often the background worker checks a run on this server (DDS-SRS-021).
+POLL_INTERVALS = (5, 10, 30)
+DEFAULT_POLL_INTERVAL = 10
 MAX_PAYLOAD_BYTES = 16_384
 CHECK_TIMEOUT_S = 10.0
 _HEADER_NAME = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$")
@@ -85,9 +88,17 @@ def _payload(body: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _interval(body: dict[str, Any]) -> int:
+    value = body.get("pollIntervalSeconds", DEFAULT_POLL_INTERVAL)
+    if isinstance(value, bool) or value not in POLL_INTERVALS:
+        raise ApiError(400, "pollIntervalSeconds must be 5, 10 or 30.")
+    return int(value)
+
+
 def public_view(server: dict[str, Any]) -> dict[str, Any]:
     """What the API returns: everything except the sealed secrets."""
     view = {k: v for k, v in server.items() if k != "secrets"}
+    view.setdefault("pollIntervalSeconds", DEFAULT_POLL_INTERVAL)  # servers saved before 021
     field = SECRET_FIELD.get(server["authType"])
     view["secretSet"] = bool(field and field in server.get("secrets", {}))
     return view
@@ -108,7 +119,7 @@ class TestServerService:
         servers = [public_view(s) for s in await self._store.list()]
         if not is_admin(user):
             # Non-admins only need to pick a server, not see how it authenticates.
-            servers = [{k: s[k] for k in ("id", "name", "endpointUrl")} for s in servers]
+            servers = [{k: s[k] for k in ("id", "name", "endpointUrl", "pollIntervalSeconds")} for s in servers]
         return {"servers": servers, "secretsAvailable": self._box.available}
 
     async def _get(self, server_id: str) -> dict[str, Any]:
@@ -186,6 +197,7 @@ class TestServerService:
             "authType": auth_type,
             "auth": auth,
             "payload": _payload(body),
+            "pollIntervalSeconds": _interval(body),
             "secrets": secrets,
             "updatedBy": user.name,
             "updatedAt": now,

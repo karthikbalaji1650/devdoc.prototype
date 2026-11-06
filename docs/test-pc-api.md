@@ -49,6 +49,23 @@ Reply with any 2xx and the server's own job id:
 
 `status` is one of `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED` (any case).
 
+DevDoc Studio's backend calls this from a background worker on the
+server's *Check runs every* interval (5, 10 or 30 seconds), not from the
+browser, and keeps calling until the run is `COMPLETED` or `FAILED`. If
+the call fails (no connection, an HTTP error, an unknown `status`), it
+retries on the next interval; after 20 failures in a row the run is
+marked failed. `COMPLETED` results that cannot be read fail the run at once.
+
+While `QUEUED` or `RUNNING`, report progress if you can (all optional):
+
+```json
+{ "status": "RUNNING", "total": 40, "completed": 12, "passed": 10, "failed": 2 }
+```
+
+DevDoc Studio shows it as "12 of 40 executed (30%)": the execution
+percentage is `completed / total * 100`. Without `completed`, it is taken
+as `passed + failed`.
+
 When `FAILED`, add a reason: `{ "status": "FAILED", "error": "BMC unreachable" }`.
 
 When `COMPLETED`, add the results, one entry per test case:

@@ -100,6 +100,26 @@ describe('runRemoteExecution', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it('passes the run id and reports polled progress from the server', async () => {
+    const progress = { total: 4, completed: 2, passed: 2, failed: 0, percent: 50 };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job-9' }))
+      .mockResolvedValueOnce(jsonResponse({ status: 'running', phase: 'RUNNING', server: 'Lab PC', progress }))
+      .mockResolvedValueOnce(jsonResponse({ status: 'failed', phase: 'FAILED', error: 'stopped' }));
+
+    const { runRemoteExecution } = await load();
+    const updates: unknown[] = [];
+    await runRemoteExecution(suite, (u) => updates.push(u), { pollIntervalMs: 1, serverId: 'srv-1', runId: 'run-7' });
+
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ suiteId: 's1', serverId: 'srv-1', runId: 'run-7' });
+    expect(updates).toEqual([
+      { state: 'running' },
+      { state: 'running', phase: 'RUNNING', progress, pollError: undefined },
+      { state: 'error', message: 'stopped' },
+    ]);
+  });
+
   it('sends the run to a registered test server and reports its failure', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ ok: true })) // push

@@ -171,6 +171,17 @@ export interface TestRunItem {
   startDate?: string;
   endDate?: string;
   caseResults?: TestRunCaseResult[];
+  /** Runs on a registered remote test server (DDS-SRS-020/021): what the
+   * server's background worker last polled. Written by the server too. */
+  remote?: RemoteRunState;
+}
+
+export interface RemoteRunProgress { total: number; completed: number; passed: number; failed: number; percent: number }
+export interface RemoteRunState {
+  server: string;
+  phase: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  progress?: RemoteRunProgress | null;
+  error?: string;
 }
 
 export interface MilestoneItem {

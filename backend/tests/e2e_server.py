@@ -27,7 +27,7 @@ def main() -> None:
     store = seeded_store()
     # A fresh key per run, so test-server credentials can be stored (DDS-SRS-075).
     secrets_key = os.environ.get("SECRETS_KEY") or base64.b64encode(os.urandom(32)).decode()
-    settings = test_settings(cors_origins=origin, secrets_key=secrets_key)
+    settings = test_settings(cors_origins=origin, secrets_key=secrets_key, remote_poll_enabled=True)
     app = create_app(settings, repositories=memory_repositories(store), redis=redis)
 
     async def with_reset(scope: dict[str, Any], receive: Any, send: Any) -> None:
@@ -50,7 +50,8 @@ def main() -> None:
     async def fake_test_pc(scope: dict[str, Any], receive: Any, send: Any) -> None:
         """A stand-in remote Test PC (docs/test-pc-api.md) for the browser
         tests: accepts runs with API key `e2e-testpc-key`, records the last
-        start request (GET /__e2e/testpc/last) and reports every run completed."""
+        start request (GET /__e2e/testpc/last), reports a run RUNNING at 50%
+        on the first check and COMPLETED (1 pass, 1 fail) after that."""
         path, method = scope["path"], scope["method"]
         headers = {k.decode().lower(): v.decode() for k, v in scope["headers"]}
         body = b""
@@ -73,11 +74,19 @@ def main() -> None:
             await reply(401, {"error": "bad key"})
         elif path == "/__e2e/testpc/runs" and method == "POST":
             testpc["last"] = {"apiKey": headers.get("x-api-key"), "body": json.loads(body or b"{}")}
+            testpc["polls"] = 0
             await reply(202, {"jobId": "fake-1"})
         elif path.startswith("/__e2e/testpc/runs/") and method == "GET":
-            await reply(
-                200, {"status": "COMPLETED", "results": [{"customId": "TC-001", "title": "TC-001", "status": "PASS"}]}
-            )
+            # First check: halfway through; after that: completed.
+            polls = testpc["polls"] = testpc.get("polls", 0) + 1
+            if polls == 1:
+                await reply(200, {"status": "RUNNING", "total": 2, "completed": 1, "passed": 1, "failed": 0})
+            else:
+                results = [
+                    {"customId": "TC-001", "title": "TC-001", "status": "PASS"},
+                    {"customId": "TC-002", "title": "TC-002", "status": "FAIL", "failureMessage": "Timeout"},
+                ]
+                await reply(200, {"status": "COMPLETED", "results": results})
         else:
             await reply(200, {"ok": True})
 

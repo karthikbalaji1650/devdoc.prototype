@@ -90,7 +90,8 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
   await expect(page.getByText(/Remote execution failed/)).toHaveCount(0);
 });
 
-test('Run Test sends the suite to a registered test server with its credentials (DDS-SRS-020)', async ({ page }) => {
+test('Run Test sends the suite to a registered test server and follows it to completion (DDS-SRS-020, 021)', async ({ page }) => {
+  test.setTimeout(60_000);
   const api = `http://localhost:${API_PORT}`;
   await skipWelcomeGuide(page);
   await page.goto(`http://localhost:${FRONTEND_PORT}`);
@@ -121,5 +122,11 @@ test('Run Test sends the suite to a registered test server with its credentials 
   const last = await (await page.request.get(`${api}/__e2e/testpc/last`)).json();
   expect(last.body.parameters).toEqual({ bmcIp: '10.0.0.5' });
   expect(last.body.robotCode).toContain('*** Test Cases ***');
-  await expect(page.getByText(/Remote execution failed/)).toHaveCount(0);
+
+  // The server's worker polls the Test PC (DDS-SRS-021): first halfway,
+  // then finished; the page picks both up without a reload.
+  const progress = page.getByTestId('remote-progress').first();
+  await expect(progress).toContainText(/Running on Fake Lab PC · 1 of 2 executed \(50%\)/, { timeout: 20_000 });
+  await expect(progress).toContainText('Completed on Fake Lab PC · 2 of 2 executed (100%) · 1 passed · 1 failed', { timeout: 20_000 });
+  await expect(page.getByText(/Run complete — 1 passed, 1 failed/)).toBeVisible();
 });

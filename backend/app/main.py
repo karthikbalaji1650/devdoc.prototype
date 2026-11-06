@@ -53,6 +53,7 @@ from app.services.auth import AuthService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
+from app.services.remote_runs import RemoteRunPoller, RemoteRunService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
 from app.services.test_servers import TestServerService
@@ -65,6 +66,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
     test_store = TestManagementStore(redis)
     documents = CachedDocumentRepository(repos.documents, redis)
     test_servers = TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client)
+    remote_runs = RemoteRunService(RemoteJobStore(redis), test_servers, redis, test_store)
     return Services(
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
@@ -74,7 +76,8 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         ai=AiService(settings, http_client),
         test_management=TestManagementService(test_store),
         test_servers=test_servers,
-        test_exec=TestExecService(TestExecRepository(), remote_jobs=RemoteJobStore(redis), servers=test_servers),
+        test_exec=TestExecService(TestExecRepository(), remote=remote_runs),
+        remote_runs=remote_runs,
         releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
@@ -109,9 +112,14 @@ def create_app(
             redis_client = create_redis(settings.redis_url)
         async with httpx.AsyncClient() as http_client:
             app.state.services = build_services(settings, repos, http_client, redis_client)
+            # The background worker that polls remote test runs (DDS-SRS-021).
+            poller = RemoteRunPoller(app.state.services.remote_runs)
+            if settings.remote_poll_enabled:
+                poller.start()
             try:
                 yield
             finally:
+                await poller.stop()
                 if owns_redis:
                     await redis_client.aclose()
                 if pool is not None:
