@@ -76,3 +76,5 @@ TEST_DATABASE_URL=postgresql://...  uv run pytest tests/test_postgres.py   # rea
 `tests/e2e_server.py` is the API the Playwright specs `e2e/backend-login.spec.ts`
 and `e2e/remote-test-execution.spec.ts` start. It runs on in-memory repositories,
 so no database is needed.
+
+This is my readme
