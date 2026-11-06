@@ -18,6 +18,7 @@ import {
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
 import { RunTargetModal, type RunTarget } from './RunTargetModal';
 import { ScheduleModal } from './ScheduleModal';
+import { TrendCharts } from './TrendCharts';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary, testCaseLibrary } from '../../services/testCaseLibraryService';
 import { useSharedCollection, type CollectionStatus } from '../../services/sharedCollection';
@@ -2253,6 +2254,8 @@ const ReportsView: React.FC<{ runs: TestRunItem[]; suites: TestSuiteItem[] }> = 
           </div>
         ))}
       </div>
+      {/* Velocity and pass-rate trends (DDS-SRS-023) */}
+      <TrendCharts runs={runs} suites={suites} />
       {/* Run table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
