@@ -14,7 +14,7 @@ import sys
 import openpyxl
 
 XLSX, OUT = sys.argv[1], sys.argv[2]
-HEADER = "DevDoc Studio · SRS status report · 6 Nov 2026 (revised) · branch feature/remote-test-servers"
+HEADER = "DevDoc Studio · SRS status report · 7 Nov 2026 · branch feature/remote-test-servers"
 
 TITLES = {
     1: "List in-progress documents; open in editor", 2: "Users edit only their own documents",
@@ -86,7 +86,7 @@ def table(nums: list[int]) -> str:
            '<th class="s">Status</th><th>What exists today / what is missing</th></tr></thead><tbody>']
     for n in nums:
         rid, status, note, checked = rows[n]
-        when = "Checked 6 Nov" if checked.startswith("6 Nov") else "4 Nov, not re-checked"
+        when = f"Checked {checked.removesuffix(' 2026')}" if checked else "Not checked"
         out.append(f'<tr><td class="n">{n}</td><td class="id">{e(rid)}</td><td class="t">{e(TITLES[n])}</td>'
                    f'<td class="s">{badge(status)}<span class="when">{e(when)}</span></td><td>{e(note)}</td></tr>')
     out.append("</tbody></table>")
@@ -119,7 +119,7 @@ area_rows = "".join(
 KEY_POINTS = [
     ("43 of 52 verified.", "Each has unit, API or browser tests that pass (docs/testing/srs-test-matrix.md)."),
     ("9 built, not verified:", "the real system they need was not tried - test PC (020, 021, 072), Jenkins / Bitbucket (026, 027), AI provider (029), Jira / GitHub (044), SSO provider (076), deployment (074)."),
-    ("Bug fixed:", "the Export options menu ignored mouse clicks since 17 Sep, so 009 and the JSON download (010) did not work."),
+    ("Bugs fixed:", "Export options menu ignored clicks (009, 010); run page Close, Rerun, Edit and Execute did nothing; output.xml import read the wrong status and made up times; skipped tests counted as blocked; runs and testers always named one fixed user."),
     ("Not ready to deploy.", "Deployment is not an SRS requirement; what it needs is listed on the right."),
 ]
 key = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in KEY_POINTS)
@@ -129,7 +129,6 @@ BEFORE_DEPLOYMENT = [
     ("Secrets", "Set SECRETS_KEY and BRIDGE_TOKEN; replace the demo database password."),
     ("Server", "None yet; CI only builds the images."),
     ("Real systems", "Connect Jira, run one Jenkins job; test PC runs need a test PC implementing docs/test-pc-api.md."),
-    ("Known bugs", "\"Import output.xml\" reads Robot results wrongly. Close, Rerun, Edit and Execute Automated Tests on a run do nothing."),
 ]
 before = "".join(f"<tr><td class='t'>{e(a)}</td><td>{e(b)}</td></tr>" for a, b in BEFORE_DEPLOYMENT)
 page1 = (f'<section class="page">{head("Summary", 1)}<h1>DevDoc Studio — SRS status report</h1>'
