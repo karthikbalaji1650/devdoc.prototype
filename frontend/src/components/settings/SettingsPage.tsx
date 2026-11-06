@@ -27,6 +27,7 @@ import {
   type AiProvider,
 } from '../../services/aiService';
 import { ServerDataPanel } from './ServerDataPanel';
+import { TestServersPanel } from './TestServersPanel';
 import { SessionAuditTable } from './SessionAuditTable';
 import { canAccessDataManagement } from '../../services/permissions';
 
@@ -394,7 +395,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             {/* SYSTEM & STORAGE */}
             {activeTab === 'data' && canManageData && (
               <section className="space-y-6">
-                <SectionHeader icon={Database} title="System & Storage" desc="Back up or reset the server's data, set the workspace connection, and review sign-ins." />
+                <SectionHeader icon={Database} title="System & Storage" desc="Register remote test servers, back up or reset the server's data, set the workspace connection, and review sign-ins." />
 
                 {/* VS Code Server URL setting */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
@@ -432,6 +433,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                     </button>
                   </div>
                 </div>
+
+                {/* Remote test execution servers (DDS-SRS-019, admins) */}
+                <TestServersPanel />
 
                 {/* Server backup and reset (admins) */}
                 <ServerDataPanel />

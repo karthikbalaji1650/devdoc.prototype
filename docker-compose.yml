@@ -75,6 +75,8 @@ services:
       # to let the frontend's AI rephrase feature use this server as a key-
       # holding proxy instead of a per-browser key. Unset by default.
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Encrypts stored test-server credentials (see backend/.env.example).
+      - SECRETS_KEY=${SECRETS_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
   # ----------------------------------------------------

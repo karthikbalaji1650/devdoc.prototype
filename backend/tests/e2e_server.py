@@ -7,6 +7,7 @@ Started and killed by those specs; prints `READY <users json>` once up.
     PORT=4111 FRONTEND_ORIGIN=http://localhost:5199 uv run python -m tests.e2e_server
 """
 
+import base64
 import json
 import os
 from typing import Any
@@ -24,7 +25,10 @@ def main() -> None:
     origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5199")
     redis = fakeredis.FakeAsyncRedis(decode_responses=True)
     store = seeded_store()
-    app = create_app(test_settings(cors_origins=origin), repositories=memory_repositories(store), redis=redis)
+    # A fresh key per run, so test-server credentials can be stored (DDS-SRS-075).
+    secrets_key = os.environ.get("SECRETS_KEY") or base64.b64encode(os.urandom(32)).decode()
+    settings = test_settings(cors_origins=origin, secrets_key=secrets_key)
+    app = create_app(settings, repositories=memory_repositories(store), redis=redis)
 
     async def with_reset(scope: dict[str, Any], receive: Any, send: Any) -> None:
         """POST /__e2e/reset empties Redis and the documents, so each browser

@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = ""
 
+    # 32 random bytes, base64: encrypts stored test-server credentials
+    # (AES-256-GCM, DDS-SRS-075). Unset, servers without credentials still work.
+    secrets_key: str = ""
+
     @property
     def cookie_secure_enabled(self) -> bool:
         return self.cookie_secure == "true"

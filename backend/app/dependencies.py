@@ -18,6 +18,7 @@ from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
+from app.services.test_servers import TestServerService
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Services:
     ai: AiService
     test_exec: TestExecService
     test_management: TestManagementService
+    test_servers: TestServerService
     login_limiter: RateLimiter
     cookie_secure: bool
 

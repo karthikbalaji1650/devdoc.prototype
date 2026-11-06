@@ -28,6 +28,7 @@ AUTH_GUARDED_PREFIXES = (
     "/api/collections",
     "/api/admin",
     "/api/releases",
+    "/api/test-servers",
 )
 
 

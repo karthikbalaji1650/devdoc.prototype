@@ -19,6 +19,7 @@ from app.core.errors import register_exception_handlers
 from app.core.middleware import ExpressCorsMiddleware, JsonBodyMiddleware
 from app.core.rate_limit import login_rate_limiter
 from app.core.routing import ExpressPathMiddleware, route_templates
+from app.core.secrets import SecretBox
 from app.db.pool import create_pool
 from app.db.redis import create_redis
 from app.dependencies import Services
@@ -31,7 +32,20 @@ from app.repositories.releases import ReleaseStore
 from app.repositories.session_audit import SessionAuditStore
 from app.repositories.test_exec import TestExecRepository
 from app.repositories.test_management import TestManagementStore
-from app.routers import admin, ai, audit, auth, collections, documents, health, releases, test_exec, test_management
+from app.repositories.test_servers import TestServerStore
+from app.routers import (
+    admin,
+    ai,
+    audit,
+    auth,
+    collections,
+    documents,
+    health,
+    releases,
+    test_exec,
+    test_management,
+    test_servers,
+)
 from app.schemas.openapi import install_openapi
 from app.services.admin import AdminService
 from app.services.ai import AiService
@@ -41,6 +55,7 @@ from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
+from app.services.test_servers import TestServerService
 
 logger = logging.getLogger("devdoc.api")
 
@@ -58,6 +73,7 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         ai=AiService(settings, http_client),
         test_exec=TestExecService(TestExecRepository()),
         test_management=TestManagementService(test_store),
+        test_servers=TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client),
         releases=ReleaseService(ReleaseStore(redis), test_store),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
@@ -102,7 +118,20 @@ def create_app(
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
     routers = [
-        m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections, admin, releases)
+        m.router
+        for m in (
+            health,
+            auth,
+            documents,
+            ai,
+            test_exec,
+            test_management,
+            test_servers,
+            audit,
+            collections,
+            admin,
+            releases,
+        )
     ]
     for router in routers:
         app.include_router(router)

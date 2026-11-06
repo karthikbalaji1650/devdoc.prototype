@@ -51,6 +51,7 @@ def test_settings(**overrides: Any) -> Settings:
         "gemini_model": "",
         "openai_api_key": "",
         "openai_model": "",
+        "secrets_key": "",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)

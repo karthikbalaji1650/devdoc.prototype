@@ -34,6 +34,7 @@ tests/             pytest suite; parity/ compares against the old Node API
 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | bcrypt check, random session id in an httpOnly `devdoc_sid` cookie, stored in `sessions` so logout revokes it at once. Login is rate-limited: 10 failures per IP per 15 min. |
 | `GET/PUT/DELETE /api/documents[/:id]`, `DELETE /api/documents/:id/purge` | Each route re-checks the frontend's edit/visibility rules server-side. DELETE is a soft delete; purge removes the row. |
 | `GET /api/ai/providers`, `POST /api/ai/rephrase`, `POST /api/ai/generate-test-cases` | Proxies Gemini/OpenAI with server-side keys. |
+| `GET/POST /api/test-servers`, `PUT/DELETE /api/test-servers/:id`, `POST /api/test-servers/:id/check` | Remote test servers (DDS-SRS-019): endpoint URL, auth (none / API key / Basic / OAuth2 client credentials) and payload parameters. Admins manage them. Credentials are encrypted at rest with AES-256-GCM under `SECRETS_KEY` (DDS-SRS-075) and never returned. `check` authenticates and sends GET to the endpoint, reporting only status and timing. |
 | `POST /api/test-exec/scripts`, `POST /api/test-exec/runs`, `GET /api/test-exec/runs/:jobId` | **Mock** remote Test PC with in-memory state and randomized results. |
 
 Interactive docs: `/docs`; schema: `/openapi.json`.
