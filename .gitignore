@@ -11,3 +11,6 @@ __pycache__/
 .ruff_cache/
 .venv/
 .DS_Store
+
+# Repositories connected to the code editor (DDS-SRS-030) are clones, not part of this repo.
+workspace-qa/repos/

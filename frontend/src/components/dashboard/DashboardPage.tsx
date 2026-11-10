@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
-  LogOut,
-  CheckCircle2,
-  Clock,
   UploadCloud,
   HelpCircle,
 } from 'lucide-react';
@@ -39,13 +36,6 @@ type ActivityItem = {
   date: string;
 };
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good Morning';
-  if (h < 17) return 'Good Afternoon';
-  return 'Good Evening';
-}
-
 function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diffMs / 60000);
@@ -57,12 +47,27 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; label: string }> = {
-  APPROVED: { bg: 'bg-[#142b1d] text-[#4ade80] border border-[#1f5d39]', dot: 'bg-[#4ade80]', label: 'Approved' },
-  IN_REVIEW: { bg: 'bg-[#111d2f] text-[#a78bfa] border border-[#304c7d]', dot: 'bg-[#a78bfa]', label: 'In Review' },
-  PENDING: { bg: 'bg-[#2a220b] text-[#fbbf24] border border-[#6a4d12]', dot: 'bg-[#fbbf24]', label: 'Pending' },
-  CHANGES_REQUESTED: { bg: 'bg-[#2a1212] text-[#f87171] border border-[#7d2d2d]', dot: 'bg-[#f87171]', label: 'Changes Req.' },
+// One dot per status; the label stays neutral so color only marks state.
+const STATUS_STYLES: Record<ActivityItem['type'], { dot: string; label: string }> = {
+  APPROVED: { dot: 'bg-[var(--success)]', label: 'Approved' },
+  IN_REVIEW: { dot: 'bg-[var(--amber)]', label: 'In review' },
+  PENDING: { dot: 'bg-[var(--text-faint)]', label: 'Pending' },
+  CHANGES_REQUESTED: { dot: 'bg-[var(--danger)]', label: 'Changes requested' },
 };
+
+/** A document number, set the same way everywhere it names a document. */
+const DocTag: React.FC<{ value: string }> = ({ value }) => (
+  <span className="inline-flex items-center h-5 px-1.5 rounded border border-[var(--border-soft)] font-mono text-[12px] leading-none text-[var(--text-dim)] whitespace-nowrap">
+    {value}
+  </span>
+);
+
+const StatusLabel: React.FC<{ type: ActivityItem['type'] }> = ({ type }) => (
+  <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-dim)] shrink-0">
+    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[type].dot}`} />
+    {STATUS_STYLES[type].label}
+  </span>
+);
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout, onOpenDocuments, onOpenDocument }) => {
   const [notifOpen, setNotifOpen] = useState(false);
@@ -91,7 +96,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const reviewedDocs = approvedDocs + inReviewDocs;
   const approvalRate = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
   const inReviewRate = reviewedDocs > 0 ? Math.round((inReviewDocs / reviewedDocs) * 100) : 0;
-  const testProgress = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
   const chartRadius = 46;
   const chartCircumference = 2 * Math.PI * chartRadius;
   const approvedArc = (approvedDocs / (reviewedDocs || 1)) * chartCircumference;
@@ -104,10 +108,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user, documentsVersion]);
   const docCounts = countTracked(buildTrackedDocuments(visibleDocs, reviewers, isAdmin(user)));
 
-  const STATS: { label: string; value: number; status: Exclude<TrackedStatus, 'OTHER'> | null; valueColor: string }[] = [
-    { label: 'total docs', value: docCounts.total, status: null, valueColor: 'text-[#ededed]' },
-    { label: 'approved', value: docCounts.approved, status: 'APPROVED', valueColor: 'text-[#4ade80]' },
-    { label: 'in review', value: docCounts.inReview, status: 'IN_REVIEW', valueColor: 'text-[#fbbf24]' },
+  const STATS: { label: string; value: number; status: Exclude<TrackedStatus, 'OTHER'> | null; dot: string | null }[] = [
+    { label: 'Total docs', value: docCounts.total, status: null, dot: null },
+    { label: 'Approved', value: docCounts.approved, status: 'APPROVED', dot: 'bg-[var(--success)]' },
+    { label: 'In review', value: docCounts.inReview, status: 'IN_REVIEW', dot: 'bg-[var(--amber)]' },
   ];
 
   const recentActivity: ActivityItem[] = useMemo(
@@ -123,174 +127,142 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
     [reviewers]
   );
 
+  const focusRing = 'focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-1px] focus-visible:outline-[var(--success)]';
+
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-[#ededed] overflow-hidden">
-      <AppSidebar user={user} activeView="dashboard" onNavigate={onNavigate} onLogout={onLogout} />
+    <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] overflow-hidden">
+      <AppSidebar user={user} compact activeView="dashboard" onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-24 flex items-center justify-between px-7 border-b border-[#242424] bg-[#0d0d0d] shrink-0">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Dashboard overview</div>
-            <h1 className="text-xl font-bold text-[#ededed] mt-1">{getGreeting()}, {user.name.split(' ')[0]}</h1>
-          </div>
+        <header className="h-16 flex items-center justify-between gap-4 px-4 sm:px-8 border-b border-[var(--border-soft)] bg-[var(--panel)] shrink-0">
+          <h1 className="text-[17px] sm:text-[20px] font-medium text-[var(--text)] truncate">Engineering workspace</h1>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setWelcomeOpen(true)}
-              className="ui-button ui-button-icon"
+              className={`w-8 h-8 flex items-center justify-center rounded-md text-[var(--text-faint)] hover:text-[var(--text)] hover:bg-[var(--panel-alt)] transition-colors ${focusRing}`}
               title="Show the welcome guide again"
               aria-label="Help"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-4 h-4" strokeWidth={1.5} />
             </button>
             <div ref={notifRef} className="relative">
               <button
                 type="button"
                 onClick={() => setNotifOpen((o) => !o)}
-                className="ui-button ui-button-icon relative"
+                className={`relative w-8 h-8 flex items-center justify-center rounded-md text-[var(--text-faint)] hover:text-[var(--text)] hover:bg-[var(--panel-alt)] transition-colors ${focusRing}`}
                 title="Notifications"
+                aria-label="Notifications"
               >
-                <Bell className="w-4 h-4" />
+                <Bell className="w-4 h-4" strokeWidth={1.5} />
                 {recentActivity.length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#4ade80]" />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
                 )}
               </button>
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 border border-[#242424] bg-[#111111] shadow-lg z-50">
-                  <div className="px-3 py-2.5 border-b border-[#242424] text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">
+                <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[var(--border-soft)] bg-[var(--panel)] shadow-[0_8px_24px_rgba(0,0,0,0.3)] z-50 overflow-hidden">
+                  <div className="px-4 h-10 flex items-center border-b border-[var(--border-soft)] text-[13px] font-medium text-[var(--text)]">
                     Notifications
                   </div>
                   {recentActivity.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-[11px] text-[#8a8a8a] font-mono">
-                      No recent activity.
+                    <div className="px-4 py-6 text-center text-[13px] text-[var(--text-faint)]">
+                      No recent activity
                     </div>
                   ) : (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-[#242424]">
-                      {recentActivity.map((item) => {
-                        const ss = STATUS_STYLES[item.type];
-                        return (
-                          <div key={item.id} className="px-3 py-2.5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-[10px] uppercase tracking-[0.1em] text-[#8a8a8a] font-mono truncate">{item.docNumber}</div>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.1em] font-mono shrink-0 ${ss.bg}`}>
-                                <span className={`w-1 h-1 rounded-full ${ss.dot}`} />
-                                {ss.label}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-xs font-medium text-[#ededed] truncate">{item.docTitle}</div>
-                            <div className="mt-1 text-[10px] text-[#8a8a8a] font-mono">{item.reviewer} · {item.date}</div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-[var(--border-soft)]">
+                      {recentActivity.map((item) => (
+                        <div key={item.id} className="px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <DocTag value={item.docNumber} />
+                            <StatusLabel type={item.type} />
                           </div>
-                        );
-                      })}
+                          <div className="mt-2 text-[13px] text-[var(--text)] truncate">{item.docTitle}</div>
+                          <div className="mt-1 text-[12px] text-[var(--text-faint)]">{item.reviewer} · <span className="font-mono">{item.date}</span></div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
             </div>
-            <div className="border-l border-[#242424] h-6 ml-1" />
-            <div className="ui-panel flex items-center gap-3 px-2 py-1.5">
-              <div className="w-8 h-8 border border-[#242424] bg-[#131313] flex items-center justify-center text-[10px] font-bold text-[#ededed] font-mono uppercase">
-                {user.initials}
-              </div>
-              <div className="hidden sm:block text-right">
-                <div className="text-[10px] font-bold text-[#ededed] uppercase tracking-[0.08em] font-mono">{user.name}</div>
-                <div className="text-[9px] text-[#8a8a8a] uppercase tracking-[0.12em] font-mono">{user.title}</div>
-              </div>
-            </div>
-            <button type="button" onClick={onLogout} className="ui-button ui-button-danger">
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
-            </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-7 bg-[#0a0a0a]">
-          <div className="border border-[#242424] bg-[#0f0f0f]">
-            <section className="p-6">
-              <div className="border-b border-[#242424] pb-5 mb-5">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">System overview</div>
-                <div className="text-[28px] font-bold text-[#ededed] leading-none">Engineering workspace</div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[#242424] bg-[#111111]">
-                {STATS.map((stat) => (
-                  <button
-                    key={stat.label}
-                    type="button"
-                    onClick={() => onOpenDocuments(stat.status)}
-                    title={`View ${stat.label === 'total docs' ? 'all documents' : `${stat.label} documents`}`}
-                    className="border-r border-[#242424] last:border-r-0 p-5 text-left transition-colors hover:bg-[#161616] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#4ade80]"
-                  >
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">{stat.label}</div>
-                    <div className={`text-3xl font-bold ${stat.valueColor} font-mono`}>{stat.value}</div>
-                  </button>
-                ))}
-                <div className="p-5">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">
-                    <UploadCloud className="w-3 h-3" /> google drive
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[var(--bg)]">
+          <div className="max-w-[1440px] space-y-4 sm:space-y-6">
+            <section aria-label="Document counts" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 rounded-lg border border-[var(--border-soft)] bg-[var(--panel)] overflow-hidden">
+              {STATS.map((stat) => (
+                <button
+                  key={stat.label}
+                  type="button"
+                  onClick={() => onOpenDocuments(stat.status)}
+                  title={`View ${stat.status ? `${stat.label.toLowerCase()} documents` : 'all documents'}`}
+                  className={`p-6 text-left border-b sm:border-r xl:border-b-0 border-[var(--border-soft)] transition-colors hover:bg-[var(--panel-alt)] ${focusRing}`}
+                >
+                  <div className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
+                    {stat.dot && <span className={`w-1.5 h-1.5 rounded-full ${stat.dot}`} />}
+                    {stat.label}
                   </div>
-                  {latestDriveExport ? (
-                    <>
-                      <div className="text-lg font-bold text-[#4ade80] font-mono leading-tight">Synced {formatRelativeTime(latestDriveExport.exportedAt)}</div>
-                      <div className="text-[10px] text-[#8a8a8a] mt-1 truncate">{latestDriveExport.docTitle}</div>
-                    </>
-                  ) : (
-                    <div className="text-lg font-bold text-[#8a8a8a] font-mono leading-tight">Not synced yet</div>
-                  )}
+                  <div className="mt-3 text-[32px] leading-none font-medium font-mono tabular-nums text-[var(--text)]">{stat.value}</div>
+                </button>
+              ))}
+              <div className="p-6">
+                <div className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
+                  <UploadCloud className="w-4 h-4" strokeWidth={1.5} /> Google Drive
                 </div>
+                {latestDriveExport ? (
+                  <>
+                    <div className="mt-3 text-[15px] font-medium text-[var(--text)]">Synced {formatRelativeTime(latestDriveExport.exportedAt)}</div>
+                    <div className="mt-1 text-[12px] text-[var(--text-faint)] truncate">{latestDriveExport.docTitle}</div>
+                  </>
+                ) : (
+                  <div className="mt-3 text-[15px] text-[var(--text-faint)]">Not synced yet</div>
+                )}
               </div>
             </section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.75fr)] items-start border-t border-[#242424]">
-              <aside className="p-6 border-b xl:border-b-0 xl:border-r border-[#242424]">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">Recent activity</div>
-                <div className="space-y-3">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 sm:gap-6 items-start">
+              <section className="rounded-lg border border-[var(--border-soft)] bg-[var(--panel)] p-4 sm:p-6">
+                <h2 className="text-[15px] font-medium text-[var(--text)]">Recent activity</h2>
+                <div className="mt-4 space-y-2">
                   {recentActivity.map((item) => {
-                    const ss = STATUS_STYLES[item.type];
                     const linked = findDocumentByNumber(visibleDocs, item.docNumber);
                     const Wrapper = (linked ? 'button' : 'div') as React.ElementType;
                     return (
                       <Wrapper
                         key={item.id}
                         {...(linked ? { type: 'button', onClick: () => onOpenDocument(linked.metadata.id), title: 'Open this document' } : {})}
-                        className={`block w-full text-left border border-[#242424] bg-[#111111] p-3 ${linked ? 'transition-colors hover:border-[#4ade80] hover:bg-[#161616]' : ''}`}
+                        className={`block w-full text-left rounded-md border border-[var(--border-soft)] bg-[var(--bg)] px-4 py-3 ${linked ? `transition-colors hover:border-[var(--border)] hover:bg-[var(--panel-alt)] ${focusRing}` : ''}`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.docNumber}</div>
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] font-mono ${ss.bg}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} />
-                            {ss.label}
-                          </span>
+                          <DocTag value={item.docNumber} />
+                          <StatusLabel type={item.type} />
                         </div>
-                        <div className="mt-3 text-sm font-medium text-[#ededed]">{item.docTitle}</div>
-                        <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.reviewer}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.date}</div>
+                        <div className="mt-2 text-[14px] text-[var(--text)]">{item.docTitle}</div>
+                        <div className="mt-1 text-[12px] text-[var(--text-faint)]">
+                          {item.reviewer}{item.reviewerRole ? `, ${item.reviewerRole}` : ''} · <span className="font-mono tabular-nums">{item.date}</span>
+                        </div>
                       </Wrapper>
                     );
                   })}
                 </div>
-              </aside>
+              </section>
 
-              <aside className="self-start w-full p-5 bg-[#0d0d0d]">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Review results</div>
-                    <div className="mt-1 text-sm font-semibold text-[#ededed]">Approval progress</div>
-                  </div>
-                  <div className="text-[10px] text-[#8a8a8a] font-mono">LIVE DATA</div>
-                </div>
+              <section className="rounded-lg border border-[var(--border-soft)] bg-[var(--panel)] p-4 sm:p-6">
+                <h2 className="text-[15px] font-medium text-[var(--text)]">Sign-offs</h2>
+                <p className="mt-1 text-[12px] text-[var(--text-faint)]">From the reviewers log, one per reviewer</p>
 
-                <div className="mt-4 flex flex-col sm:flex-row xl:flex-col 2xl:flex-row items-center gap-4">
-                  <div className="relative shrink-0 w-28 h-28">
+                <div className="mt-6 flex justify-center">
+                  <div className="relative shrink-0 w-36 h-36">
                     <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120" role="img" aria-label={`${approvalRate}% approved, ${inReviewDocs} in review`}>
-                      <circle cx="60" cy="60" r={chartRadius} fill="none" stroke="#242424" strokeWidth="13" />
+                      <circle cx="60" cy="60" r={chartRadius} fill="none" stroke="var(--panel-alt)" strokeWidth="10" />
                       {reviewedDocs > 0 && (
                         <>
                           <circle
-                            cx="60" cy="60" r={chartRadius} fill="none" stroke="#4ade80" strokeWidth="13" strokeLinecap="butt"
-                            strokeDasharray={`${Math.max(approvedArc - 4, 0)} ${chartCircumference}`}
-                            className="cursor-pointer"
+                            cx="60" cy="60" r={chartRadius} fill="none" stroke="var(--success)" strokeWidth="10" strokeLinecap="butt"
+                            strokeDasharray={`${Math.max(approvedArc - 3, 0)} ${chartCircumference}`}
+                            className="cursor-pointer outline-none"
                             tabIndex={0}
                             onMouseEnter={() => setChartHover('approved')}
                             onMouseLeave={() => setChartHover(null)}
@@ -299,10 +271,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                           />
                           {inReviewDocs > 0 && (
                             <circle
-                              cx="60" cy="60" r={chartRadius} fill="none" stroke="#fbbf24" strokeWidth="13" strokeLinecap="butt"
-                              strokeDasharray={`${Math.max(reviewArc - 4, 0)} ${chartCircumference}`}
+                              cx="60" cy="60" r={chartRadius} fill="none" stroke="var(--amber)" strokeWidth="10" strokeLinecap="butt"
+                              strokeDasharray={`${Math.max(reviewArc - 3, 0)} ${chartCircumference}`}
                               strokeDashoffset={-approvedArc}
-                              className="cursor-pointer"
+                              className="cursor-pointer outline-none"
                               tabIndex={0}
                               onMouseEnter={() => setChartHover('in-review')}
                               onMouseLeave={() => setChartHover(null)}
@@ -313,59 +285,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                         </>
                       )}
                     </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xl font-bold text-[#ededed] font-mono">{approvalRate}%</span>
-                      <span className="text-[8px] uppercase tracking-[0.13em] text-[#8a8a8a] font-mono">approved</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[28px] leading-none font-medium font-mono tabular-nums text-[var(--text)]">{approvalRate}%</span>
+                      <span className="mt-1 text-[12px] text-[var(--text-faint)]">approved</span>
                     </div>
                     {chartHover && (
-                      <div role="status" className="absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 whitespace-nowrap border border-[#303030] bg-[#171717] px-2.5 py-1.5 text-[10px] text-[#ededed] shadow-lg font-mono">
-                        <span className={chartHover === 'approved' ? 'text-[#4ade80]' : 'text-[#fbbf24]'}>
-                          {chartHover === 'approved' ? 'Approved' : 'In review'}
-                        </span>
-                        {' — '}{chartHover === 'approved' ? approvedDocs : inReviewDocs} documents ({chartHover === 'approved' ? approvalRate : inReviewRate}%)
+                      <div role="status" className="absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-soft)] bg-[var(--panel-alt)] px-2.5 py-1.5 text-[12px] text-[var(--text)] shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+                        {chartHover === 'approved' ? 'Approved' : 'In review'}: <span className="font-mono tabular-nums">{chartHover === 'approved' ? approvedDocs : inReviewDocs}</span> ({chartHover === 'approved' ? approvalRate : inReviewRate}%)
                       </div>
                     )}
                   </div>
-
-                  <div className="w-full space-y-2.5">
-                    <div className="flex items-center justify-between gap-3 border-b border-[#242424] pb-2.5">
-                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
-                        <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#4ade80]" /> Approved
-                      </div>
-                      <span className="text-base font-bold text-[#4ade80] font-mono">{approvedDocs}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
-                        <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
-                        <Clock className="w-3.5 h-3.5 text-[#fbbf24]" /> In review
-                      </div>
-                      <span className="text-base font-bold text-[#fbbf24] font-mono">{inReviewDocs}</span>
-                    </div>
-                    <div className="pt-1 text-[9px] text-[#8a8a8a] font-mono">{reviewedDocs} DOCUMENTS IN REVIEW PIPELINE</div>
-                  </div>
                 </div>
 
-                <div className="mt-5 border-t border-[#242424] pt-4">
-                  <div className="text-[9px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Delivery forecast</div>
-                  <div className="mt-3">
-                    <div className="border border-[#242424] bg-[#111111] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] text-[#bdbdbd]">Live test cases</div>
-                        <span className="text-xs font-bold text-[#a78bfa] font-mono">{reviewedDocs}</span>
-                      </div>
-                      <div className="mt-3 h-2 overflow-hidden bg-[#242424]">
-                        <div className="h-full bg-[#4ade80]" style={{ width: `${testProgress}%` }} />
-                      </div>
-                      <div className="mt-2 flex justify-between text-[9px] text-[#8a8a8a] font-mono">
-                        <span>{approvedDocs} PASSED</span>
-                        <span className="text-[#fbbf24]">{inReviewDocs} RUNNING</span>
-                      </div>
-                    </div>
+                <dl className="mt-6 divide-y divide-[var(--border-soft)] border-t border-[var(--border-soft)]">
+                  <div className="h-10 flex items-center justify-between">
+                    <dt className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" /> Approved
+                    </dt>
+                    <dd className="text-[14px] font-mono tabular-nums text-[var(--text)]">{approvedDocs}</dd>
                   </div>
-                </div>
-              </aside>
-            </section>
+                  <div className="h-10 flex items-center justify-between">
+                    <dt className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]" /> In review
+                    </dt>
+                    <dd className="text-[14px] font-mono tabular-nums text-[var(--text)]">{inReviewDocs}</dd>
+                  </div>
+                  <div className="h-10 flex items-center justify-between">
+                    <dt className="text-[13px] text-[var(--text-faint)]">Total sign-offs</dt>
+                    <dd className="text-[14px] font-mono tabular-nums text-[var(--text-dim)]">{reviewedDocs}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
           </div>
         </main>
       </div>

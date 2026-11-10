@@ -39,8 +39,15 @@ COPY --from=builder /app/dist .
 # restricts substitution to that one variable, so nginx's own $host,
 # $http_upgrade etc. in the template are left untouched.
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-ENV NGINX_ENVSUBST_FILTER=^BACKEND_ORIGIN$
+ENV NGINX_ENVSUBST_FILTER=^(BACKEND_ORIGIN|HTTPS_PORT)$
 ENV BACKEND_ORIGIN=
+# The port browsers use for HTTPS, for the HTTP -> HTTPS redirect.
+ENV HTTPS_PORT=443
 
-EXPOSE 80
+# HTTPS with TLS 1.3 (DDS-SRS-074): a mounted certificate, or a self-signed
+# one made at start (docker/15-devdoc-tls.sh, run by the image's entrypoint).
+RUN apk add --no-cache openssl
+COPY docker/15-devdoc-tls.sh /docker-entrypoint.d/15-devdoc-tls.sh
+
+EXPOSE 80 443
 CMD ["nginx", "-g", "daemon off;"]

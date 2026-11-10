@@ -1,0 +1,45 @@
+{
+  "suite": {
+    "id": "s1",
+    "title": "AST2600 RTC Clock & Timing",
+    "description": "",
+    "module": "Firmware",
+    "createdAt": "2026-01-01"
+  },
+  "cases": [
+    {
+      "id": "c1",
+      "customId": "TC-001",
+      "title": "Drift  check\tunder load",
+      "type": "Automated",
+      "priority": "High",
+      "labels": [
+        "RTC",
+        "Drift"
+      ]
+    },
+    {
+      "id": "c2",
+      "customId": "TC-002",
+      "title": "Manual only",
+      "type": "Manual",
+      "priority": "Low"
+    },
+    {
+      "id": "c3",
+      "customId": "TC-003",
+      "title": "Candidate",
+      "type": "Manual",
+      "automationCandidate": true,
+      "priority": "Medium"
+    },
+    {
+      "id": "c4",
+      "customId": "TC-004",
+      "title": "Own code",
+      "type": "Automated",
+      "priority": "Critical",
+      "robotCode": "TC-004 Own code\n    Log    custom"
+    }
+  ]
+}

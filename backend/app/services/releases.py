@@ -14,6 +14,8 @@
 import hashlib
 import json
 import re
+import time
+import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -23,6 +25,7 @@ from app.models.user import User
 from app.repositories.releases import ReleaseStore
 from app.repositories.test_management import TestManagementStore
 from app.services.permissions import is_admin
+from app.services.trackers import TrackerService, blocker_query
 
 TYPES = ("Major", "Minor", "Patch", "Hotfix")
 STATUSES = ("Planned", "In Progress", "RC Frozen", "Approved", "Deployed", "Cancelled")
@@ -45,6 +48,10 @@ _GENESIS = "0" * 64
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+# Who the audit log names for the background sync of Jira / GitHub blockers.
+TRACKER_SYNC_USER = User("system", "Tracker sync", "", None, None, "system", None, None)
 
 
 def can_manage(user: User) -> bool:
@@ -90,9 +97,10 @@ def verify_chain(entries: list[dict[str, Any]]) -> bool:
 
 
 class ReleaseService:
-    def __init__(self, store: ReleaseStore, tests: TestManagementStore) -> None:
+    def __init__(self, store: ReleaseStore, tests: TestManagementStore, trackers: TrackerService | None = None) -> None:
         self._store = store
         self._tests = tests
+        self._trackers = trackers
 
     # ── audit log (046) ────────────────────────────────────────────────
     async def _audit(self, user: User, release_id: str, action: str, details: dict[str, Any]) -> None:
@@ -303,6 +311,14 @@ class ReleaseService:
             "documents": [
                 d for d in body.get("documents", (existing or {}).get("documents", [])) if isinstance(d, dict)
             ],
+            # Which Jira / GitHub issues are this release's blockers (044); null clears it.
+            "blockerQuery": (
+                blocker_query(body["blockerQuery"], None)
+                if "blockerQuery" in body and body["blockerQuery"] is not None
+                else None
+                if "blockerQuery" in body
+                else (existing or {}).get("blockerQuery")
+            ),
             "createdBy": (existing or {}).get("createdBy", user.name),
             "createdAt": (existing or {}).get("createdAt", _now()),
             "updatedAt": _now(),
@@ -320,6 +336,8 @@ class ReleaseService:
             await self._audit(user, release_id, "gate-rules-changed", {"rules": release["gateRules"]})
         if existing is not None and existing.get("signoffRoles") != release["signoffRoles"]:
             await self._audit(user, release_id, "signoff-roles-changed", {"roles": release["signoffRoles"]})
+        if (existing or {}).get("blockerQuery") != release["blockerQuery"] and (existing or release["blockerQuery"]):
+            await self._audit(user, release_id, "blocker-query-changed", {"query": release["blockerQuery"]})
         return release
 
     async def delete_release(self, user: User, release_id: str) -> None:
@@ -507,6 +525,131 @@ class ReleaseService:
             raise ApiError(404, "Blocker not found.")
         await self._store.delete_blocker(release_id, blocker_id)
         await self._audit(user, release_id, "blocker-removed", {"key": blocker["key"]})
+
+    # ── blockers from Jira / GitHub (044) ──────────────────────────────
+    def _require_trackers(self) -> TrackerService:
+        if self._trackers is None:
+            raise ApiError(501, "Issue trackers are not available on this server.")
+        return self._trackers
+
+    async def lookup_blocker(self, user: User, release_id: str, body: Any) -> dict[str, Any]:
+        """Links one issue by key; its title, link, severity and status are read
+        from the tracker, and kept current by each sync."""
+        _require_manager(user)
+        await self._release_or_404(release_id)
+        trackers = self._require_trackers()
+        if not isinstance(body, dict):
+            raise ApiError(400, "Body must be a JSON object.")
+        tracker = _choice(body, "tracker", ("Jira", "GitHub"), "Jira")
+        info = await trackers.issue(tracker, _text(body, "key") or "")
+        blockers = await self._store.list_blockers(release_id)
+        existing = next((b for b in blockers if b.get("tracker") == tracker and b.get("key") == info["key"]), None)
+        blocker = {
+            **(existing or {"id": f"b-{uuid.uuid4().hex[:12]}", "createdBy": user.name}),
+            **info,
+            "source": (existing or {}).get("source") if (existing or {}).get("source") == "synced" else "linked",
+            "syncedAt": _now(),
+            "updatedAt": _now(),
+        }
+        blocker.pop("syncNote", None)
+        await self._store.put_blocker(release_id, blocker)
+        if existing is None:
+            await self._audit(
+                user, release_id, "blocker-logged", {"key": blocker["key"], "severity": blocker["severity"]}
+            )
+        return blocker
+
+    async def sync_blockers(self, user: User, release_id: str) -> dict[str, Any]:
+        """Brings in the issues the release's blocker query matches and refreshes
+        every linked issue. An issue that no longer matches the query is closed
+        here (it is no longer marked as a blocker). One audit entry per sync
+        that changed anything."""
+        release = await self._release_or_404(release_id)
+        trackers = self._require_trackers()
+        query = release.get("blockerQuery") or {}
+        blockers = await self._store.list_blockers(release_id)
+        by_key = {(b.get("tracker"), b.get("key")): b for b in blockers}
+        added: list[str] = []
+        closed: list[str] = []
+        reopened: list[str] = []
+        error = None
+        try:
+            matched = await trackers.search(query) if query else []
+            seen = set()
+            for info in matched:
+                seen.add((info["tracker"], info["key"]))
+                old = by_key.get((info["tracker"], info["key"]))
+                if old is None:
+                    added.append(info["key"])
+                elif old.get("status") != info["status"]:
+                    (closed if info["status"] == "Closed" else reopened).append(info["key"])
+                new = {
+                    **(old or {"id": f"b-{uuid.uuid4().hex[:12]}", "createdBy": user.name}),
+                    **info,
+                    "source": "synced" if (old or {}).get("source") != "linked" else "linked",
+                    "syncedAt": _now(),
+                    "updatedAt": _now(),
+                }
+                new.pop("syncNote", None)
+                if new != old:
+                    await self._store.put_blocker(release_id, new)
+            for (tracker, key), old in by_key.items():
+                if (tracker, key) in seen or old.get("source") not in ("synced", "linked"):
+                    continue
+                try:
+                    info = await trackers.issue(tracker, key)
+                except ApiError as exc:
+                    if exc.status != 404:
+                        raise
+                    info = {
+                        **{k: old.get(k) for k in ("tracker", "key", "title", "url", "severity")},
+                        "status": "Closed",
+                    }
+                    old = {**old, "syncNote": "Not found in the tracker any more."}
+                new = {**old, **info, "syncedAt": _now(), "updatedAt": _now()}
+                if old.get("source") == "synced" and info["status"] == "Open":
+                    new["status"] = "Closed"
+                    new["syncNote"] = "No longer matches the blocker query."
+                if old.get("status") != new["status"]:
+                    (closed if new["status"] == "Closed" else reopened).append(key)
+                if new != old:
+                    await self._store.put_blocker(release_id, new)
+        except ApiError as exc:
+            error = exc.message
+        result = {"at": _now(), "added": added, "closed": closed, "reopened": reopened, "error": error}
+        await self._store.put_release({**release, "blockerSync": result})
+        if added or closed or reopened:
+            await self._audit(
+                user, release_id, "blockers-synced", {"added": added, "closed": closed, "reopened": reopened}
+            )
+        return result
+
+    async def sync_blockers_now(self, user: User, release_id: str) -> dict[str, Any]:
+        """The "Sync now" button: release managers and admins."""
+        _require_manager(user)
+        return await self.sync_blockers(user, release_id)
+
+    SYNC_EVERY_S = 300
+
+    async def sync_all_due(self, now: float | None = None) -> int:
+        """The background worker's step: every SYNC_EVERY_S, sync each active
+        release that has a blocker query or linked issues."""
+        if self._trackers is None or not any((await self._trackers.configured()).values()):
+            return 0
+        now = time.time() if now is None else now
+        synced = 0
+        for release in await self._store.list_releases():
+            if release.get("status") in ("Deployed", "Cancelled"):
+                continue
+            if not release.get("blockerQuery") and not any(
+                b.get("source") in ("synced", "linked") for b in await self._store.list_blockers(release["id"])
+            ):
+                continue
+            if not await self._store.claim_sync(release["id"], int(now // self.SYNC_EVERY_S), self.SYNC_EVERY_S):
+                continue
+            await self.sync_blockers(TRACKER_SYNC_USER, release["id"])
+            synced += 1
+        return synced
 
     # ── sample data ────────────────────────────────────────────────────
     async def seed(self, user: User, body: Any) -> dict[str, Any]:

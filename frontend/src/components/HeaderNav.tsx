@@ -211,7 +211,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         )}
 
         {/* Template Switcher Dropdown */}
-        <div ref={exportDropdownRef} className="relative">
+        <div className="relative">
           <button
             onClick={() => setTemplateDropdownOpen(!templateDropdownOpen)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-800 border border-slate-300 transition-colors"
@@ -356,8 +356,9 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           <span>{isExportingDocx ? 'Generating...' : 'Export Word'}</span>
         </button>
 
-        {/* Secondary Actions Dropdown (Excel, JSON, Print, AI Settings) */}
-        <div className="relative">
+        {/* Secondary Actions Dropdown (Excel, JSON, Print, AI Settings). The ref
+            marks what counts as "inside" for closing it on an outside press. */}
+        <div ref={exportDropdownRef} className="relative">
           <button
             onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
             aria-label="Export options"

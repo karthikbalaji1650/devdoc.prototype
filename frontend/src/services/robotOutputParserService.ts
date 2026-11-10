@@ -22,8 +22,29 @@ export interface ParsedRobotRun {
   testResults: ParsedRobotTestResult[];
 }
 
+/** Elapsed time of a <status>: `elapsed` in seconds (RF 7), or
+ * starttime/endtime "YYYYMMDD HH:MM:SS.mmm" (RF 4 - 6); 0 if neither. */
+function elapsedMs(status: Element | null): number {
+  if (!status) return 0;
+  const elapsed = status.getAttribute('elapsed');
+  if (elapsed !== null) {
+    const seconds = Number(elapsed);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : 0;
+  }
+  const parse = (v: string | null) => {
+    const m = v?.match(/^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})$/);
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], +m[7]) : NaN;
+  };
+  const ms = parse(status.getAttribute('endtime')) - parse(status.getAttribute('starttime'));
+  return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
 /**
- * Parses standard Robot Framework output.xml string into structured JavaScript objects
+ * Parses a Robot Framework output.xml (RF 4 - 7). A test's outcome is its
+ * own <status> - the last direct child of <test>, not a nested keyword's.
+ * PASS, FAIL and SKIP map directly; NOT RUN (not executed) counts as SKIP.
+ * The server's parser (backend/app/services/robot_output.py) follows the
+ * same rules; both are pinned to backend/tests/fixtures/robot_output_*.
  */
 export function parseRobotOutputXml(xmlString: string, suiteId: string): { run: TestRunItem; results: ParsedRobotTestResult[] } {
   const parser = new DOMParser();
@@ -31,7 +52,7 @@ export function parseRobotOutputXml(xmlString: string, suiteId: string): { run: 
 
   const suiteNode = xmlDoc.querySelector('robot > suite');
   const suiteTitle = suiteNode?.getAttribute('name') || 'Robot Framework Automated Suite';
-  
+
   const testNodes = xmlDoc.querySelectorAll('test');
   const results: ParsedRobotTestResult[] = [];
   let passed = 0;
@@ -39,28 +60,23 @@ export function parseRobotOutputXml(xmlString: string, suiteId: string): { run: 
   let skipped = 0;
 
   testNodes.forEach((tNode, idx) => {
-    const title = tNode.getAttribute('name') || `Test Case ${idx + 1}`;
-    const statusNode = tNode.querySelector('status');
-    const rawStatus = statusNode?.getAttribute('status') || 'FAIL';
-    const status: 'PASS' | 'FAIL' | 'SKIP' = rawStatus === 'PASS' ? 'PASS' : rawStatus === 'SKIP' ? 'SKIP' : 'FAIL';
-    
+    const title = tNode.getAttribute('name')?.trim() || `Test Case ${idx + 1}`;
+    const ownStatuses = Array.from(tNode.children).filter((c) => c.tagName === 'status');
+    const statusNode = ownStatuses[ownStatuses.length - 1] ?? null;
+    const rawStatus = statusNode?.getAttribute('status') ?? 'FAIL';
+    const status: 'PASS' | 'FAIL' | 'SKIP' = rawStatus === 'PASS' ? 'PASS' : rawStatus === 'SKIP' || rawStatus === 'NOT RUN' ? 'SKIP' : 'FAIL';
+
     if (status === 'PASS') passed++;
     else if (status === 'FAIL') failed++;
     else skipped++;
 
-    const failureMessage = status === 'FAIL' ? (statusNode?.textContent?.trim() || 'Assertion error during keyword execution.') : undefined;
+    const failureMessage = status === 'FAIL' ? ((statusNode?.textContent ?? '').trim().slice(0, 2000) || 'Failed.') : undefined;
 
-    // Extract custom ID from test name if formatted like "TC_HPM_001_Title" or default
+    // The ID from a test name like "TC_HPM_001 Title" -> "TC-HPM-001"; otherwise TC-<position>.
     const matchId = title.match(/^(TC[_\-A-Z0-9]+)[\s_-]/i);
-    const customId = matchId ? matchId[1].replace(/_/g, '-') : `TC-ROBOT-00${idx + 1}`;
+    const customId = matchId ? matchId[1].replace(/_/g, '-') : `TC-${idx + 1}`;
 
-    results.push({
-      customId,
-      title,
-      status,
-      elapsedTimeMs: Math.floor(Math.random() * 800) + 120,
-      failureMessage
-    });
+    results.push({ customId, title, status, elapsedTimeMs: elapsedMs(statusNode), ...(failureMessage ? { failureMessage } : {}) });
   });
 
   const run: TestRunItem = {
@@ -71,7 +87,8 @@ export function parseRobotOutputXml(xmlString: string, suiteId: string): { run: 
     status: failed === 0 ? 'Completed' : 'Failed',
     passedCount: passed,
     failedCount: failed,
-    blockedCount: skipped,
+    blockedCount: 0,
+    skippedCount: skipped,
     executedAt: new Date().toISOString()
   };
 

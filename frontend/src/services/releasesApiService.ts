@@ -48,7 +48,16 @@ export interface Build {
 export interface Blocker {
   id: string; key: string; tracker: 'Jira' | 'GitHub'; title: string | null; url: string | null;
   severity: (typeof SEVERITIES)[number]; status: 'Open' | 'Closed';
+  /** Read from Jira / GitHub (044): "synced" from the release's blocker query,
+   * "linked" by key; kept current by each sync. Absent: entered by hand. */
+  source?: 'synced' | 'linked';
+  syncedAt?: string;
+  syncNote?: string;
 }
+
+/** Which Jira / GitHub issues are the release's blockers (044). */
+export interface BlockerQuery { jira?: { jql: string }; github?: { repo: string; label: string } }
+export interface BlockerSync { at: string; added: string[]; closed: string[]; reopened: string[]; error: string | null }
 
 export interface Release {
   id: string;
@@ -63,6 +72,8 @@ export interface Release {
   gateRules: GateRules;
   notes: string;
   documents: { id: string; title: string }[];
+  blockerQuery?: BlockerQuery | null;
+  blockerSync?: BlockerSync;
   createdBy: string;
   builds: Build[];
   blockers: Blocker[];
@@ -123,6 +134,10 @@ export const promoteBuild = (id: string, buildId: string) => call<{ build: Build
 export const saveBlocker = (id: string, blockerId: string, blocker: Partial<Blocker>) =>
   call<{ blocker: Blocker }>('PUT', `/${enc(id)}/blockers/${enc(blockerId)}`, blocker);
 export const deleteBlocker = (id: string, blockerId: string) => call<null>('DELETE', `/${enc(id)}/blockers/${enc(blockerId)}`);
+/** Links a Jira (PROJ-123) or GitHub (owner/repo#123) issue, read from the tracker. */
+export const lookupBlocker = (id: string, tracker: 'Jira' | 'GitHub', key: string) =>
+  call<{ blocker: Blocker }>('POST', `/${enc(id)}/blockers/lookup`, { tracker, key });
+export const syncBlockers = (id: string) => call<BlockerSync>('POST', `/${enc(id)}/blockers/sync`);
 export const loadAudit = (id: string) => call<{ entries: AuditEntry[]; intact: boolean }>('GET', `/${enc(id)}/audit`);
 
 /** A Markdown draft of the release notes from what the release holds. */

@@ -17,7 +17,7 @@ export const test = base.extend<{ resetServer: void }, { stack: Stack }>({
   stack: [async ({}, use, workerInfo) => {
     const stack = await startStack(4300 + workerInfo.parallelIndex, 5300 + workerInfo.parallelIndex);
     await use(stack);
-    stack.stop();
+    await stack.stop();
   }, { scope: 'worker', timeout: 90_000 }],
   baseURL: async ({ stack }, use) => { await use(stack.frontendUrl); },
   resetServer: [async ({ stack }, use) => { await stack.reset(); await use(); }, { auto: true }],
