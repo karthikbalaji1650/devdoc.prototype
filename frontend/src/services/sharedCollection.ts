@@ -92,7 +92,9 @@ export function createSharedCollection<T extends { id: string }>(
       if (status !== 'unavailable') { status = 'unavailable'; items = opts.demo?.() ?? []; notify(); }
       return Promise.resolve();
     }
-    if (loading && !force) return loading;
+    // A failed load is not kept: the app asks for some collections before
+    // sign-in (401), and the next screen to use one must fetch it again.
+    if (loading && !force && status !== 'error') return loading;
     status = 'loading';
     notify();
     loading = fetchAll()

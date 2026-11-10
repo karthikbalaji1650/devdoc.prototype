@@ -22,6 +22,17 @@ describe('createSharedCollection', () => {
     expect(again.items()).toEqual([]);
   });
 
+  it('loads again after a failed load, e.g. one made before sign-in', async () => {
+    api.data.set('notes', new Map([['a', { id: 'a', title: 'A' }]]));
+    const c = createSharedCollection<Item>('notes');
+    api.fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: 'Not signed in.' }), { status: 401 }));
+    await c.load();
+    expect(c.status()).toBe('error');
+    await c.load();
+    expect(c.status()).toBe('ready');
+    expect(c.items()).toEqual([{ id: 'a', title: 'A' }]);
+  });
+
   it('replaceAll sends only what changed, and notifies subscribers', async () => {
     const c = createSharedCollection<Item>('notes');
     await c.load();
