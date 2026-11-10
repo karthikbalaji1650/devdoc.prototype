@@ -22,7 +22,7 @@ test('sign in with the provider, then use and revoke a JWT access token', async 
   await page.getByRole('button', { name: 'Sign in with Test IdP' }).click();
 
   // Provider -> API callback -> back to the app, signed in, address bar clean.
-  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
   expect(new URL(page.url()).search).toBe('');
   await expect(page.getByText(admin.name).first()).toBeVisible();
 

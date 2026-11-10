@@ -127,5 +127,5 @@ export async function signInThroughBackend(page: Page, stack: Stack, user: TestU
   await page.getByPlaceholder('engineer@sanmina.com').fill(user.email);
   await page.getByPlaceholder('Enter your password').fill(user.password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
 }

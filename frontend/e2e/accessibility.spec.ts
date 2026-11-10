@@ -20,7 +20,7 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
   test('dashboard', async ({ page }) => {
     await signInAs(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+    await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
     expect(await scan(page)).toEqual([]);
   });
 

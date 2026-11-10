@@ -71,7 +71,7 @@ test('clicking Run Test starts a remote run that shows up immediately as In Prog
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill(users[0].password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+  await expect(page.getByText(new RegExp(`Good (Morning|Afternoon|Evening)`))).toBeVisible();
 
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await page.getByRole('button', { name: 'Run Test' }).click();
@@ -101,7 +101,7 @@ test('Run Test sends the suite to a registered test server and follows it live t
   await page.getByPlaceholder('engineer@sanmina.com').fill(users[0].email);
   await page.getByPlaceholder('Enter your password').fill(users[0].password);
   await page.getByRole('button', { name: /sign in to platform/i }).click();
-  await expect(page.getByRole('heading', { name: 'Engineering workspace' })).toBeVisible();
+  await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
 
   // Register the harness's fake Test PC (backend/tests/e2e_server.py) as the admin.
   const created = await page.request.post(`${api}/api/test-servers`, {
