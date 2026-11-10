@@ -180,6 +180,11 @@ services:
       - DATABASE_URL=postgres://platform_admin:platform_secure_password_2026@postgres-db:5432/platform_db
       # Same value as the api service's: required by the bridge's git endpoints when set.
       - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
+      # The code editor's password (it gives a terminal). Set one in a root .env;
+      # without it a random password is made and printed in this container's
+      # log: docker compose logs vscode-cline | grep password
+      - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD:-}
+      - CODE_SERVER_HASHED_PASSWORD=${CODE_SERVER_HASHED_PASSWORD:-}
     volumes:
       - ./workspace-qa:/home/coder/project
 

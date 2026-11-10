@@ -124,7 +124,13 @@ port 8000 for this machine) and the web app (HTTPS on 8443, proxying the
 API at `/api`, the code editor at `/vscode/` and its file bridge at
 `/bridge/`) together, already wired to each other — no extra steps needed.
 Set `HTTPS_PORT` to serve on another port (e.g. 443), and `TLS_HOSTNAME`
-for the self-signed certificate's name. See [backend/README.md](backend/README.md) for the
+for the self-signed certificate's name.
+
+The code editor (Coder screen) asks for a password, since it gives a
+terminal. Set `CODE_SERVER_PASSWORD` in a root `.env`, or
+`CODE_SERVER_HASHED_PASSWORD` with an argon2 hash in single quotes (it
+contains `$`). Without either, a random password is made on first start
+and printed in the log: `docker compose logs vscode-cline | grep password`. See [backend/README.md](backend/README.md) for the
 API on its own, and the demo accounts it seeds.
 
 CI builds and publishes both images on every push to `main`, tagged

@@ -14,7 +14,7 @@ import sys
 import openpyxl
 
 XLSX, OUT = sys.argv[1], sys.argv[2]
-HEADER = "DevDoc Studio · SRS status report · 7 Nov 2026 · branch feature/remote-test-servers"
+HEADER = "DevDoc Studio · SRS status report · 10 Nov 2026 · branch feature/remote-test-servers"
 
 TITLES = {
     1: "List in-progress documents; open in editor", 2: "Users edit only their own documents",
@@ -124,9 +124,8 @@ KEY_POINTS = [
 ]
 key = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in KEY_POINTS)
 BEFORE_DEPLOYMENT = [
-    ("Code editor password", "code-server has none; anyone who reaches the app can open it, terminal included."),
     ("TLS certificate", "Replace the self-signed one."),
-    ("Secrets", "Set SECRETS_KEY and BRIDGE_TOKEN; replace the demo database password."),
+    ("Secrets", "Set SECRETS_KEY, BRIDGE_TOKEN and CODE_SERVER_PASSWORD (the code editor's; without it one is generated and printed in its log); replace the demo database password."),
     ("Server", "None yet; CI only builds the images."),
     ("Real systems", "Connect Jira, run one Jenkins job; test PC runs need a test PC implementing docs/test-pc-api.md."),
 ]
