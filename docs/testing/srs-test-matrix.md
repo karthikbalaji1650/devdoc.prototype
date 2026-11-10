@@ -61,7 +61,7 @@ or the old Node API), frontend unit 236 passed, browser 89 passed (Chromium).
 | 046 | Done | — | `test_releases.py` test_records_every_release_action_in_order<br>`test_releases.py` test_tampering_is_detected | `release-master.spec.ts` a release manager takes an RC from registration to Final |  |
 | 071 | Done | — | — | `navigation-perf.spec.ts` | Measured on a production build on the development machine. |
 | 072 | Built – not verified | — | `test_remote_runs.py` test_tracks_100_concurrent_runs_within_one_tick | — | Measured in-process against a simulated test server, not real lab load. |
-| 073 | Done | — | — | `test-management-perf.spec.ts` | Measured on the development machine. |
+| 073 | Done | — | — | `test-management-perf.spec.ts` fetching every case of a 5,000-case suite, and opening the screen | Query median 138 ms on CI (Chromium), 46 ms locally, under 500 ms. Screen on a production build: 661 ms on CI, 185 ms locally. |
 | 074 | Built – not verified | — | — | — | Checked by hand on a throwaway Docker stack (self-signed certificate): TLS 1.3 negotiated, TLS 1.2 refused, HTTP redirected, Secure cookie, browser sign-in. No automated test; no real deployment. |
 | 075 | Done | — | `test_test_servers.py` test_secret_is_encrypted_in_storage_and_in_the_backup<br>`test_test_servers.py` test_round_trip_and_context_binding | — |  |
 | 076 | Built – not verified | `LoginPage.test.tsx` offers the provider when the server has SSO | `test_sso_jwt.py` test_a_full_sign_in_with_pkce_state_and_nonce<br>`test_sso_jwt.py` test_a_jwt_works_on_any_route_until_the_session_ends | `sso.spec.ts` sign in with the provider, then use and revoke a JWT access token | Single sign-on against a simulated provider. |
