@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
@@ -109,7 +109,7 @@ jobs:
       # e2e/backend-login.spec.ts and remote-test-execution.spec.ts start
       # the real API (backend/tests/e2e_server.py, in-memory storage) to
       # check the frontend and API together.
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
