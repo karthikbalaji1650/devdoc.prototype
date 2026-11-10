@@ -290,3 +290,52 @@ class TestBlockersAndSeed:
         body = other.post(f"{BASE}/seed", json=sample).json()
         assert body["seeded"] is True and body["releases"][0]["blockers"][0]["key"] == "WH3-1"
         assert other.post(f"{BASE}/seed", json=sample).status_code == 409
+
+
+class TestRecordedValues:
+    """Every value the SRS names, read back exactly (DDS-SRS-034, 036, 040, 042)."""
+
+    def test_040_every_image_detail_is_stored(self, api: Api) -> None:
+        manager = setup_release(api)
+        build = manager.post(f"{BASE}/r1/builds", json=build_body()).json()["build"]
+        stored = get_release(manager)["builds"][0]
+        for field, value in build_body().items():
+            assert build[field] == value and stored[field] == value, field
+
+    def test_034_a_build_without_linked_runs_is_pending(self, api: Api) -> None:
+        manager = setup_release(api)
+        manager.post(f"{BASE}/r1/builds", json=build_body())
+        gates = get_release(manager)["builds"][0]["gates"]
+        assert gates["verification"] == "Pending" and gates["linkedRuns"] == 0
+        assert gates["passRate"] is None and gates["coverage"] is None
+
+    def test_042_coverage_is_the_share_of_linked_results_executed(self, api: Api) -> None:
+        manager = setup_release(api)
+        manager.put("/api/test-management/runs/run1", json=run(["Passed", "Failed", "Untested", "Untested"]))
+        manager.put("/api/test-management/runs/run2", json=run(["Passed", "Passed"]))
+        manager.post(f"{BASE}/r1/builds", json=build_body())
+        manager.put(f"{BASE}/r1/builds/rc100/runs", json={"testRunIds": ["run1", "run2"]})
+        gates = get_release(manager)["builds"][0]["gates"]
+        assert gates["linkedRuns"] == 2
+        assert gates["coverage"] == round(4 / 6 * 100, 1)  # 4 of 6 results executed
+        assert gates["passRate"] == 75.0  # 3 passed of 4 executed
+
+    def test_036_metrics_follow_the_release(self, api: Api) -> None:
+        manager = setup_release(api)
+        metrics = get_release(manager)["metrics"]
+        assert (metrics["builds"], metrics["latestBuild"], metrics["latestPassRate"], metrics["openBlockers"]) == (
+            0,
+            None,
+            None,
+            0,
+        )
+        manager.put("/api/test-management/runs/run1", json=run(["Passed", "Failed"]))
+        manager.post(f"{BASE}/r1/builds", json=build_body())
+        manager.post(f"{BASE}/r1/builds", json=build_body(sha256="c" * 64))
+        manager.put(f"{BASE}/r1/builds/rc101/runs", json={"testRunIds": ["run1"]})
+        manager.put(f"{BASE}/r1/blockers/b1", json={"key": "WH3-1", "severity": "Major"})
+        metrics = get_release(manager)["metrics"]
+        assert metrics["builds"] == 2 and metrics["latestBuild"] == "v2.4.0-RC101"
+        assert metrics["latestPassRate"] == 50.0 and metrics["latestCoverage"] == 100.0
+        assert metrics["openBlockers"] == 1 and metrics["finalBuild"] is None
+        assert metrics["milestonesTotal"] == 5

@@ -46,7 +46,9 @@ docker-compose.yml   the full stack
 docker compose up --build
 ```
 
-The app is at http://localhost:5173 and the API at http://localhost:8000 (docs at `/docs`). Demo login: `mani.thangavel@sanmina.com` / `devdoc-demo`.
+The app is at **https://localhost:8443** (http://localhost:5173 redirects there), with the API behind it at `/api`. The API's interactive docs are not proxied: open http://localhost:8000/docs on the machine running it. Demo login: `mani.thangavel@sanmina.com` / `devdoc-demo`.
+
+Everything a browser reaches is HTTPS with TLS 1.3 only (DDS-SRS-074). Without a certificate in `certs/` the web app makes a self-signed one, so the browser warns once; `scripts/make-dev-cert.sh` makes one your machine trusts (with [mkcert](https://github.com/FiloSottile/mkcert)), and for a real deployment put your own `tls.crt` and `tls.key` in `certs/`. The plain ports (Postgres, Redis, the API, code-server) are bound to 127.0.0.1 only.
 
 **Local development with hot reload:**
 
@@ -118,8 +120,17 @@ layout and may not work well.
 ## Docker
 
 `docker compose up` starts Postgres, the optional API (`backend/`, on
-port 8000) and the web app together, already wired to each other — no
-extra steps needed. See [backend/README.md](backend/README.md) for the
+port 8000 for this machine) and the web app (HTTPS on 8443, proxying the
+API at `/api`, the code editor at `/vscode/` and its file bridge at
+`/bridge/`) together, already wired to each other — no extra steps needed.
+Set `HTTPS_PORT` to serve on another port (e.g. 443), and `TLS_HOSTNAME`
+for the self-signed certificate's name.
+
+The code editor (Coder screen) asks for a password, since it gives a
+terminal. Set `CODE_SERVER_PASSWORD` in a root `.env`, or
+`CODE_SERVER_HASHED_PASSWORD` with an argon2 hash in single quotes (it
+contains `$`). Without either, a random password is made on first start
+and printed in the log: `docker compose logs vscode-cline | grep password`. See [backend/README.md](backend/README.md) for the
 API on its own, and the demo accounts it seeds.
 
 CI builds and publishes both images on every push to `main`, tagged

@@ -1,10 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { signInThroughBackend, startStack, type Stack } from './backendHarness';
 
-// DDS-SRS-073: suites of 5,000+ test cases load in under 500 ms.
+// DDS-SRS-073: "Database query responses for fetching test suites with
+// 5,000+ cases must complete within < 500 ms". Measured as the API response
+// that returns the suite. Opening the whole screen with it (fetch + render)
+// is held to the navigation budget of DDS-SRS-071 (1.5 s), on a production
+// build as in navigation-perf.spec.ts.
 const CASES = 5000;
+const QUERY_BUDGET_MS = 500;
+const SCREEN_BUDGET_MS = 1500;
 let stack: Stack;
-test.beforeAll(async () => { stack = await startStack(4144, 5230); });
+test.beforeAll(async () => { stack = await startStack(4144, 5230, { production: true }); });
 test.afterAll(() => stack?.stop());
 
 function bigSuite() {
@@ -25,15 +31,14 @@ function bigSuite() {
   };
 }
 
-test('a 5,000-case suite opens in under 500 ms', async ({ page }) => {
+test('a 5,000-case suite is fetched in under 500 ms, and the screen opens in under 1.5 s', async ({ page }) => {
   test.setTimeout(120_000);
   await stack.reset();
   await signInThroughBackend(page, stack);
   const openTestManagement = () => page.getByRole('button', { name: 'Test Management', exact: true }).click();
   const leave = () => page.getByRole('button', { name: 'Dashboard', exact: true }).click();
 
-  // Warm-up: the dev server compiles the screen's code on first use, which
-  // a production build never does - keep that out of the measurement.
+  // Warm-up: load the screen's code once, outside the measurement.
   await openTestManagement();
   await expect(page.getByRole('button', { name: 'Add Case' }).first()).toBeVisible();
   await leave();
@@ -54,9 +59,23 @@ test('a 5,000-case suite opens in under 500 ms', async ({ page }) => {
     timings.push(Date.now() - t0);
     await leave();
   }
-  const median = [...timings].sort((a, b) => a - b)[1];
-  console.log(`opening Test Management with ${CASES} cases: ${timings.join(', ')} ms (median ${median} ms)`);
-  expect(median).toBeLessThan(500);
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[1];
+
+  // The query itself: the API response with every case, timed in the browser.
+  const queries: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    queries.push(await page.evaluate(async (url) => {
+      const t0 = performance.now();
+      const res = await fetch(`${url}/api/test-management`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.suites[0].testCases.length !== 5000) throw new Error('not every case was returned');
+      return Math.round(performance.now() - t0);
+    }, apiBase));
+  }
+  console.log(`fetching ${CASES} cases: ${queries.join(', ')} ms (median ${median(queries)} ms); `
+    + `opening the screen: ${timings.join(', ')} ms (median ${median(timings)} ms)`);
+  expect(median(queries), 'API response with every case').toBeLessThan(QUERY_BUDGET_MS);
+  expect(median(timings), 'opening Test Management').toBeLessThan(SCREEN_BUDGET_MS);
 
   // Every case is still reachable: search covers all of them, not just the first page.
   await openTestManagement();

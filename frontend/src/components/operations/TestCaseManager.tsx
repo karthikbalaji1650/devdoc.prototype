@@ -16,6 +16,12 @@ import {
   type TestManagementData,
 } from '../../services/testManagementApiService';
 import { isRemoteExecutionConfigured, runRemoteExecution, type RemoteExecutionUpdate } from '../../services/remoteExecutionService';
+import { RunTargetModal, type RunTarget } from './RunTargetModal';
+import { RunEditModal } from './RunEditModal';
+import { getStoredSession } from '../../services/authService';
+import { rerunOf, closeRun, reopenRun } from '../../services/runActions';
+import { ScheduleModal } from './ScheduleModal';
+import { TrendCharts } from './TrendCharts';
 import { buildRobotSuiteText } from '../../services/robotSuiteBuilder';
 import { searchLibrary, saveToLibrary, removeFromLibrary, testCaseLibrary } from '../../services/testCaseLibraryService';
 import { useSharedCollection, type CollectionStatus } from '../../services/sharedCollection';
@@ -48,6 +54,8 @@ import {
   ClipboardList, FileBarChart, Search, ArrowUpDown, Zap, Bot, FileCode2,
   FileSpreadsheet, Folder,
   HelpCircle, ImagePlus, Library, BookmarkPlus, Paperclip, Bug,
+  CalendarClock,
+  RotateCcw,
 } from 'lucide-react';
 
 interface TestCaseManagerProps {
@@ -177,7 +185,7 @@ const TestCaseLibraryModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Import from Library</h2>
           <LibraryStatus status={library.status} error={library.error} />
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
           <div className="relative">
@@ -245,7 +253,7 @@ const SuiteLibraryModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Load Suite from Library</h2>
           <LibraryStatus status={library.status} error={library.error} />
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
           <div className="relative">
@@ -386,7 +394,7 @@ const PieChart: React.FC<{ run: TestRunItem }> = ({ run }) => {
   return (
     <svg width={112} height={112} viewBox="0 0 112 112">
       {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} />)}
-      <circle cx={56} cy={56} r={25} fill="#ffffff" />
+      <circle cx={56} cy={56} r={25} style={{ fill: 'var(--panel)' }} />
     </svg>
   );
 };
@@ -626,7 +634,7 @@ const AddTestRunModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900">Add Test Run</h2>
           <div className="flex gap-2">
-            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+            <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
           </div>
         </div>
         <div className="p-5 space-y-4">
@@ -919,12 +927,12 @@ const AddCaseModal: React.FC<{
             {initial?.id ? 'Edit Test Case' : 'Add Test Case'}
             <span className="ml-2 text-xs font-mono font-semibold text-[var(--blue)]">{initial?.customId || nextCustomId}</span>
           </h2>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Title <span className="text-rose-500">*</span></label>
-            <input value={title} onChange={e => setTitle(e.target.value)}
+            <label htmlFor="case-title" className="block text-xs font-semibold text-slate-700 mb-1">Title <span className="text-rose-500">*</span></label>
+            <input id="case-title" value={title} onChange={e => setTitle(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-xs" placeholder="Test case title" />
           </div>
           {sections.length > 0 && (
@@ -941,40 +949,40 @@ const AddCaseModal: React.FC<{
           )}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
-              <select value={type} onChange={e => setType(e.target.value as 'Manual'|'Automated')}
+              <label htmlFor="case-type" className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
+              <select id="case-type" value={type} onChange={e => setType(e.target.value as 'Manual'|'Automated')}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
                 <option>Manual</option><option>Automated</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as TestCasePriority)}
+              <label htmlFor="case-priority" className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
+              <select id="case-priority" value={priority} onChange={e => setPriority(e.target.value as TestCasePriority)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
                 {PRIORITIES.map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Estimate (min)</label>
-              <input type="number" value={estMin} onChange={e => setEstMin(e.target.value)}
+              <label htmlFor="case-estimate" className="block text-xs font-semibold text-slate-700 mb-1">Estimate (min)</label>
+              <input id="case-estimate" type="number" value={estMin} onChange={e => setEstMin(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="30" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Labels (comma-separated)</label>
-              <input value={labels} onChange={e => setLabels(e.target.value)}
+              <label htmlFor="case-labels" className="block text-xs font-semibold text-slate-700 mb-1">Labels (comma-separated)</label>
+              <input id="case-labels" value={labels} onChange={e => setLabels(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="RTC, Firmware" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">References</label>
-              <input value={refs} onChange={e => setRefs(e.target.value)}
+              <label htmlFor="case-refs" className="block text-xs font-semibold text-slate-700 mb-1">References</label>
+              <input id="case-refs" value={refs} onChange={e => setRefs(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="WH3-1205" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Preconditions</label>
-            <textarea value={preconditions} onChange={e => setPreconditions(e.target.value)} rows={2}
+            <label htmlFor="case-preconditions" className="block text-xs font-semibold text-slate-700 mb-1">Preconditions</label>
+            <textarea id="case-preconditions" value={preconditions} onChange={e => setPreconditions(e.target.value)} rows={2}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
           </div>
 
@@ -989,11 +997,11 @@ const AddCaseModal: React.FC<{
               {steps.map((st, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-start">
                   <span className="col-span-1 text-[10px] text-[var(--success)] font-bold pt-2">{st.step}</span>
-                  <input value={st.action} onChange={e => updateStep(i, 'action', e.target.value)}
+                  <input aria-label={`Step ${st.step} action`} value={st.action} onChange={e => updateStep(i, 'action', e.target.value)}
                     className="col-span-5 bg-white border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 outline-none" placeholder="Action" />
-                  <input value={st.expected} onChange={e => updateStep(i, 'expected', e.target.value)}
+                  <input aria-label={`Step ${st.step} expected result`} value={st.expected} onChange={e => updateStep(i, 'expected', e.target.value)}
                     className="col-span-5 bg-white border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-700 outline-none" placeholder="Expected result" />
-                  <button onClick={() => removeStep(i)} className="col-span-1 p-1 text-rose-500 hover:bg-rose-50 rounded">
+                  <button type="button" aria-label={`Remove step ${st.step}`} onClick={() => removeStep(i)} className="col-span-1 p-1 text-rose-500 hover:bg-rose-50 rounded">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
@@ -1001,8 +1009,8 @@ const AddCaseModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Expected Outcome</label>
-            <textarea value={expectedResult} onChange={e => setExpectedResult(e.target.value)} rows={2}
+            <label htmlFor="case-expected" className="block text-xs font-semibold text-slate-700 mb-1">Expected Outcome</label>
+            <textarea id="case-expected" value={expectedResult} onChange={e => setExpectedResult(e.target.value)} rows={2}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
           </div>
           <div>
@@ -1021,8 +1029,8 @@ const AddCaseModal: React.FC<{
           </label>
           {(type === 'Automated' || autoCandidate) && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Robot Framework Code (.robot)</label>
-              <textarea value={robotCode} onChange={e => setRobotCode(e.target.value)} rows={5}
+              <label htmlFor="case-robot" className="block text-xs font-semibold text-slate-700 mb-1">Robot Framework Code (.robot)</label>
+              <textarea id="case-robot" value={robotCode} onChange={e => setRobotCode(e.target.value)} rows={5}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono outline-none resize-none" />
             </div>
           )}
@@ -1060,8 +1068,9 @@ const TestCasesView: React.FC<{
   onShowAiModal: () => void;
   onShowBackAnnotateModal: () => void;
   onRunTest: (suite: TestSuiteItem) => void;
+  onSchedule: (suite: TestSuiteItem) => void;
 }> = ({ suites, selectedSuiteId, projects, visibleSuites, onSelectSuite, onUpdateSuites, onShowToast,
-        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest }) => {
+        onExportSuiteMd, onExportRobotSuite, onExportProtocolExcel, onImportProtocolExcel, onShowAiModal, onShowBackAnnotateModal, onRunTest, onSchedule }) => {
   const [collapseAll, setCollapseAll]       = useState(false);
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
   const [showAddCase, setShowAddCase]       = useState(false);
@@ -1321,6 +1330,9 @@ const TestCasesView: React.FC<{
           </button>
           <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5" /> Run Test
+          </button>
+          <button onClick={() => selectedSuite && onSchedule(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-50">
+            <CalendarClock className="w-3.5 h-3.5" /> Schedule
           </button>
           {selectedSuite && <>
             <button onClick={onExportSuiteMd} className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg text-xs font-semibold">
@@ -1616,8 +1628,14 @@ const RunDetailView: React.FC<{
   run: TestRunItem; runs: TestRunItem[]; suites: TestSuiteItem[];
   onUpdate: (run: TestRunItem) => void; onClose: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
-}> = ({ run, runs, suites, onUpdate, onClose, onUpdateSuites }) => {
+  /** Adds a new run (Rerun) and opens it. */
+  onRerun: (run: TestRunItem) => void;
+  onRunTest: (suite: TestSuiteItem) => void;
+}> = ({ run, runs, suites, onUpdate, onClose, onUpdateSuites, onRerun, onRunTest }) => {
   const [activeTab, setActiveTab] = useState<RunDetailTab>('results');
+  const [editing, setEditing] = useState(false);
+  const currentUser = getStoredSession()?.user.name;
+  const isOpen = run.status === 'In Progress';
   // Historical trends (DDS-SRS-025): which earlier run of the suite to compare with.
   const baselines = comparableRuns(runs, run);
   const [baselineId, setBaselineId] = useState<string>(() => baselines[0]?.id ?? '');
@@ -1650,7 +1668,7 @@ const RunDetailView: React.FC<{
 
   const handleStatusChange = (caseId: string, status: TestCaseStatus) => {
     const newResults = caseResults.map(r => r.caseId === caseId
-      ? { ...r, status, testedBy: 'Manivannan T.', testedAt: new Date().toISOString() } : r);
+      ? { ...r, status, testedBy: currentUser, testedAt: new Date().toISOString() } : r);
     onUpdate({
       ...run, caseResults: newResults,
       passedCount:  newResults.filter(r => r.status === 'Passed').length,
@@ -1727,7 +1745,7 @@ const RunDetailView: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-slate-900 truncate">{run.name}</h2>
-          <p className="text-xs text-slate-500">Created by Manivannan T. on {new Date(run.executedAt).toLocaleDateString()}</p>
+          <p className="text-xs text-slate-500">{run.createdBy ? `Created by ${run.createdBy} on ` : 'Created on '}{new Date(run.executedAt).toLocaleDateString()}{!isOpen && ' · Closed'}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select aria-label="Download test summary report" value="" onChange={e => { if (e.target.value) handleDownloadReport(e.target.value as 'html' | 'csv' | 'pdf'); }}
@@ -1737,13 +1755,21 @@ const RunDetailView: React.FC<{
             <option value="html">HTML</option>
             <option value="csv">CSV</option>
           </select>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Check className="w-3.5 h-3.5" /> Close</button>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><RefreshCw className="w-3.5 h-3.5" /> Rerun</button>
-          <button className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs"><Play className="w-3.5 h-3.5" /> Execute Automated Tests</button>
+          <button onClick={() => onUpdate(isOpen ? closeRun(run) : reopenRun(run))}
+            title={isOpen ? 'Finish the run: its status follows its results' : 'Open the run again for testing'}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs">
+            {isOpen ? <><Check className="w-3.5 h-3.5" /> Close</> : <><RotateCcw className="w-3.5 h-3.5" /> Reopen</>}
+          </button>
+          <button onClick={() => onRerun(rerunOf(run))} title="Start a new run of the same test cases, all untested"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><RefreshCw className="w-3.5 h-3.5" /> Rerun</button>
+          <button onClick={() => setEditing(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
+          <button onClick={() => suite && onRunTest(suite)} disabled={!suite} title={suite ? 'Run this suite\'s automated tests on a test server' : 'The run\'s suite no longer exists'}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50"><Play className="w-3.5 h-3.5" /> Execute Automated Tests</button>
         </div>
       </div>
       {reportNote && <p role="status" className="text-xs text-[var(--blue)] -mt-2 mb-3">{reportNote}</p>}
+      {editing && <RunEditModal run={run} onSave={(r) => { onUpdate(r); setEditing(false); }} onClose={() => setEditing(false)} />}
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 shadow-xs">
@@ -1813,7 +1839,7 @@ const RunDetailView: React.FC<{
                         <div className="col-span-2 flex flex-wrap gap-1">{(r.labels||[]).slice(0,1).map(l=><span key={l} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{l}</span>)}</div>
                         <div className="col-span-2 text-[11px] text-slate-500 truncate">{r.assignedTo||'—'}</div>
                         <div className="col-span-2" onClick={e=>e.stopPropagation()}>
-                          <select value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
+                          <select aria-label={`Status of ${r.customId}`} value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
                             className={`w-full text-[10px] font-bold px-2 py-1 rounded border outline-none cursor-pointer bg-white ${STATUS_COLORS[r.status]}`}>
                             {ALL_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
                           </select>
@@ -1977,8 +2003,9 @@ const TestRunsView: React.FC<{
   onProcessXml: (xml: string) => void; onDownloadResultJson: () => void; onExportRunReport: () => void;
   onUpdateSuites: (s: TestSuiteItem[]) => void;
   onRunTest: (suite: TestSuiteItem) => void;
+  onSchedule: (suite: TestSuiteItem) => void;
 }> = ({ runs, suites, milestones, selectedSuiteId, onAddRun, onUpdateRun, onDeleteRun,
-        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites, onRunTest }) => {
+        lastRunResults, onProcessXml, onDownloadResultJson, onExportRunReport, onUpdateSuites, onRunTest, onSchedule }) => {
   const selectedSuite = suites.find(s => s.id === selectedSuiteId) || suites[0];
   const [showAddModal,  setShowAddModal]  = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string|null>(null);
@@ -1986,7 +2013,8 @@ const TestRunsView: React.FC<{
   const [inputXml,      setInputXml]      = useState(SAMPLE_ROBOT_XML);
 
   const selectedRun = runs.find(r => r.id === selectedRunId);
-  if (selectedRun) return <RunDetailView run={selectedRun} runs={runs} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}/>;
+  if (selectedRun) return <RunDetailView run={selectedRun} runs={runs} suites={suites} onUpdate={onUpdateRun} onClose={()=>setSelectedRunId(null)} onUpdateSuites={onUpdateSuites}
+    onRerun={(r)=>{ onAddRun(r); setSelectedRunId(r.id); }} onRunTest={onRunTest}/>;
 
   const openRuns      = runs.filter(r => r.status === 'In Progress');
   const completedRuns = runs.filter(r => r.status !== 'In Progress');
@@ -1998,6 +2026,34 @@ const TestRunsView: React.FC<{
     return n ? <span className="inline-block mt-1 px-1.5 py-0.5 rounded border text-[10px] font-bold bg-rose-50 text-rose-700 border-rose-200">▼ {n} regression{n === 1 ? '' : 's'} vs {prev!.name}</span> : null;
   };
 
+  // DDS-SRS-021: what the server last polled from the remote test server.
+  const RemoteProgressLine: React.FC<{ remote: NonNullable<TestRunItem['remote']> }> = ({ remote }) => {
+    const p = remote.progress;
+    const phase = { QUEUED: 'Queued', RUNNING: 'Running', COMPLETED: 'Completed', FAILED: 'Failed' }[remote.phase];
+    return (
+      <p className={`text-[11px] mt-0.5 ${remote.phase === 'FAILED' ? 'text-[var(--danger)]' : 'text-[var(--blue)]'}`} data-testid="remote-progress">
+        {phase} on {remote.server}
+        {p && p.total > 0 && ` · ${p.completed} of ${p.total} executed (${p.percent}%) · ${p.passed} passed · ${p.failed} failed`}
+        {remote.phase === 'FAILED' && remote.error && ` · ${remote.error}`}
+      </p>
+    );
+  };
+
+  // DDS-SRS-026/027: the pipeline build a run came from.
+  const CiBuildLine: React.FC<{ ci: NonNullable<TestRunItem['ci']> }> = ({ ci }) => {
+    const label = [ci.pipeline ?? 'CI', ci.buildNumber && `#${ci.buildNumber}`].filter(Boolean).join(' ');
+    const where = [ci.repository, ci.branch && ci.commit ? `${ci.branch} @ ${ci.commit.slice(0, 10)}` : ci.branch || ci.commit?.slice(0, 10)].filter(Boolean).join(' · ');
+    const safeUrl = ci.buildUrl && /^https?:\/\//i.test(ci.buildUrl) ? ci.buildUrl : undefined;
+    return (
+      <p className="text-[11px] mt-0.5 text-[var(--text-dim)]" data-testid="ci-build">
+        {safeUrl
+          ? <a href={safeUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[var(--blue)] hover:underline">{label}</a>
+          : label}
+        {where && ` · ${where}`}
+      </p>
+    );
+  };
+
   const RunCard: React.FC<{ run: TestRunItem; open?: boolean }> = ({ run, open }) => (
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 cursor-pointer group shadow-xs" onClick={()=>setSelectedRunId(run.id)}>
       <div className="flex items-start gap-3">
@@ -2006,8 +2062,10 @@ const TestRunsView: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
           <h3 className={`text-sm font-bold mb-1 ${open?'text-blue-700':'text-slate-800 group-hover:text-slate-900'}`}>{run.name}</h3>
-          <p className="text-[11px] text-slate-500 mb-1">By Manivannan T. · {new Date(run.executedAt).toLocaleDateString()}</p>
+          <p className="text-[11px] text-slate-500 mb-1">{run.createdBy ? `By ${run.createdBy} · ` : ''}{new Date(run.executedAt).toLocaleDateString()}</p>
           <p className="text-[11px] text-slate-500">{run.passedCount} Passed · {run.failedCount} Failed · {run.blockedCount} Blocked · {run.untestedCount??0} Untested</p>
+          {run.remote && <RemoteProgressLine remote={run.remote} />}
+          {run.ci && <CiBuildLine ci={run.ci} />}
           <RegressionBadge run={run} />
         </div>
         <div className="flex items-center gap-3 w-44 flex-shrink-0">
@@ -2039,6 +2097,9 @@ const TestRunsView: React.FC<{
           </button>
           <button onClick={() => selectedSuite && onRunTest(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#07111d]! rounded-lg text-xs font-bold shadow-xs disabled:opacity-50">
             <Play className="w-3.5 h-3.5"/> Execute Automated Tests
+          </button>
+          <button onClick={() => selectedSuite && onSchedule(selectedSuite)} disabled={!selectedSuite} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--panel-alt)] text-[var(--text)] border border-[var(--border)] rounded-lg text-xs font-semibold disabled:opacity-50">
+            <CalendarClock className="w-3.5 h-3.5" /> Schedule
           </button>
         </div>
       </div>
@@ -2212,6 +2273,8 @@ const ReportsView: React.FC<{ runs: TestRunItem[]; suites: TestSuiteItem[] }> = 
           </div>
         ))}
       </div>
+      {/* Velocity and pass-rate trends (DDS-SRS-023) */}
+      <TrendCharts runs={runs} suites={suites} />
       {/* Run table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -2275,7 +2338,7 @@ const AiGenerateModal: React.FC<{
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-xs"><Bot className="w-4 h-4 text-white"/></div>
             <h2 className="text-base font-bold text-slate-900">Generate Test Cases via AI</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4"/></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4"/></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -2484,7 +2547,7 @@ TC_RTC_004_Drift_Under_Thermal_Throttling
               <p className="text-xs text-slate-500">Sync test scripts, new test cases created by Claude, and Robot execution results.</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -2807,10 +2870,32 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
       try { applySnapshot(await loadTestManagement()); } catch { /* keep the toast */ }
     });
   }, [projects, suites, runs, milestones, loadState, applySnapshot]);
+
+  // Runs the server adds or fills in by itself - scheduled runs (DDS-SRS-028)
+  // and remote results (DDS-SRS-021) - show up while the Runs view is open.
+  // Skipped whenever a local change is still being saved, so it never
+  // overwrites an edit; taking the server's runs as the new baseline means
+  // nothing is sent back.
+  useEffect(() => {
+    if (loadState !== 'ready' || view !== 'runs') return;
+    const timer = setInterval(async () => {
+      let snapshot: TestManagementData;
+      try { snapshot = await loadTestManagement(); } catch { return; }
+      await syncQueue.current;
+      setRuns(local => {
+        if (local !== synced.current.runs) return local;
+        synced.current = { ...synced.current, runs: snapshot.runs };
+        return snapshot.runs;
+      });
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [loadState, view]);
   const [showAiModal,            setShowAiModal]            = useState(false);
   const [showBackAnnotateModal,  setShowBackAnnotateModal]  = useState(false);
   const [toast,                  setToast]                  = useState<string|null>(null);
   const [lastRunResults,         setLastRunResults]         = useState<{run:TestRunItem;results:ParsedRobotTestResult[];suiteName:string}|null>(null);
+  const [runTargetSuite,         setRunTargetSuite]         = useState<TestSuiteItem|null>(null);
+  const [scheduleSuite,          setScheduleSuite]          = useState<TestSuiteItem|null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(null),3500); };
 
@@ -2903,7 +2988,8 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
   const handleProcessXml = (xml: string) => {
     try {
-      const suite = suites[0];
+      // The suite being viewed, as on the rest of the Test Runs screen.
+      const suite = suites.find(s => s.id === selectedSuiteId) ?? suites[0];
       const { run: parsedRun, results } = parseRobotOutputXml(xml, suite?.id||'');
       if (results.length===0){showToast('⚠️ No test results found in XML.');return;}
       const caseResults: TestRunCaseResult[] = results.map((r,i)=>({
@@ -2977,21 +3063,35 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
   // Both "Run Test" (Test Cases toolbar) and "Execute Automated Tests"
   // (Test Runs toolbar) call this, scoped to the currently selected
-  // suite. Pushes the suite's script to the remote execution backend
-  // (a mock today - see server/src/testExec.ts), shows an "In Progress"
-  // run immediately, then updates it in place once results sync back.
+  // suite. Asks which test server to use (DDS-SRS-020), pushes the suite's
+  // script to the backend, which sends it to that server (or its simulated
+  // Test PC), shows an "In Progress" run immediately, then updates it in
+  // place once results sync back.
   const handleRunTest = (suite: TestSuiteItem) => {
     if (!isRemoteExecutionConfigured()) {
-      showToast('⚠️ Remote execution needs a backend - see server/README.md.');
+      showToast('⚠️ Remote execution needs the backend (VITE_API_BASE_URL) - see backend/README.md.');
       return;
     }
+    setRunTargetSuite(suite);
+  };
 
+  // Scheduled runs (DDS-SRS-028) need the backend's worker and a registered server.
+  const handleSchedule = (suite: TestSuiteItem) => {
+    if (!isRemoteExecutionConfigured()) {
+      showToast('⚠️ Scheduled runs need the backend (VITE_API_BASE_URL) - see backend/README.md.');
+      return;
+    }
+    setScheduleSuite(suite);
+  };
+
+  const startRemoteRun = (suite: TestSuiteItem, target: RunTarget) => {
     const runId = `run-${Date.now()}`;
     const placeholderRun: TestRunItem = {
       id: runId,
       name: `${suite.title} Remote Execution Run`,
       suiteId: suite.id,
-      environment: 'Remote Test PC',
+      environment: target.name,
+      ...(target.serverId ? { remote: { server: target.name, phase: 'QUEUED' as const } } : {}),
       status: 'In Progress',
       passedCount: 0,
       failedCount: 0,
@@ -3000,11 +3100,22 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
     };
     setRuns(prev => [placeholderRun, ...prev]);
     setView('runs');
-    showToast('🚀 Run started — this can take a while; results sync automatically.');
+    showToast(`🚀 Run started on ${target.name} — this can take a while; results sync automatically.`);
 
     runRemoteExecution(suite, (update: RemoteExecutionUpdate) => {
+      if (update.state === 'running') {
+        // Progress the server's worker polled from the test server (DDS-SRS-021).
+        if (update.phase) {
+          setRuns(prev => prev.map(r => r.id === runId
+            ? { ...r, remote: { server: target.name, phase: update.phase!, progress: update.progress ?? r.remote?.progress } }
+            : r));
+        }
+        return;
+      }
       if (update.state === 'error') {
-        setRuns(prev => prev.map(r => r.id === runId ? { ...r, status: 'Failed' } : r));
+        setRuns(prev => prev.map(r => r.id === runId
+          ? { ...r, status: 'Failed', ...(r.remote ? { remote: { ...r.remote, phase: 'FAILED' as const, error: update.message } } : {}) }
+          : r));
         showToast(`❌ Remote execution failed: ${update.message}`);
         return;
       }
@@ -3016,10 +3127,15 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
         }));
         const updatedRun: TestRunItem = {
           ...placeholderRun,
+          ...(placeholderRun.remote ? { remote: { server: target.name, phase: 'COMPLETED' as const, progress: {
+            total: update.results.summary.total, completed: update.results.summary.total,
+            passed: update.results.summary.passed, failed: update.results.summary.failed, percent: 100,
+          } } } : {}),
           status: update.results.summary.failed === 0 ? 'Completed' : 'Failed',
           passedCount: update.results.summary.passed,
           failedCount: update.results.summary.failed,
-          blockedCount: update.results.summary.skipped,
+          blockedCount: 0,
+          skippedCount: update.results.summary.skipped,
           caseResults,
         };
         setRuns(prev => prev.map(r => r.id === runId ? updatedRun : r));
@@ -3035,7 +3151,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
 
         showToast(`✅ Run complete — ${update.results.summary.passed} passed, ${update.results.summary.failed} failed.`);
       }
-    });
+    }, { serverId: target.serverId, runId });
   };
 
   const handleExportProtocolExcel = async () => {
@@ -3132,6 +3248,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onShowAiModal={()=>setShowAiModal(true)}
               onShowBackAnnotateModal={()=>setShowBackAnnotateModal(true)}
               onRunTest={handleRunTest}
+              onSchedule={handleSchedule}
             />
           )}
           {view==='runs' && (
@@ -3146,6 +3263,7 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
               onExportRunReport={handleExportRunReport}
               onUpdateSuites={setSuites}
               onRunTest={handleRunTest}
+              onSchedule={handleSchedule}
             />
           )}
           {view==='milestones' && (
@@ -3162,6 +3280,17 @@ const TestCaseManager: React.FC<TestCaseManagerProps> = ({ onBackToHub, onNaviga
           suites={suites} selectedSuiteId={selectedSuiteId}
           onGenerate={handleAiGenerate} onClose={()=>setShowAiModal(false)}
         />
+      )}
+      {/* Run Test: choose the test server (DDS-SRS-020) */}
+      {runTargetSuite && (
+        <RunTargetModal
+          suiteTitle={runTargetSuite.title}
+          onRun={(target) => { const suite = runTargetSuite; setRunTargetSuite(null); startRemoteRun(suite, target); }}
+          onClose={() => setRunTargetSuite(null)}
+        />
+      )}
+      {scheduleSuite && (
+        <ScheduleModal suiteId={scheduleSuite.id} suiteTitle={scheduleSuite.title} onClose={() => setScheduleSuite(null)} />
       )}
       {/* Back Annotate Modal */}
       {showBackAnnotateModal && (

@@ -100,6 +100,10 @@ class ReleaseStore:
     async def audit(self, release_id: str) -> list[dict[str, Any]]:
         return [json.loads(e) for e in await self._redis.lrange(audit_key(release_id), 0, -1)]
 
+    async def claim_sync(self, release_id: str, slot: int, ttl_s: int) -> bool:
+        """True once per release per sync slot, across API instances (044)."""
+        return bool(await self._redis.set(f"{PREFIX}{release_id}:sync:{slot}", "1", nx=True, ex=ttl_s * 2))
+
     # sample data
     async def claim_seed(self) -> bool:
         return bool(await self._redis.set(f"{PREFIX}seeded", "1", nx=True))

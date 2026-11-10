@@ -10,10 +10,13 @@ import {
   Settings2,
   Check,
   RotateCcw,
+  GitBranch,
 } from 'lucide-react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
 import { AppSidebar } from '../AppSidebar';
+import { ReposModal } from './ReposModal';
+import { isReposAvailable } from '../../services/reposApiService';
 
 /* ─── Helper to resolve VS Code Server URL dynamically ─── */
 // Defaults to the same-origin /vscode/ reverse proxy (nginx.conf.template),
@@ -52,6 +55,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
   const [iframeKey, setIframeKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [showRepos, setShowRepos] = useState(false);
 
   const handleReload = useCallback(() => {
     setIsLoading(true);
@@ -180,6 +184,17 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {isReposAvailable() && (
+              <button
+                type="button"
+                onClick={() => setShowRepos(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all shadow-xs"
+                title="Connect existing code repositories to the workspace"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Repositories</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleImportXml}
@@ -287,6 +302,7 @@ export const CoderView: React.FC<CoderViewProps> = ({ user, onNavigate, onLogout
         className="hidden"
         onChange={handleXmlFileChange}
       />
+      {showRepos && <ReposModal onClose={() => setShowRepos(false)} />}
     </div>
   );
 };

@@ -23,5 +23,8 @@ test('an admin sees real sign-ins from other browsers, with sign-outs', async ({
   const leadRow = page.getByRole('row', { name: new RegExp(lead.name) }).first();
   await expect(leadRow).toBeVisible();
   await expect(leadRow).not.toContainText('Active');
+  // Sign-in time, sign-out time, role and session length (Duration) are shown.
+  const cells = await leadRow.locator('td').allTextContents();
+  expect(cells.some((c) => /^(\d+h )?\d+m$/.test(c.trim()))).toBe(true); // e.g. "12m" or "1h 5m"
   await expect(page.getByRole('row', { name: new RegExp(`${admin.name}.*Active`) }).first()).toBeVisible();
 });

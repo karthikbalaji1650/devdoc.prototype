@@ -17,6 +17,9 @@ export function getStoredFileBridgeUrl(): string {
         // ignore
       }
     }
+    // Served over HTTPS (docker-compose, DDS-SRS-074): the same-origin
+    // /bridge/ proxy, never a plain-HTTP port.
+    if (window.location.protocol === 'https:') return `${window.location.origin}/bridge`;
     const host = window.location.hostname || 'localhost';
     return `http://${host}:8081`;
   }

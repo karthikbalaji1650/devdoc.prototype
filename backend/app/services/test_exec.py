@@ -1,7 +1,11 @@
-"""Mock remote Test PC: the frontend pushes a suite's Robot Framework
-script, starts a run, and polls for results. Nothing here touches real
-hardware - a future real Test PC integration replaces this service behind
-the same routes, with no client-side changes."""
+"""Remote test execution: the frontend pushes a suite's Robot Framework
+script, starts a run, and polls for results.
+
+- With a `serverId` (DDS-SRS-020), the run goes to that registered remote
+  test server; services/remote_runs.py starts it and polls it in the
+  background (DDS-SRS-021), and status reads return what was polled.
+- Without one, a mock Test PC answers with random results - the demo
+  setup, where there is no real hardware."""
 
 import asyncio
 import math
@@ -16,6 +20,7 @@ from app.core.errors import ApiError
 from app.core.jscompat import JS_WS_CLASS, is_nonblank_string, js_iso_date, js_opt, js_trim
 from app.models.test_exec import Job, PushedScript
 from app.repositories.test_exec import TestExecRepository
+from app.services.remote_runs import RemoteRunService
 
 # How long the mock pretends a run takes. Real hardware takes far longer
 # (hence the frontend's 30-minute poll); this only has to let a poll see
@@ -69,9 +74,19 @@ def _job_id() -> str:
 class TestExecService:
     __test__ = False
 
-    def __init__(self, repo: TestExecRepository, run_delay_s: float = MOCK_RUN_DELAY_S) -> None:
+    def __init__(
+        self,
+        repo: TestExecRepository,
+        run_delay_s: float = MOCK_RUN_DELAY_S,
+        remote: RemoteRunService | None = None,
+    ) -> None:
         self._repo = repo
         self._run_delay_s = run_delay_s
+        self._remote = remote
+
+    @property
+    def remote(self) -> RemoteRunService | None:
+        return self._remote
 
     def push_script(self, body: Any) -> dict[str, bool]:
         suite_id, suite_title, robot_code = (js_opt(body, k) for k in ("suiteId", "suiteTitle", "robotCode"))
@@ -84,13 +99,23 @@ class TestExecService:
         self._repo.save_script(PushedScript(suite_id, suite_title, robot_code))
         return {"ok": True}
 
-    def start_run(self, body: Any) -> dict[str, str]:
+    async def start_run(self, body: Any, user_name: str = "") -> dict[str, str]:
         suite_id = js_opt(body, "suiteId")
         if not is_nonblank_string(suite_id):
             raise ApiError(400, "suiteId is required.")
         script = self._repo.get_script(suite_id)
         if script is None:
             raise ApiError(400, "No script has been pushed for this suite yet.")
+
+        server_id = js_opt(body, "serverId")
+        if server_id is not None:
+            if not is_nonblank_string(server_id):
+                raise ApiError(400, "serverId must be a test server id.")
+            if self._remote is None:
+                raise ApiError(501, "Remote test servers are not available on this server.")
+            job_id = _job_id()
+            await self._remote.start(server_id, script, job_id, user_name, js_opt(body, "runId"))
+            return {"jobId": job_id}
 
         job_id = _job_id()
         self._repo.save_job(job_id, Job(suite_id=suite_id, status="running"))
@@ -118,7 +143,11 @@ class TestExecService:
             ),
         )
 
-    def run_status(self, job_id: str) -> dict[str, Any]:
+    async def run_status(self, job_id: str) -> dict[str, Any]:
+        if self._remote is not None:
+            remote = await self._remote.status(job_id)
+            if remote is not None:
+                return remote
         job = self._repo.get_job(job_id)
         if job is None:
             raise ApiError(404, "No run found with that id.")

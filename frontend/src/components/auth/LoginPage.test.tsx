@@ -8,8 +8,11 @@ import { LoginPage } from './LoginPage';
 vi.mock('../../services/backendAuthService', () => ({
   isBackendConfigured: vi.fn(() => false),
   loginWithBackend: vi.fn(),
+  fetchSsoConfig: vi.fn(async () => ({ enabled: false, providerName: null })),
+  fetchBackendUser: vi.fn(),
+  ssoLoginUrl: vi.fn(() => 'http://api.test/api/auth/sso/login'),
 }));
-import { isBackendConfigured, loginWithBackend } from '../../services/backendAuthService';
+import { fetchBackendUser, fetchSsoConfig, isBackendConfigured, loginWithBackend } from '../../services/backendAuthService';
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -80,6 +83,40 @@ describe('LoginPage — backend configured', () => {
     act(() => { el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await flush();
     expect(el.querySelector('[role="alert"]')?.textContent).toBe('Invalid email or password.');
+    expect(onLogin).not.toHaveBeenCalled();
+  });
+
+});
+
+describe('LoginPage — single sign-on (DDS-SRS-076)', () => {
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('offers the provider when the server has SSO', async () => {
+    vi.mocked(isBackendConfigured).mockReturnValue(true);
+    vi.mocked(fetchSsoConfig).mockResolvedValue({ enabled: true, providerName: 'Microsoft' });
+    const el = render(<LoginPage onLogin={vi.fn()} />);
+    await flush();
+    expect([...el.querySelectorAll('button')].some((b) => b.textContent?.includes('Sign in with Microsoft'))).toBe(true);
+  });
+
+  it('finishes a sign-in the provider sent back, and clears the address bar', async () => {
+    vi.mocked(isBackendConfigured).mockReturnValue(true);
+    vi.mocked(fetchBackendUser).mockResolvedValue({ id: 'u1', name: 'Mani', email: 'm@x', title: '', department: '', role: 'admin', avatarBg: '', initials: 'MA' });
+    window.history.replaceState(null, '', '/?sso=1');
+    const onLogin = vi.fn();
+    render(<LoginPage onLogin={onLogin} />);
+    await flush();
+    expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }));
+    expect(window.location.search).toBe('');
+  });
+
+  it('shows why the provider sign-in was refused', async () => {
+    vi.mocked(isBackendConfigured).mockReturnValue(true);
+    window.history.replaceState(null, '', '/?sso_error=There%20is%20no%20DevDoc%20Studio%20account%20for%20x%40y.');
+    const onLogin = vi.fn();
+    const el = render(<LoginPage onLogin={onLogin} />);
+    await flush();
+    expect(el.querySelector('[role="alert"]')?.textContent).toBe('There is no DevDoc Studio account for x@y.');
     expect(onLogin).not.toHaveBeenCalled();
   });
 });

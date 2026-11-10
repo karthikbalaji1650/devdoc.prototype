@@ -3,36 +3,86 @@ map $http_upgrade $connection_upgrade {
     ""      close;
 }
 
+# Data in transit is encrypted (DDS-SRS-074): the app, the API, the code
+# editor and its file bridge are all served here over HTTPS, TLS 1.3 only.
+# Plain HTTP only redirects. ${HTTPS_PORT} is the port the browser uses
+# for HTTPS (substituted at container start, like ${BACKEND_ORIGIN}).
 server {
     listen 80;
+    server_name _;
+    return 301 https://$host:${HTTPS_PORT}$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
     server_name localhost;
+
+    # The certificate: mounted at /etc/nginx/certs/tls.crt + tls.key, or a
+    # self-signed one made at container start (docker/15-devdoc-tls.sh).
+    ssl_certificate     /etc/nginx/tls/tls.crt;
+    ssl_certificate_key /etc/nginx/tls/tls.key;
+    ssl_protocols       TLSv1.3;
+    ssl_session_cache   shared:TLS:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Upstreams are resolved per request (Docker's DNS), so nginx starts even
+    # when an optional service - the code editor - is not running.
+    resolver 127.0.0.11 valid=30s ipv6=off;
 
     # Security headers (SRS #13). Scoped to what this app actually loads:
     # Google Identity Services (login) and Drive (export), Google Fonts,
     # the Gemini / OpenAI APIs when AI assist is configured with them, and
-    # the backend API (backend/) at BACKEND_ORIGIN - substituted from the
-    # environment at container start (NGINX_ENVSUBST_FILTER below limits
-    # substitution to just this one variable, so nginx's own $host,
-    # $http_upgrade etc. below are left alone). Empty when unset: the app
-    # still runs, just without that origin allow-listed.
-    # frame-src includes 'self' for the Coder screen's embedded code-server
-    # - reached via the same-origin /vscode/ proxy below, never a direct
-    # cross-origin port, so no extra origin needs allow-listing here.
+    # the backend API at BACKEND_ORIGIN - substituted from the environment
+    # at container start (NGINX_ENVSUBST_FILTER limits substitution to
+    # BACKEND_ORIGIN and HTTPS_PORT, so nginx's own $host, $http_upgrade
+    # etc. are left alone). With the API proxied below at /api/ it is the
+    # same origin as the app. frame-src 'self' covers the Coder screen's
+    # embedded code-server, reached via the same-origin /vscode/ proxy.
     # Known, remaining gap: a custom Ollama URL (not the localhost default
     # already listed) still isn't covered - it's configured per-browser in
     # Settings, with nowhere server-side to read it from at container start.
+    add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header X-Frame-Options "DENY" always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://generativelanguage.googleapis.com https://api.openai.com http://localhost:11434 ${BACKEND_ORIGIN}; frame-src 'self' https://accounts.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
 
-    # Reverse-proxy ALL /vscode/* traffic to code-server.
-    # This must be declared before the catch-all location / so that
-    # Nginx prefix-matching gives it priority.
-    # The trailing-slash on proxy_pass strips the /vscode prefix
-    # before forwarding to the upstream.
+    # The API (backend/), same origin as the app.
+    location /api/ {
+        set $api http://api:8000;
+        proxy_pass $api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Live run updates are server-sent events (DDS-SRS-022): pass them on
+        # as they come, and keep the stream open.
+        proxy_buffering off;
+        proxy_read_timeout 3600;
+        # CI result uploads (output.xml) can be large (DDS-SRS-026).
+        client_max_body_size 60m;
+    }
+
+    # The code editor's file bridge (sandbox/file_bridge.py), for the app's
+    # saves to the workspace; /bridge/x -> bridge /x.
+    location /bridge/ {
+        set $bridge http://vscode-cline:8081;
+        rewrite ^/bridge/(.*)$ /$1 break;
+        proxy_pass $bridge;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        client_max_body_size 20m;
+    }
+
+    # Reverse-proxy ALL /vscode/* traffic to code-server; /vscode/x -> /x.
+    # Declared before the catch-all location / so prefix matching picks it.
     location /vscode/ {
-        proxy_pass http://vscode-cline:8080/;
+        set $vscode http://vscode-cline:8080;
+        rewrite ^/vscode/(.*)$ /$1 break;
+        proxy_pass $vscode;
         proxy_http_version 1.1;
 
         # Correct WebSocket upgrade pattern (map handles both WS and HTTP)

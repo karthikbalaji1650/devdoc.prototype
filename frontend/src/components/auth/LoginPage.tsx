@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, KeyRound, Lock, Mail } from 'lucide-react';
 import { DEMO_USERS, type UserProfile } from '../../types/auth';
-import { isBackendConfigured, loginWithBackend } from '../../services/backendAuthService';
+import { fetchBackendUser, fetchSsoConfig, isBackendConfigured, loginWithBackend, ssoLoginUrl, type SsoConfig } from '../../services/backendAuthService';
 
 interface LoginPageProps {
   onLogin: (profile: UserProfile) => void;
@@ -13,6 +13,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const backendMode = isBackendConfigured();
+  const [sso, setSso] = useState<SsoConfig>({ enabled: false, providerName: null });
+  const onLoginRef = useRef(onLogin); // App passes a new function each render
+  onLoginRef.current = onLogin;
+
+  // Single sign-on (DDS-SRS-076): offer it when the server has it, and finish
+  // a sign-in the provider has sent the browser back from.
+  useEffect(() => {
+    if (!backendMode) return;
+    void fetchSsoConfig().then(setSso);
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('sso') && !params.has('sso_error')) return;
+    window.history.replaceState(null, '', window.location.pathname); // don't keep it in the address bar
+    if (params.get('sso_error')) {
+      setError(params.get('sso_error')!);
+      return;
+    }
+    setIsLoading(true);
+    fetchBackendUser().then((user) => onLoginRef.current(user)).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Single sign-on failed.');
+      setIsLoading(false);
+    });
+  }, [backendMode]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -120,6 +142,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+          {sso.enabled && (
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                <span className="h-px flex-1 bg-[var(--border)]" />or<span className="h-px flex-1 bg-[var(--border)]" />
+              </div>
+              <button type="button" disabled={isLoading} onClick={() => { setIsLoading(true); window.location.assign(ssoLoginUrl()); }}
+                className="w-full py-2.5 border border-[var(--border)] bg-[var(--panel-alt)] text-[var(--text)] text-xs font-semibold flex items-center justify-center gap-2 hover:border-[var(--blue)] disabled:opacity-50">
+                <KeyRound className="w-4 h-4 text-[var(--blue)]" /> Sign in with {sso.providerName}
+              </button>
+            </div>
+          )}
         </section>
       </main>
 

@@ -19,28 +19,56 @@ from app.core.errors import register_exception_handlers
 from app.core.middleware import ExpressCorsMiddleware, JsonBodyMiddleware
 from app.core.rate_limit import login_rate_limiter
 from app.core.routing import ExpressPathMiddleware, route_templates
+from app.core.secrets import SecretBox
 from app.db.pool import create_pool
 from app.db.redis import create_redis
 from app.dependencies import Services
 from app.repositories.base import Repositories
+from app.repositories.ci_tokens import CiTokenStore
 from app.repositories.collections import CollectionStore
 from app.repositories.document_cache import CachedDocumentRepository
 from app.repositories.document_history import DocumentHistoryStore
 from app.repositories.postgres import postgres_repositories
 from app.repositories.releases import ReleaseStore
+from app.repositories.schedules import ScheduleStore
 from app.repositories.session_audit import SessionAuditStore
-from app.repositories.test_exec import TestExecRepository
+from app.repositories.test_exec import RemoteJobStore, TestExecRepository
 from app.repositories.test_management import TestManagementStore
-from app.routers import admin, ai, audit, auth, collections, documents, health, releases, test_exec, test_management
+from app.repositories.test_servers import TestServerStore
+from app.routers import (
+    admin,
+    ai,
+    audit,
+    auth,
+    ci,
+    collections,
+    documents,
+    health,
+    releases,
+    repos,
+    test_exec,
+    test_management,
+    test_schedules,
+    test_servers,
+    trackers,
+)
 from app.schemas.openapi import install_openapi
 from app.services.admin import AdminService
 from app.services.ai import AiService
 from app.services.auth import AuthService
+from app.services.ci import CiService
 from app.services.collections import CollectionService
 from app.services.documents import DocumentService
 from app.services.releases import ReleaseService
+from app.services.remote_runs import RemoteRunPoller, RemoteRunService
+from app.services.repos import RepoService
+from app.services.schedules import ScheduleService
+from app.services.sso import SsoService
 from app.services.test_exec import TestExecService
 from app.services.test_management import TestManagementService
+from app.services.test_servers import TestServerService
+from app.services.tokens import TokenService, signing_key
+from app.services.trackers import TrackerService
 
 logger = logging.getLogger("devdoc.api")
 
@@ -49,6 +77,9 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
     session_audit = SessionAuditStore(redis)
     test_store = TestManagementStore(redis)
     documents = CachedDocumentRepository(repos.documents, redis)
+    test_servers = TestServerService(TestServerStore(redis), SecretBox(settings.secrets_key), http_client)
+    trackers = TrackerService(redis, SecretBox(settings.secrets_key), http_client)
+    remote_runs = RemoteRunService(RemoteJobStore(redis), test_servers, redis, test_store)
     return Services(
         auth=AuthService(repos, session_audit),
         session_audit=session_audit,
@@ -56,9 +87,19 @@ def build_services(settings: Settings, repos: Repositories, http_client: httpx.A
         documents=DocumentService(documents, DocumentHistoryStore(redis)),
         admin=AdminService(documents, redis),
         ai=AiService(settings, http_client),
-        test_exec=TestExecService(TestExecRepository()),
         test_management=TestManagementService(test_store),
-        releases=ReleaseService(ReleaseStore(redis), test_store),
+        test_servers=test_servers,
+        test_exec=TestExecService(TestExecRepository(), remote=remote_runs),
+        remote_runs=remote_runs,
+        schedules=ScheduleService(ScheduleStore(redis), test_store, test_servers, remote_runs),
+        ci=CiService(CiTokenStore(redis), test_store, test_servers, remote_runs),
+        releases=ReleaseService(ReleaseStore(redis), test_store, trackers),
+        trackers=trackers,
+        repos=RepoService(
+            redis, SecretBox(settings.secrets_key), http_client, settings.bridge_url, settings.bridge_token
+        ),
+        tokens=TokenService(signing_key(settings.jwt_secret, settings.secrets_key)),
+        sso=SsoService(settings, redis, http_client),
         login_limiter=login_rate_limiter(),
         cookie_secure=settings.cookie_secure_enabled,
     )
@@ -92,9 +133,17 @@ def create_app(
             redis_client = create_redis(settings.redis_url)
         async with httpx.AsyncClient() as http_client:
             app.state.services = build_services(settings, repos, http_client, redis_client)
+            # The background worker that polls remote test runs (DDS-SRS-021).
+            services = app.state.services
+            poller = RemoteRunPoller(
+                services.remote_runs, also=(services.schedules.fire_due, services.releases.sync_all_due)
+            )
+            if settings.remote_poll_enabled:
+                poller.start()
             try:
                 yield
             finally:
+                await poller.stop()
                 if owns_redis:
                     await redis_client.aclose()
                 if pool is not None:
@@ -102,7 +151,24 @@ def create_app(
 
     app = FastAPI(title="DevDoc Studio API", version="1.0.0", lifespan=lifespan, redirect_slashes=False)
     routers = [
-        m.router for m in (health, auth, documents, ai, test_exec, test_management, audit, collections, admin, releases)
+        m.router
+        for m in (
+            health,
+            auth,
+            documents,
+            ai,
+            test_exec,
+            test_management,
+            test_servers,
+            test_schedules,
+            trackers,
+            repos,
+            ci,
+            audit,
+            collections,
+            admin,
+            releases,
+        )
     ]
     for router in routers:
         app.include_router(router)
