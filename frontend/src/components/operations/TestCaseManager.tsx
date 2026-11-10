@@ -185,7 +185,7 @@ const TestCaseLibraryModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Import from Library</h2>
           <LibraryStatus status={library.status} error={library.error} />
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
           <div className="relative">
@@ -253,7 +253,7 @@ const SuiteLibraryModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><Library className="w-4 h-4 text-blue-600" /> Load Suite from Library</h2>
           <LibraryStatus status={library.status} error={library.error} />
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 pb-3">
           <div className="relative">
@@ -634,7 +634,7 @@ const AddTestRunModal: React.FC<{
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900">Add Test Run</h2>
           <div className="flex gap-2">
-            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+            <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
           </div>
         </div>
         <div className="p-5 space-y-4">
@@ -927,12 +927,12 @@ const AddCaseModal: React.FC<{
             {initial?.id ? 'Edit Test Case' : 'Add Test Case'}
             <span className="ml-2 text-xs font-mono font-semibold text-[var(--blue)]">{initial?.customId || nextCustomId}</span>
           </h2>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Title <span className="text-rose-500">*</span></label>
-            <input value={title} onChange={e => setTitle(e.target.value)}
+            <label htmlFor="case-title" className="block text-xs font-semibold text-slate-700 mb-1">Title <span className="text-rose-500">*</span></label>
+            <input id="case-title" value={title} onChange={e => setTitle(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-xs" placeholder="Test case title" />
           </div>
           {sections.length > 0 && (
@@ -963,20 +963,20 @@ const AddCaseModal: React.FC<{
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Estimate (min)</label>
-              <input type="number" value={estMin} onChange={e => setEstMin(e.target.value)}
+              <label htmlFor="case-estimate" className="block text-xs font-semibold text-slate-700 mb-1">Estimate (min)</label>
+              <input id="case-estimate" type="number" value={estMin} onChange={e => setEstMin(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="30" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Labels (comma-separated)</label>
-              <input value={labels} onChange={e => setLabels(e.target.value)}
+              <label htmlFor="case-labels" className="block text-xs font-semibold text-slate-700 mb-1">Labels (comma-separated)</label>
+              <input id="case-labels" value={labels} onChange={e => setLabels(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="RTC, Firmware" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">References</label>
-              <input value={refs} onChange={e => setRefs(e.target.value)}
+              <label htmlFor="case-refs" className="block text-xs font-semibold text-slate-700 mb-1">References</label>
+              <input id="case-refs" value={refs} onChange={e => setRefs(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs" placeholder="WH3-1205" />
             </div>
           </div>
@@ -997,11 +997,11 @@ const AddCaseModal: React.FC<{
               {steps.map((st, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-start">
                   <span className="col-span-1 text-[10px] text-[var(--success)] font-bold pt-2">{st.step}</span>
-                  <input value={st.action} onChange={e => updateStep(i, 'action', e.target.value)}
+                  <input aria-label={`Step ${st.step} action`} value={st.action} onChange={e => updateStep(i, 'action', e.target.value)}
                     className="col-span-5 bg-white border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 outline-none" placeholder="Action" />
-                  <input value={st.expected} onChange={e => updateStep(i, 'expected', e.target.value)}
+                  <input aria-label={`Step ${st.step} expected result`} value={st.expected} onChange={e => updateStep(i, 'expected', e.target.value)}
                     className="col-span-5 bg-white border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-700 outline-none" placeholder="Expected result" />
-                  <button onClick={() => removeStep(i)} className="col-span-1 p-1 text-rose-500 hover:bg-rose-50 rounded">
+                  <button type="button" aria-label={`Remove step ${st.step}`} onClick={() => removeStep(i)} className="col-span-1 p-1 text-rose-500 hover:bg-rose-50 rounded">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
@@ -1009,8 +1009,8 @@ const AddCaseModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Expected Outcome</label>
-            <textarea value={expectedResult} onChange={e => setExpectedResult(e.target.value)} rows={2}
+            <label htmlFor="case-expected" className="block text-xs font-semibold text-slate-700 mb-1">Expected Outcome</label>
+            <textarea id="case-expected" value={expectedResult} onChange={e => setExpectedResult(e.target.value)} rows={2}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
           </div>
           <div>
@@ -1029,8 +1029,8 @@ const AddCaseModal: React.FC<{
           </label>
           {(type === 'Automated' || autoCandidate) && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Robot Framework Code (.robot)</label>
-              <textarea value={robotCode} onChange={e => setRobotCode(e.target.value)} rows={5}
+              <label htmlFor="case-robot" className="block text-xs font-semibold text-slate-700 mb-1">Robot Framework Code (.robot)</label>
+              <textarea id="case-robot" value={robotCode} onChange={e => setRobotCode(e.target.value)} rows={5}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono outline-none resize-none" />
             </div>
           )}
@@ -1839,7 +1839,7 @@ const RunDetailView: React.FC<{
                         <div className="col-span-2 flex flex-wrap gap-1">{(r.labels||[]).slice(0,1).map(l=><span key={l} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{l}</span>)}</div>
                         <div className="col-span-2 text-[11px] text-slate-500 truncate">{r.assignedTo||'—'}</div>
                         <div className="col-span-2" onClick={e=>e.stopPropagation()}>
-                          <select value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
+                          <select aria-label={`Status of ${r.customId}`} value={r.status} onChange={e=>handleStatusChange(r.caseId,e.target.value as TestCaseStatus)}
                             className={`w-full text-[10px] font-bold px-2 py-1 rounded border outline-none cursor-pointer bg-white ${STATUS_COLORS[r.status]}`}>
                             {ALL_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
                           </select>
@@ -2338,7 +2338,7 @@ const AiGenerateModal: React.FC<{
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-xs"><Bot className="w-4 h-4 text-white"/></div>
             <h2 className="text-base font-bold text-slate-900">Generate Test Cases via AI</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4"/></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"><X className="w-4 h-4"/></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -2547,7 +2547,7 @@ TC_RTC_004_Drift_Under_Thermal_Throttling
               <p className="text-xs text-slate-500">Sync test scripts, new test cases created by Claude, and Robot execution results.</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
             <X className="w-4 h-4" />
           </button>
         </div>
