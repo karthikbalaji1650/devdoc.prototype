@@ -3,6 +3,7 @@ import { FileText, History, Database, ShieldCheck, X } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
 import { isAdmin } from '../../services/permissions';
+import { isBackendConfigured } from '../../services/backendAuthService';
 
 interface WelcomeModalProps {
   user: UserProfile;
@@ -60,10 +61,21 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
           <div className="flex gap-3 border border-[var(--border)] bg-[var(--panel-alt)] p-3.5">
             <ShieldCheck className="h-5 w-5 shrink-0 text-[var(--blue)]" />
             <div>
-              <div className="text-sm font-semibold text-[var(--text)]">This is a demo environment</div>
-              <div className="mt-1 text-xs leading-relaxed text-[var(--text-dim)]">
-                Everything you do here is stored in this browser only, so it won't appear on another device unless this deployment is connected to the shared backend.
-              </div>
+              {isBackendConfigured() ? (
+                <>
+                  <div className="text-sm font-semibold text-[var(--text)]">Your work is saved on the server</div>
+                  <div className="mt-1 text-xs leading-relaxed text-[var(--text-dim)]">
+                    Sign in from any device to pick up where you left off. Teammates see what their role allows.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-semibold text-[var(--text)]">This is a demo environment</div>
+                  <div className="mt-1 text-xs leading-relaxed text-[var(--text-dim)]">
+                    Everything you do here is stored in this browser only, so it won't appear on another device unless this deployment is connected to the shared backend.
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
