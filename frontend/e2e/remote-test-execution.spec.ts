@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawnServer, stopServer, waitForPortsFree } from './backendHarness';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,23 +40,25 @@ let users: { email: string; password: string; name: string }[];
 test.beforeAll(async () => {
   // The backend venv's python directly (after `uv sync` in backend/), not
   // `uv run`: killing uv can leave the server orphaned on its port.
-  apiProc = spawn(path.join(BACKEND_ROOT, '.venv', 'bin', 'python'), ['-m', 'tests.e2e_server'], {
+  await waitForPortsFree([API_PORT, FRONTEND_PORT]);
+  apiProc = spawnServer(path.join(BACKEND_ROOT, '.venv', 'bin', 'python'), ['-m', 'tests.e2e_server'], {
     cwd: BACKEND_ROOT,
     env: { ...process.env, PORT: String(API_PORT), FRONTEND_ORIGIN: `http://localhost:${FRONTEND_PORT}` },
   });
   const ready = await waitForLine(apiProc, /READY (.+)/);
   users = JSON.parse(ready.match(/READY (.+)/)![1]);
 
-  frontendProc = spawn('npx', ['vite', '--port', String(FRONTEND_PORT), '--strictPort'], {
+  frontendProc = spawnServer('npx', ['vite', '--port', String(FRONTEND_PORT), '--strictPort'], {
     cwd: FRONTEND_ROOT,
     env: { ...process.env, VITE_API_BASE_URL: `http://localhost:${API_PORT}` },
   });
   await waitForLine(frontendProc, /ready in/);
 });
 
-test.afterAll(() => {
-  apiProc?.kill();
-  frontendProc?.kill();
+test.afterAll(async () => {
+  stopServer(apiProc);
+  stopServer(frontendProc);
+  await waitForPortsFree([API_PORT, FRONTEND_PORT]);
 });
 
 function skipWelcomeGuide(page: import('@playwright/test').Page) {

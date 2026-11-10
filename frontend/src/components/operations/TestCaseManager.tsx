@@ -394,7 +394,7 @@ const PieChart: React.FC<{ run: TestRunItem }> = ({ run }) => {
   return (
     <svg width={112} height={112} viewBox="0 0 112 112">
       {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} />)}
-      <circle cx={56} cy={56} r={25} fill="#ffffff" />
+      <circle cx={56} cy={56} r={25} style={{ fill: 'var(--panel)' }} />
     </svg>
   );
 };
@@ -949,15 +949,15 @@ const AddCaseModal: React.FC<{
           )}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
-              <select value={type} onChange={e => setType(e.target.value as 'Manual'|'Automated')}
+              <label htmlFor="case-type" className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
+              <select id="case-type" value={type} onChange={e => setType(e.target.value as 'Manual'|'Automated')}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
                 <option>Manual</option><option>Automated</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as TestCasePriority)}
+              <label htmlFor="case-priority" className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
+              <select id="case-priority" value={priority} onChange={e => setPriority(e.target.value as TestCasePriority)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none shadow-xs">
                 {PRIORITIES.map(p => <option key={p}>{p}</option>)}
               </select>
@@ -981,8 +981,8 @@ const AddCaseModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Preconditions</label>
-            <textarea value={preconditions} onChange={e => setPreconditions(e.target.value)} rows={2}
+            <label htmlFor="case-preconditions" className="block text-xs font-semibold text-slate-700 mb-1">Preconditions</label>
+            <textarea id="case-preconditions" value={preconditions} onChange={e => setPreconditions(e.target.value)} rows={2}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none resize-none shadow-xs" />
           </div>
 

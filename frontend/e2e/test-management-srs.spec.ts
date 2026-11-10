@@ -109,12 +109,10 @@ test('032: a suite is sent to the code editor\'s folder as .robot and as .md', a
 test('013: a case keeps every field the SRS lists, as entered', async ({ page }) => {
   await openTestManagement(page);
   await page.getByRole('button', { name: 'Add Case' }).first().click();
-  const field = (label: string, tag: 'select' | 'textarea') =>
-    page.locator(`xpath=//label[normalize-space()="${label}"]/following::${tag}[1]`);
   await page.getByPlaceholder('Test case title').fill('Watchdog re-arms after warm reset');
-  await field('Type', 'select').selectOption('Automated');
-  await field('Priority', 'select').selectOption('Critical');
-  await field('Preconditions', 'textarea').fill('BMC booted; watchdog enabled');
+  await page.getByLabel('Type', { exact: true }).selectOption('Automated');
+  await page.getByLabel('Priority', { exact: true }).selectOption('Critical');
+  await page.getByLabel('Preconditions', { exact: true }).fill('BMC booted; watchdog enabled');
   await page.getByPlaceholder('Action').first().fill('Issue a warm reset');
   await page.getByPlaceholder('Expected result').first().fill('Watchdog timer restarts within 5 s');
   await page.getByLabel('Post-conditions').fill('BMC healthy');

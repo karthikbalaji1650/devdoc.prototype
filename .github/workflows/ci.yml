@@ -17,9 +17,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -58,7 +58,7 @@ jobs:
           --health-cmd "pg_isready -U devdoc -d devdoc_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -76,16 +76,28 @@ jobs:
           TEST_DATABASE_URL: postgresql://devdoc:devdoc@localhost:5432/devdoc_test
         run: uv run pytest
 
+  # One job per browser, in parallel: each installs only its browser and
+  # stays well inside its time limit (all browsers in one job took over 15
+  # minutes on one worker).
   browser-tests:
+    name: browser-tests (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: chromium, projects: "--project=chromium", browsers: chromium }
+          - { name: firefox, projects: "--project=firefox", browsers: firefox }
+          - { name: webkit, projects: "--project=webkit", browsers: webkit }
+          - { name: mobile, projects: "--project='Mobile Chrome' --project='Mobile Safari'", browsers: "chromium webkit" }
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -107,16 +119,16 @@ jobs:
         run: uv sync --frozen
 
       - name: Install browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install --with-deps ${{ matrix.browsers }}
 
       - name: Browser and accessibility tests
-        run: npm run test:e2e
+        run: npx playwright test ${{ matrix.projects }}
 
       - name: Upload report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.name }}
           path: |
             frontend/playwright-report/
             frontend/test-results/
@@ -138,7 +150,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The default docker driver can't export a build cache; the GHA
       # cache backend used below needs the docker-container driver.
