@@ -28,8 +28,10 @@ describe('createSharedCollection', () => {
     api.fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: 'Not signed in.' }), { status: 401 }));
     await c.load();
     expect(c.status()).toBe('error');
+    expect(c.error()).toBe('Not signed in.');
     await c.load();
     expect(c.status()).toBe('ready');
+    expect(c.error()).toBe('');
     expect(c.items()).toEqual([{ id: 'a', title: 'A' }]);
   });
 

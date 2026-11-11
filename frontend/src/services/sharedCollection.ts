@@ -95,10 +95,14 @@ export function createSharedCollection<T extends { id: string }>(
     // A failed load is not kept: the app asks for some collections before
     // sign-in (401), and the next screen to use one must fetch it again.
     if (loading && !force && status !== 'error') return loading;
+    // A load that succeeds after a failed one clears that failure's message
+    // (e.g. "Not signed in." from before sign-in). A save error set by
+    // write() is kept: write() reloads while the status is 'ready'.
+    const failedBefore = status === 'error';
     status = 'loading';
     notify();
     loading = fetchAll()
-      .then(() => { status = 'ready'; })
+      .then(() => { status = 'ready'; if (failedBefore) error = ''; })
       .catch((err: unknown) => { status = 'error'; error = err instanceof Error ? err.message : String(err); })
       .finally(notify);
     return loading;
