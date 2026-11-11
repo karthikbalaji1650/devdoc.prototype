@@ -92,6 +92,21 @@ export async function fetchBackendUser(): Promise<UserProfile> {
   return toProfile((await res.json()).user);
 }
 
+/** Whether the server still has this browser's session. The app keeps the
+ * signed-in user in localStorage, but the server's session ends after 12
+ * hours (or when it is signed out elsewhere). 'signed-out' only on a 401:
+ * an unreachable server or any other error gives 'unknown', so a network
+ * blip never signs anyone out. */
+export async function checkBackendSession(): Promise<'valid' | 'signed-out' | 'unknown'> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrl()}/api/auth/me`, { credentials: 'include', retries: 1 });
+    if (res.ok) return 'valid';
+    return res.status === 401 ? 'signed-out' : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export interface AccessToken { accessToken: string; tokenType: 'Bearer'; expiresIn: number }
 
 /** A JWT for scripts and tools: valid for an hour, and only while this session is. */

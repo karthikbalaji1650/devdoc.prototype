@@ -22,7 +22,7 @@ import {
 import { DocBinModal } from './components/documents/DocBinModal';
 import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
 import { getStoredSession, loginWithProfile, logout } from './services/authService';
-import { isBackendConfigured, logoutBackend } from './services/backendAuthService';
+import { checkBackendSession, isBackendConfigured, logoutBackend } from './services/backendAuthService';
 import { createDebouncedSaver } from './services/autosave';
 import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
 import { getStoredReviewersLog, reviewersLog } from './services/reviewersLogService';
@@ -112,6 +112,23 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) void loadDocuments(true);
   }, [currentUser]);
+
+  // A page load with a stored session asks the server whether that session
+  // still exists. When it has ended (12 hours, or signed out elsewhere), go
+  // back to sign-in instead of showing every screen as "Not signed in."
+  useEffect(() => {
+    if (!isBackendConfigured() || !getStoredSession()) return;
+    let cancelled = false;
+    void checkBackendSession().then((result) => {
+      if (cancelled || result !== 'signed-out') return;
+      logout();
+      resetDocuments();
+      setCurrentUser(null);
+      setCurrentApp('login');
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on page load
+  }, []);
 
   useEffect(() => {
     if (!activeDocumentId) return;

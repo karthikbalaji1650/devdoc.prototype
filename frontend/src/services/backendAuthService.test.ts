@@ -87,3 +87,32 @@ describe('logoutBackend', () => {
     await expect(logoutBackend()).resolves.toBeUndefined();
   });
 });
+
+describe('checkBackendSession', () => {
+  beforeEach(() => vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:4000/'));
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+
+  it('is valid when the server still has the session, and sends the cookie', async () => {
+    fetchMock.mockResolvedValue(json(200, { user: { id: 'u1', name: 'Mani', email: 'm@x', role: 'admin' } }));
+    const { checkBackendSession } = await load();
+    await expect(checkBackendSession()).resolves.toBe('valid');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:4000/api/auth/me');
+    expect(init.credentials).toBe('include');
+  });
+
+  it('is signed-out when the server answers 401 (session ended)', async () => {
+    fetchMock.mockResolvedValue(json(401, { error: 'Not signed in.' }));
+    const { checkBackendSession } = await load();
+    await expect(checkBackendSession()).resolves.toBe('signed-out');
+  });
+
+  it('is unknown, never signed-out, when the server errors or cannot be reached', async () => {
+    const { checkBackendSession } = await load();
+    fetchMock.mockResolvedValue(json(500, { error: 'boom' }));
+    await expect(checkBackendSession()).resolves.toBe('unknown');
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(checkBackendSession()).resolves.toBe('unknown');
+  });
+});
