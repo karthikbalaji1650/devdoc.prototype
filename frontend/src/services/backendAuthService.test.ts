@@ -42,7 +42,7 @@ describe('loginWithBackend', () => {
 
   it('fills in reasonable defaults for a user with no title, department or avatar set', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      user: { id: 'usr-09', name: 'New Person', email: 'new@x.com', title: null, department: null, role: 'firmware-lead', avatarBg: null, initials: null },
+      user: { id: 'usr-09', name: 'New Person', email: 'new@x.com', title: null, department: null, role: 'user', avatarBg: null, initials: null },
     }), { status: 200 }));
     const { loginWithBackend } = await load();
     const user = await loginWithBackend('new@x.com', 'secret');

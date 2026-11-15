@@ -19,9 +19,15 @@ export async function signInAs(page: Page, role: Role = 'admin'): Promise<void> 
     if (sessionStorage.getItem('e2e-signed-in')) return;
     sessionStorage.setItem('e2e-signed-in', '1');
     localStorage.setItem('devdoc_studio_user_session_v1', JSON.stringify({
-      user: { ...user, email: `${user.id}@example.com`, department: 'Engineering', role: userRole, avatarBg: 'x' },
+      user: { ...user, email: `${user.id}@example.com`, department: 'Engineering', role: userRole === 'admin' ? 'admin' : 'user', avatarBg: 'x' },
       token: 'e2e', loginTime: new Date().toISOString(), isAuthenticated: true,
     }));
     localStorage.setItem('devdoc_studio_welcome_seen_v1', '1');
   }, [u, role] as const);
+}
+
+/** Settings → System & Storage (there is no separate sidebar entry for it). */
+export async function openSystemAndStorage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /System & Storage/i }).click();
 }

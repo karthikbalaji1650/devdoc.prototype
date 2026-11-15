@@ -109,7 +109,7 @@ class TestGet:
         agent = api.sign_in(AUTHOR)
         agent.put("/api/documents/a", json=doc("a"))
         document = agent.get("/api/documents/a").json()["document"]
-        assert list(document) == ["metadata", "sections", "updatedAt"]
+        assert list(document) == ["metadata", "sections", "ownerId", "updatedAt"]
 
     def test_most_recently_updated_first(self, api: Api) -> None:
         agent = api.sign_in(AUTHOR)

@@ -31,7 +31,7 @@ backend/             Python 3.12 + FastAPI, managed with uv
     models/          domain records
     schemas/         request/response models (the API contract)
     core/ db/        config, HTTP plumbing, connection pool
-  sql/init.sql       Postgres schema + seed data
+  migrations/        Alembic schema migrations (alembic.ini)
   tests/             pytest
 sandbox/             VS Code + Robot Framework container (the Coder screen)
 docs/                API contract, migration report, reference documents
@@ -46,17 +46,18 @@ docker-compose.yml   the full stack
 docker compose up --build
 ```
 
-The app is at **https://localhost:8443** (http://localhost:5173 redirects there), with the API behind it at `/api`. The API's interactive docs are not proxied: open http://localhost:8000/docs on the machine running it. Demo login: `mani.thangavel@sanmina.com` / `devdoc-demo`.
+The app is at **https://localhost:8443** (http://localhost:5173 redirects there), with the API behind it at `/api`. The API's interactive docs are not proxied: open http://localhost:8000/docs on the machine running it. There are no built-in accounts: create one first with `docker compose run --rm migrate python -m app.db.create_user` (see backend/README.md).
 
 Everything a browser reaches is HTTPS with TLS 1.3 only (DDS-SRS-074). Without a certificate in `certs/` the web app makes a self-signed one, so the browser warns once; `scripts/make-dev-cert.sh` makes one your machine trusts (with [mkcert](https://github.com/FiloSottile/mkcert)), and for a real deployment put your own `tls.crt` and `tls.key` in `certs/`. The plain ports (Postgres, Redis, the API, code-server) are bound to 127.0.0.1 only.
 
 **Local development with hot reload:**
 
 ```
-docker compose up -d postgres-db                  # or any Postgres seeded with backend/sql/init.sql
+docker compose up -d postgres-db                  # or any Postgres
 
 cd backend                                        # terminal 1
 cp .env.example .env && uv sync
+uv run alembic upgrade head && uv run python -m app.db.create_user   # schema, then your first user
 uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-header
 
 cd frontend                                       # terminal 2

@@ -29,8 +29,10 @@ class DocumentModel(WireModel):
 
 class StoredDocument(DocumentModel):
     """A document as read back: the saved model plus the server's updatedAt
-    (ISO 8601, UTC, millisecond precision)."""
+    (ISO 8601, UTC, millisecond precision) and the id of the user who owns it
+    (null: nobody does, so only admins may edit it)."""
 
+    ownerId: str | None
     updatedAt: str
 
 

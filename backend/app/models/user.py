@@ -18,4 +18,4 @@ class User:
 @dataclass(frozen=True)
 class LoginCandidate:
     id: str
-    password_hash: str
+    password: str

@@ -37,7 +37,10 @@ def test_backup_holds_every_document_and_all_app_data(api: Api) -> None:
     redis = backup["redis"]
     assert redis["dds:tm:suites"]["type"] == "hash" and "s1" in redis["dds:tm:suites"]["value"]
     assert "c1" in redis["dds:col:test-case-library"]["value"]
-    assert any(k.startswith("dds:audit:") for k in redis)  # the sign-ins above
+    # The sign-in audit log lives in Postgres now, and is exported beside the documents.
+    assert {e["userName"] for e in backup["sessionAudit"]} == {AUTHOR.name, ADMIN.name}
+    assert backup["sessionAudit"][-1]["userName"] == ADMIN.name  # oldest first
+    assert not any(k.startswith("dds:audit:sessions") for k in redis)
     assert not any(k.startswith("dds:cache:") for k in redis)
 
 

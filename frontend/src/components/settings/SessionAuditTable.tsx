@@ -13,8 +13,10 @@ function formatDuration(loginIso: string, endIso: string | null): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-/** DDS-SRS-011: every sign-in, as the server recorded it. */
-export const SessionAuditTable: React.FC = () => {
+/** DDS-SRS-011: sign-ins as the server recorded them - everyone's for an
+ * admin; with `ownOnly`, the viewer's own (the server sends only those), so
+ * the User and Role columns, which would just repeat the viewer, are left out. */
+export const SessionAuditTable: React.FC<{ ownOnly?: boolean }> = ({ ownOnly = false }) => {
   const available = isSessionAuditAvailable();
   const [sessions, setSessions] = useState<SessionAuditEntry[] | null>(null);
   const [error, setError] = useState('');
@@ -47,9 +49,9 @@ export const SessionAuditTable: React.FC = () => {
         <table className="w-full text-xs text-left">
           <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-100">
             <tr>
-              <th className="px-5 py-2 font-bold">User</th>
-              <th className="px-3 py-2 font-bold">Role</th>
-              <th className="px-3 py-2 font-bold">Login</th>
+              {!ownOnly && <th className="px-5 py-2 font-bold">User</th>}
+              {!ownOnly && <th className="px-3 py-2 font-bold">Role</th>}
+              <th className={`${ownOnly ? 'px-5' : 'px-3'} py-2 font-bold`}>Login</th>
               <th className="px-3 py-2 font-bold">Logout</th>
               <th className="px-3 py-2 font-bold">Duration</th>
             </tr>
@@ -59,9 +61,9 @@ export const SessionAuditTable: React.FC = () => {
               const end = s.logoutTime ?? (s.status === 'expired' ? s.expiresAt : null);
               return (
                 <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-2.5 font-semibold text-slate-800">{s.userName}</td>
-                  <td className="px-3 py-2.5 text-slate-500 capitalize">{s.role.replace('-', ' ')}</td>
-                  <td className="px-3 py-2.5 text-slate-500 font-mono">{formatTimestamp(s.loginTime)}</td>
+                  {!ownOnly && <td className="px-5 py-2.5 font-semibold text-slate-800">{s.userName}</td>}
+                  {!ownOnly && <td className="px-3 py-2.5 text-slate-500 capitalize">{s.role.replace('-', ' ')}</td>}
+                  <td className={`${ownOnly ? 'px-5' : 'px-3'} py-2.5 text-slate-500 font-mono`}>{formatTimestamp(s.loginTime)}</td>
                   <td className="px-3 py-2.5 font-mono">
                     {s.status === 'active' ? (
                       <span className="text-emerald-600 font-semibold flex items-center gap-1"><Clock className="w-3 h-3" /> Active</span>
@@ -77,7 +79,7 @@ export const SessionAuditTable: React.FC = () => {
             })}
             {message && (
               <tr>
-                <td colSpan={5} role={error ? 'alert' : undefined} className={`px-5 py-6 text-center text-xs ${error ? 'text-rose-600' : 'text-slate-400'}`}>{message}</td>
+                <td colSpan={ownOnly ? 3 : 5} role={error ? 'alert' : undefined} className={`px-5 py-6 text-center text-xs ${error ? 'text-rose-600' : 'text-slate-400'}`}>{message}</td>
               </tr>
             )}
           </tbody>

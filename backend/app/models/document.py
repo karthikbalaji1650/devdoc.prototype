@@ -5,12 +5,13 @@ from typing import Any
 
 @dataclass(frozen=True)
 class DocumentRecord:
-    """A row of `documents` as the routes read it. `author` and `status`
-    are the indexed columns permission checks use - not the copies inside
+    """A row of `documents` as the routes read it. `owner_id` and `status`
+    are the columns permission checks use - not the copies inside
     `document_json`."""
 
     id: str
     author: str | None
+    owner_id: str | None
     status: str | None
     document_json: Any
     updated_at: datetime
@@ -26,6 +27,7 @@ class DocumentWrite:
     title: str | None
     subtitle: str | None
     author: str | None
+    owner_id: str | None
     department: str | None
     doc_date: str | None
     version: str | None

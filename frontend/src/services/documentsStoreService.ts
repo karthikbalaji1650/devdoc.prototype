@@ -20,7 +20,10 @@ export const DOCUMENT_SAVE_ERROR_EVENT = 'devdoc:document-save-error';
 
 export type DocumentsStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable';
 
-interface Entry { doc: DocumentModel; updatedAt: string }
+// `ownerId` is the server's verdict on who owns the document (null: nobody). It lives beside the
+// document, never inside it, so it cannot be sent back or lost when a document object is rebuilt.
+// undefined: not known (browser demo, or a document just created in this browser).
+interface Entry { doc: DocumentModel; updatedAt: string; ownerId?: string | null }
 
 let entries = new Map<string, Entry>();
 let status: DocumentsStatus = 'idle';
@@ -77,11 +80,11 @@ export function loadDocuments(force = false): Promise<void> {
   if (loading && !force) return loading;
   status = 'loading';
   notify();
-  loading = call<{ documents: (DocumentModel & { updatedAt: string })[] }>('GET', '')
+  loading = call<{ documents: (DocumentModel & { updatedAt: string; ownerId?: string | null })[] }>('GET', '')
     .then((data) => {
       const next = new Map<string, Entry>();
-      for (const { updatedAt, ...doc } of data?.documents ?? []) {
-        if (doc?.metadata?.id) next.set(doc.metadata.id, { doc, updatedAt });
+      for (const { updatedAt, ownerId, ...doc } of data?.documents ?? []) {
+        if (doc?.metadata?.id) next.set(doc.metadata.id, { doc, updatedAt, ownerId });
       }
       entries = next;
       status = 'ready';
@@ -126,6 +129,11 @@ export function getDocument(id: string): DocumentModel | null {
   return entries.get(id)?.doc ?? null;
 }
 
+/** Who owns the document, as the server last said: a user id, null (nobody), or undefined (not known). */
+export function getDocumentOwnerId(id: string): string | null | undefined {
+  return entries.get(id)?.ownerId;
+}
+
 /** Updates the document at once and sends it to the server. Returns false
  * when it cannot be saved at all (no backend). The server's verdict
  * arrives later: a refusal fires DOCUMENT_SAVE_ERROR_EVENT. */
@@ -136,7 +144,7 @@ export function saveDocument(doc: DocumentModel): boolean {
     reportSaveError('Documents are stored on the server - this browser-only demo cannot save them.');
     return false;
   }
-  entries.set(id, { doc, updatedAt: new Date().toISOString() });
+  entries.set(id, { doc, updatedAt: new Date().toISOString(), ownerId: entries.get(id)?.ownerId });
   notify();
   const previous = saveQueues.get(id) ?? Promise.resolve();
   const next = previous.then(() => call('PUT', `/${enc(id)}`, doc)).then(
@@ -264,7 +272,7 @@ export async function restoreSnapshot(docId: string, snapshotId: string): Promis
   await whenSaved(docId);
   const data = await call<{ document: DocumentModel }>('POST', `/${enc(docId)}/history/${enc(snapshotId)}/restore`);
   const doc = data!.document;
-  entries.set(docId, { doc, updatedAt: new Date().toISOString() });
+  entries.set(docId, { doc, updatedAt: new Date().toISOString(), ownerId: entries.get(docId)?.ownerId });
   notify();
   return doc;
 }

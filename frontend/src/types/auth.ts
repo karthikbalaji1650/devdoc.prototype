@@ -1,8 +1,6 @@
-export type UserRole =
-  | 'admin'
-  | 'firmware-lead'
-  | 'release-manager'
-  | 'qa-director';
+/** Two kinds of account (SRS: "user" and "admin"). A person's position
+ * (lead, manager, ...) is not an account role; it is the optional `title`. */
+export type UserRole = 'admin' | 'user';
 
 export interface UserProfile {
   id: string;
@@ -40,7 +38,7 @@ export const DEMO_USERS: UserProfile[] = [
     email: 'vaishnavi.aasaithambi@sanmina.com',
     title: 'Technical lead',
     department: 'SW engineering',
-    role: 'release-manager',
+    role: 'user',
     avatarBg: 'from-purple-600 to-pink-600',
     initials: 'VA'
   },
@@ -50,7 +48,7 @@ export const DEMO_USERS: UserProfile[] = [
     email: 'judia.lumina@sanmina.com',
     title: 'Team lead',
     department: 'SW engineering',
-    role: 'firmware-lead',
+    role: 'user',
     avatarBg: 'from-emerald-600 to-teal-600',
     initials: 'JL'
   }

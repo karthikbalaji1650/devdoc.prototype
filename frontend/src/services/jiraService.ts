@@ -1,4 +1,4 @@
-import type { JiraIssue, ReleaseMasterItem, IncidentItem } from '../types/operations';
+import type { JiraIssue, IncidentItem } from '../types/operations';
 
 export const INITIAL_JIRA_ISSUES: JiraIssue[] = [
   {
@@ -54,39 +54,6 @@ export const INITIAL_JIRA_ISSUES: JiraIssue[] = [
     storyPoints: 8,
     assignee: 'Manivannan Thangavel',
     fixVersion: 'v13.04.00'
-  }
-];
-
-export const INITIAL_RELEASE_MASTER: ReleaseMasterItem[] = [
-  {
-    id: 'rel-13-03-01',
-    releaseVersion: 'BMC Firmware Revision 13.03.01 (Security & Fix Patch)',
-    targetReleaseDate: '2026-08-16',
-    releaseStatus: 'Approved for GA',
-    jiraTicketsCount: 4,
-    totalStoryPoints: 16,
-    completedStoryPoints: 16,
-    technicalAnalysisDocId: 'wh3-1205-sample',
-    technicalAnalysisDocTitle: 'WH3-1205: WebUI HPM Firmware Upgrade Failure Investigation & Fix',
-    testReportDocId: 'tr-2026-qa-sample',
-    testReportDocTitle: 'TR-2026-0813: Firmware Security & REST API Test Execution Report',
-    releaseGateVerdict: 'GO',
-    signoffOwner: 'Manivannan Thangavel (Manager) & Vaishnavi Aasaithambi (Technical Lead)'
-  },
-  {
-    id: 'rel-13-04-00',
-    releaseVersion: 'BMC Firmware Revision 13.04.00 (WebSocket Streaming GA)',
-    targetReleaseDate: '2026-09-01',
-    releaseStatus: 'Planning',
-    jiraTicketsCount: 8,
-    totalStoryPoints: 34,
-    completedStoryPoints: 12,
-    technicalAnalysisDocId: 'adr-0042',
-    technicalAnalysisDocTitle: 'ADR 0042: Migration from REST Polling to WebSocket State Streaming',
-    testReportDocId: 'test-case-matrix-2026',
-    testReportDocTitle: 'TM-2026-AST2600: Platform Firmware & REST API Test Management Matrix',
-    releaseGateVerdict: 'PENDING_QA',
-    signoffOwner: 'Judia Lumina (Team Lead)'
   }
 ];
 

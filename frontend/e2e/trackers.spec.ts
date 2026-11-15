@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signInThroughBackend, startStack, type Stack } from './backendHarness';
+import { openSystemAndStorage } from './helpers';
 
 // DDS-SRS-044: an admin connects Jira; a release's blockers are synced from a
 // JQL query and linked by key, read from the tracker (the harness's fake Jira).
@@ -12,7 +13,7 @@ test('release blockers are read from Jira by query and by key', async ({ page })
   await signInThroughBackend(page, stack, admin);
 
   // Connect Jira (Cloud) and test the connection.
-  await page.getByRole('button', { name: 'Data Management' }).click();
+  await openSystemAndStorage(page);
   const jira = page.getByRole('form', { name: 'Jira connection' });
   await jira.getByLabel('Site URL').fill(`${stack.apiUrl}/__e2e/jira`);
   await jira.getByLabel('Account email').fill('qa@example.com');
@@ -22,12 +23,14 @@ test('release blockers are read from Jira by query and by key', async ({ page })
   await jira.getByRole('button', { name: 'Test' }).click();
   await expect(page.getByText('Jira: signed in as QA Bot.')).toBeVisible();
 
-  // Release Master: sample releases load after Test Management's sample runs.
-  await page.getByRole('button', { name: 'Test Management', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Run Test' })).toBeVisible();
-  await page.getByRole('button', { name: 'Release Master' }).first().click();
-  await page.getByRole('tab', { name: /v13\.04\.00/ }).click();
-  await page.getByRole('tab', { name: /^Blockers/ }).click();
+  // Release Master: a release this admin creates (through the API), opened by its own link.
+  const people = await (await page.request.get(`${stack.apiUrl}/api/users?q=Vaishnavi`)).json();
+  const created = await page.request.post(`${stack.apiUrl}/api/releases`, {
+    data: { version: 'v13.04.00', type: 'Minor', targetDate: '2026-12-01', signerIds: [people.users[0].id] },
+  });
+  expect(created.ok()).toBe(true);
+  const releaseId = (await created.json()).release.id;
+  await page.goto(`${stack.frontendUrl}/releases/${releaseId}/blockers`);
 
   const query = page.getByRole('region', { name: 'Blocker query' });
   await query.getByLabel('Jira JQL').fill('fixVersion = "v13.04.00" AND labels = release-blocker');

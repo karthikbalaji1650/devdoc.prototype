@@ -1,16 +1,24 @@
 import type { DocumentModel } from '../types/document';
 import type { UserProfile } from '../types/auth';
 
-type MaybeUser = Pick<UserProfile, 'name' | 'role'> | null | undefined;
+type MaybeUser = Pick<UserProfile, 'id' | 'name' | 'role'> | null | undefined;
 
 export function isAdmin(user: MaybeUser): boolean {
   return user?.role === 'admin';
 }
 
-/** Requirements #2 / #4: authors edit their own documents; admins edit any. */
-export function canEditDocument(user: MaybeUser, doc: DocumentModel): boolean {
+/** Requirements #2 / #4: owners edit their own documents; admins edit any.
+ *
+ * The server decides by owner id, so the UI does too. `ownerId` is what the
+ * server reported: a user id, or `null` when nobody owns the document (only
+ * admins may edit it). `undefined` means no owner is known, which is the
+ * browser-only demo or a document just created in this browser: there the
+ * author name is all there is. */
+export function canEditDocument(user: MaybeUser, doc: DocumentModel, ownerId?: string | null): boolean {
   if (!user) return false;
-  return isAdmin(user) || doc.metadata.author === user.name;
+  if (isAdmin(user)) return true;
+  if (ownerId === undefined) return doc.metadata.author === user.name;
+  return ownerId !== null && ownerId === user.id;
 }
 
 /** Deleting follows the same rule as editing. */

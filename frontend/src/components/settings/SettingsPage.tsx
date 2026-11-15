@@ -41,8 +41,7 @@ interface SettingsPageProps {
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
   onUpdateAvatar: (avatarUrl?: string) => void;
-  /** Controlled by App: the System & Storage tab is the admin-only
-   * "Data Management" view, so the sidebar can highlight it. */
+  /** Controlled by App, so the tab survives leaving Settings and coming back. */
   activeTab: SettingsTab;
   onTabChange: (tab: SettingsTab) => void;
 }
@@ -59,10 +58,8 @@ const TABS: { id: SettingsTab; label: string; icon: React.ElementType; desc: str
 ];
 
 const ROLE_LABELS: Record<string, string> = {
-  admin:             'Software Engineering Manager / Admin',
-  'firmware-lead':   'Team Lead - SW Engineering',
-  'release-manager': 'Technical Lead - SW Engineering',
-  'qa-director':     'QA & Security Testing Lead',
+  admin: 'Administrator',
+  user:  'User',
 };
 
 /* ─── Small reusable sub-components ─── */
@@ -126,12 +123,14 @@ function InfoBanner({ text }: { text: string }) {
 
 /* ─── Main Component ─── */
 export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, onLogout, onUpdateAvatar, activeTab: requestedTab, onTabChange }) => {
-  // System & Storage holds backups, "clear all data" and every user's
-  // session audit log: admins only (DDS-SRS-008, -011). Guarded here as
-  // well as in the tab list, so no other route can reach it.
+  // System & Storage is open to everyone: the VS Code address (this
+  // browser only) and the session audit log - everyone's for an admin,
+  // your own otherwise (the server filters it, DDS-SRS-011). Test
+  // servers, CI tokens, trackers, backup and reset stay admin-only
+  // (DDS-SRS-008).
   const canManageData = canAccessDataManagement(user);
-  const activeTab: SettingsTab = requestedTab === 'data' && !canManageData ? 'profile' : requestedTab;
-  const visibleTabs = TABS.filter((tab) => tab.id !== 'data' || canManageData);
+  const activeTab = requestedTab;
+  const visibleTabs = TABS;
   const [aiConfig, setAiConfig] = useState<AiConfig>(getStoredAiConfig());
   const [aiSaved, setAiSaved] = useState(false);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
@@ -163,7 +162,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      <AppSidebar user={user} activeView={activeTab === 'data' ? 'data-management' : 'settings'} onNavigate={onNavigate} onLogout={onLogout} />
+      <AppSidebar user={user} activeView="settings" onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Settings Sub-Tab Panel */}
@@ -398,9 +397,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
             )}
 
             {/* SYSTEM & STORAGE */}
-            {activeTab === 'data' && canManageData && (
+            {activeTab === 'data' && (
               <section className="space-y-6">
-                <SectionHeader icon={Database} title="System & Storage" desc="Register remote test servers, back up or reset the server's data, set the workspace connection, and review sign-ins." />
+                <SectionHeader
+                  icon={Database}
+                  title="System & Storage"
+                  desc={canManageData
+                    ? "Register remote test servers, back up or reset the server's data, set the workspace connection, and review sign-ins."
+                    : 'Set the workspace connection and review your own sign-ins.'}
+                />
 
                 {/* VS Code Server URL setting */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
@@ -439,25 +444,30 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   </div>
                 </div>
 
-                {/* Remote test execution servers (DDS-SRS-019, admins) */}
-                <TestServersPanel />
+                {canManageData && (
+                  <>
+                    {/* Remote test execution servers (DDS-SRS-019, admins) */}
+                    <TestServersPanel />
 
-                {/* CI/CD tokens and pipeline commands (DDS-SRS-026/027, admins) */}
-                <CiTokensPanel />
+                    {/* CI/CD tokens and pipeline commands (DDS-SRS-026/027, admins) */}
+                    <CiTokensPanel />
 
-                {/* Jira / GitHub for release blockers (DDS-SRS-044, admins) */}
-                <TrackersPanel />
+                    {/* Jira / GitHub for release blockers (DDS-SRS-044, admins) */}
+                    <TrackersPanel />
 
-                {/* Server backup and reset (admins) */}
-                <ServerDataPanel />
+                    {/* Server backup and reset (admins) */}
+                    <ServerDataPanel />
+                  </>
+                )}
 
                 {/* Session Audit Log */}
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                   <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
                     <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">User Session Audit Log</span>
+                    <span className="ml-auto text-[10px] text-slate-400">{canManageData ? 'All users' : 'Your sign-ins only'}</span>
                   </div>
-                  <SessionAuditTable />
+                  <SessionAuditTable ownOnly={!canManageData} />
                 </div>
               </section>
             )}

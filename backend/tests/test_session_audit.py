@@ -1,6 +1,6 @@
-"""DDS-SRS-011: the server records every sign-in; only admins can read it."""
+"""DDS-SRS-011: the server records every sign-in. Admins read everyone's;
+everyone else reads only their own."""
 
-import json
 from datetime import UTC, datetime, timedelta
 
 from app.core.security import SESSION_COOKIE
@@ -9,11 +9,29 @@ from tests.conftest import ADMIN, AUTHOR, OTHER, Api
 URL = "/api/audit/sessions"
 
 
-def test_needs_a_session_and_an_admin(api: Api) -> None:
+def test_needs_a_session(api: Api) -> None:
     assert api.anonymous().get(URL).status_code == 401
-    res = api.sign_in(AUTHOR).get(URL)
-    assert res.status_code == 403
-    assert res.json() == {"error": "Only admins can view the session audit log."}
+
+
+def test_a_non_admin_sees_only_their_own_sign_ins(api: Api) -> None:
+    first = api.sign_in(AUTHOR)
+    api.sign_in(OTHER)
+    api.sign_in(ADMIN)
+    assert first.post("/api/auth/logout").status_code == 204
+    author = api.sign_in(AUTHOR)
+
+    res = author.get(URL)
+    assert res.status_code == 200
+    sessions = res.json()["sessions"]
+    assert [(s["userName"], s["status"]) for s in sessions] == [(AUTHOR.name, "active"), (AUTHOR.name, "signed-out")]
+    assert {s["userId"] for s in sessions} == {AUTHOR.id}
+
+
+def test_an_admin_still_sees_everyone(api: Api) -> None:
+    api.sign_in(AUTHOR)
+    api.sign_in(OTHER)
+    names = [s["userName"] for s in api.sign_in(ADMIN).get(URL).json()["sessions"]]
+    assert names == [ADMIN.name, OTHER.name, AUTHOR.name]
 
 
 def test_logins_and_logouts_are_recorded_newest_first(api: Api) -> None:
@@ -40,14 +58,15 @@ def test_a_failed_login_or_unknown_logout_records_nothing(api: Api) -> None:
 
 def test_a_session_that_timed_out_shows_as_expired(api: Api) -> None:
     api.sign_in(AUTHOR)
-    redis = api.client.app.state.services.session_audit._redis  # type: ignore[attr-defined]
-
-    async def expire() -> None:
-        for entry_id, raw in (await redis.hgetall("dds:audit:sessions")).items():
-            entry = json.loads(raw)
-            entry["expiresAt"] = (datetime.now(UTC) - timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
-            await redis.hset("dds:audit:sessions", entry_id, json.dumps(entry))
-
-    api.client.portal.call(expire)  # type: ignore[union-attr]
+    for entry in api.store.session_audit:  # move the sign-in's expiry into the past
+        entry["expiresAt"] = (datetime.now(UTC) - timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
     sessions = api.sign_in(ADMIN).get(URL).json()["sessions"]
     assert {s["userName"]: s["status"] for s in sessions}[AUTHOR.name] == "expired"
+
+
+def test_nothing_is_ever_trimmed(api: Api) -> None:
+    """The Redis store dropped everything past the newest 1,000 entries."""
+    for _ in range(1005):
+        api.client.post("/api/auth/login", json={"email": AUTHOR.email, "password": AUTHOR.password})
+    api.client.cookies.clear()
+    assert len(api.store.session_audit) == 1005

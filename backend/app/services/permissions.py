@@ -11,7 +11,9 @@ def is_admin(user: User) -> bool:
 
 
 def can_edit_document(user: User, doc: DocumentRecord) -> bool:
-    return is_admin(user) or doc.author == user.name
+    """Admins, and the document's owner. A document with no owner (its author
+    matched no single user) can be edited by admins only, until one is assigned."""
+    return is_admin(user) or (doc.owner_id is not None and doc.owner_id == user.id)
 
 
 can_delete_document = can_edit_document

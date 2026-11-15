@@ -1,20 +1,17 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from anyio import to_thread
-
 from app.core.errors import ApiError
 from app.core.jscompat import js_opt, js_trim
 from app.core.security import SESSION_TTL_MS, generate_session_id, verify_password
 from app.models.user import User
 from app.repositories.base import Repositories
-from app.repositories.session_audit import SessionAuditStore
 
 
 class AuthService:
-    def __init__(self, repos: Repositories, audit: SessionAuditStore) -> None:
+    def __init__(self, repos: Repositories) -> None:
         self._repos = repos
-        self._audit = audit
+        self._audit = repos.session_audit
 
     async def login(self, body: Any) -> tuple[str, User | None]:
         """Returns (session id, user) or raises ApiError(400/401)."""
@@ -28,7 +25,7 @@ class AuthService:
         candidate = await self._repos.users.find_login_candidate(email)
         # Same response whether the email is unknown or the password is
         # wrong, so a caller can't use the error to discover accounts.
-        if candidate is None or not await to_thread.run_sync(verify_password, password, candidate.password_hash):
+        if candidate is None or not verify_password(password, candidate.password):
             raise ApiError(401, "Invalid email or password.")
 
         return await self._start_session(candidate.id)

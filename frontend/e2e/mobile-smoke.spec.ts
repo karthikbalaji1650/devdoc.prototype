@@ -18,16 +18,17 @@ test('login screen fits without horizontal scrolling', async ({ page }) => {
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1); // +1: subpixel rounding
 });
 
-test('dashboard: sidebar defaults to collapsed, nav is still usable, and content fits', async ({ page }) => {
+test('dashboard: sidebar is open on load, a tap on the content closes it, nav still works, and content fits', async ({ page }) => {
   await signInAs(page);
   await page.goto('/');
   await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
 
-  // Collapsed means the full-text label isn't shown...
-  await expect(page.getByText('Document Editor', { exact: true })).toHaveCount(0);
-  // ...but the button is still reachable by its accessible name (aria-label).
-  const editorNav = page.getByRole('button', { name: 'Document Editor' });
-  await expect(editorNav).toBeVisible();
+  // Open on load, as on desktop.
+  await expect(page.getByRole('button', { name: 'Minimize sidebar' })).toHaveAttribute('aria-expanded', 'true');
+
+  // A tap on the content closes it, giving the page the width back.
+  await page.locator('header h1').click();
+  await expect(page.getByRole('button', { name: 'Maximize sidebar' })).toHaveAttribute('aria-expanded', 'false');
 
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -35,6 +36,7 @@ test('dashboard: sidebar defaults to collapsed, nav is still usable, and content
   }));
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
 
-  await editorNav.click();
+  // The nav is still usable from the closed rail (icons, by accessible name).
+  await page.getByRole('button', { name: 'Document Editor' }).click();
   await expect(page.getByRole('button', { name: /New Document/ })).toBeVisible();
 });

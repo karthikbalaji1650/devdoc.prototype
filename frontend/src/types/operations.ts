@@ -27,22 +27,6 @@ export interface JiraIssue {
   linkedDocTitle?: string;
 }
 
-export interface ReleaseMasterItem {
-  id: string;
-  releaseVersion: string; // e.g. "BMC Firmware v13.03.01"
-  targetReleaseDate: string;
-  releaseStatus: 'Planning' | 'RC Testing' | 'Approved for GA' | 'Deployed';
-  jiraTicketsCount: number;
-  totalStoryPoints: number;
-  completedStoryPoints: number;
-  technicalAnalysisDocId: string;
-  technicalAnalysisDocTitle: string;
-  testReportDocId: string;
-  testReportDocTitle: string;
-  releaseGateVerdict: 'GO' | 'PENDING_QA' | 'NO-GO';
-  signoffOwner: string;
-}
-
 export interface ReviewerLogItem {
   id: string;
   docId: string;

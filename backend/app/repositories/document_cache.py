@@ -27,6 +27,7 @@ class CachedDocumentRepository:
                 DocumentRecord(
                     id=r["id"],
                     author=r["author"],
+                    owner_id=r.get("owner_id"),  # an entry cached before owners existed has none
                     status=r["status"],
                     document_json=r["document_json"],
                     updated_at=datetime.fromisoformat(r["updated_at"]),
@@ -38,6 +39,7 @@ class CachedDocumentRepository:
             {
                 "id": r.id,
                 "author": r.author,
+                "owner_id": r.owner_id,
                 "status": r.status,
                 "document_json": r.document_json,
                 "updated_at": r.updated_at.isoformat(),

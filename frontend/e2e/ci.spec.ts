@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signInThroughBackend, startStack, type Stack } from './backendHarness';
+import { openSystemAndStorage } from './helpers';
 
 // DDS-SRS-026/027: an admin creates a CI token; a pipeline uses it to record
 // Robot results; the run shows up in Test Runs with the build it came from.
@@ -21,7 +22,7 @@ test('a CI token records pipeline results as a test run', async ({ page }) => {
   await page.getByRole('button', { name: 'Test Management', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Run Test' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Data Management' }).click();
+  await openSystemAndStorage(page);
   await page.getByLabel('New token for').fill('Jenkins – firmware');
   await page.getByRole('button', { name: 'Create token' }).click();
   const tokenCode = page.getByRole('status').filter({ hasText: 'will not be shown again' }).locator('code');

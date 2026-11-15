@@ -2,11 +2,9 @@
 (tests/e2e_server.py): the same three users the Node tests used."""
 
 from dataclasses import dataclass
-from functools import cache
 from typing import Any
 
 from app.core.config import Settings
-from app.core.security import hash_password
 from app.models.user import User
 from app.repositories.memory import MemoryStore
 
@@ -23,21 +21,16 @@ class TestUser:
 
 TEST_USERS = [
     TestUser("usr-01", "Manivannan Thangavel", "mani.thangavel@sanmina.com", "admin", "demo-pass-1"),
-    TestUser("usr-02", "Vaishnavi Aasaithambi", "vaishnavi.aasaithambi@sanmina.com", "release-manager", "demo-pass-2"),
-    TestUser("usr-03", "Judia Lumina", "judia.lumina@sanmina.com", "firmware-lead", "demo-pass-3"),
+    TestUser("usr-02", "Vaishnavi Aasaithambi", "vaishnavi.aasaithambi@sanmina.com", "user", "demo-pass-2"),
+    TestUser("usr-03", "Judia Lumina", "judia.lumina@sanmina.com", "user", "demo-pass-3"),
 ]
 ADMIN, AUTHOR, OTHER = TEST_USERS
-
-
-@cache
-def _hash(password: str) -> str:
-    return hash_password(password)  # cost 12 is slow; hash each once per run
 
 
 def seeded_store() -> MemoryStore:
     store = MemoryStore()
     for u in TEST_USERS:
-        store.add_user(User(u.id, u.name, u.email, None, None, u.role, None, None), _hash(u.password))
+        store.add_user(User(u.id, u.name, u.email, None, None, u.role, None, None), u.password)
     return store
 
 

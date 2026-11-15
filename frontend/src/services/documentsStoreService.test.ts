@@ -6,7 +6,7 @@ import { API_BASE, installFakeCollectionsApi } from '../test/fakeCollectionsApi'
 // A fake /api/documents (plus the collections fake for the Doc Bin).
 function installFakeDocumentsApi() {
   const { fetchMock: collectionsFetch } = installFakeCollectionsApi();
-  const docs = new Map<string, { doc: DocumentModel; updatedAt: string; deleted: boolean }>();
+  const docs = new Map<string, { doc: DocumentModel; updatedAt: string; deleted: boolean; ownerId?: string | null }>();
   const snapshots = new Map<string, { id: string; savedAt: string; takenAt: string; label: string; doc: DocumentModel }[]>();
   let refuse: string | null = null;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -19,7 +19,7 @@ function installFakeDocumentsApi() {
     calls.push(`${method} ${path}`);
     const [, id, sub, snapId] = path.split('/').map(decodeURIComponent);
     if (method === 'GET' && !id) {
-      return json({ documents: [...docs.values()].filter((d) => !d.deleted).map((d) => ({ ...d.doc, updatedAt: d.updatedAt })) });
+      return json({ documents: [...docs.values()].filter((d) => !d.deleted).map((d) => ({ ...d.doc, ...(d.ownerId !== undefined ? { ownerId: d.ownerId } : {}), updatedAt: d.updatedAt })) });
     }
     if (method === 'PUT') {
       if (refuse) return json({ error: refuse }, 403);
@@ -51,6 +51,34 @@ beforeEach(async () => {
   store = await import('./documentsStoreService');
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+describe('document owner ids', () => {
+  it('keeps the owner the server reported next to the document, not inside it', async () => {
+    api.docs.set('a', { doc: makeDoc('a'), updatedAt: '2026-01-01T00:00:00.000Z', deleted: false, ownerId: 'usr-ada' });
+    api.docs.set('b', { doc: makeDoc('b'), updatedAt: '2026-01-02T00:00:00.000Z', deleted: false, ownerId: null });
+    await store.loadDocuments();
+    expect(store.getDocumentOwnerId('a')).toBe('usr-ada');
+    expect(store.getDocumentOwnerId('b')).toBeNull(); // the server says: nobody owns it
+    expect('ownerId' in store.getDocument('a')!).toBe(false); // so it can never be sent back or stored in the document
+  });
+  it('knows nothing about the owner of a document it has not loaded', async () => {
+    await store.loadDocuments();
+    expect(store.getDocumentOwnerId('nope')).toBeUndefined();
+  });
+  it('keeps the owner through the user\'s own edits', async () => {
+    api.docs.set('a', { doc: makeDoc('a'), updatedAt: '2026-01-01T00:00:00.000Z', deleted: false, ownerId: 'usr-ada' });
+    await store.loadDocuments();
+    store.saveDocument({ ...store.getDocument('a')!, sections: [] });
+    expect(store.getDocumentOwnerId('a')).toBe('usr-ada');
+  });
+  it('does not send the owner back to the server when saving', async () => {
+    api.docs.set('a', { doc: makeDoc('a'), updatedAt: '2026-01-01T00:00:00.000Z', deleted: false, ownerId: 'usr-ada' });
+    await store.loadDocuments();
+    store.saveDocument(store.getDocument('a')!);
+    await store.whenSaved('a');
+    expect(JSON.stringify(api.docs.get('a')!.doc)).not.toContain('usr-ada');
+  });
+});
 
 describe('documents (server-only)', () => {
   it('loads every visible document from the server, newest first', async () => {

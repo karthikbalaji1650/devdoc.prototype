@@ -80,7 +80,7 @@ export const RunTargetModal: React.FC<RunTargetModalProps> = ({ suiteTitle, onRu
             <>
               {servers.map((s) => option(s.id, s.name, s.endpointUrl))}
               {servers.length === 0 && !error && (
-                <p className="text-xs text-[var(--text-dim)]">No test servers are registered yet. An admin can add one under Data Management.</p>
+                <p className="text-xs text-[var(--text-dim)]">No test servers are registered yet. An admin can add one under Settings → System & Storage.</p>
               )}
               {error && <p role="alert" className="text-xs text-[var(--danger)]">Could not load test servers: {error}</p>}
               {option('', SIMULATED_TARGET, 'Demo only: random results, no real hardware')}

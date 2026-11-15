@@ -17,7 +17,7 @@ class TestLogin:
             "name": "Manivannan Thangavel",
             "role": "admin",
         }
-        assert "password_hash" not in user
+        assert "password" not in user
         assert re.match(r"devdoc_sid=.+HttpOnly", res.headers["set-cookie"])
 
     def test_returns_the_user_with_every_field_in_node_order(self, api: Api) -> None:

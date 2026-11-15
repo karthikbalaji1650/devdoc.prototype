@@ -111,7 +111,7 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({ suiteId, suiteTitl
           <form className="space-y-3 border-t border-[var(--border)] bg-[var(--panel-alt)] px-5 py-4" onSubmit={(e) => { e.preventDefault(); void add(); }}>
             <h3 className="text-xs font-semibold">Add a schedule</h3>
             {servers.length === 0 && schedules !== null ? (
-              <p className="text-xs text-[var(--text-dim)]">Scheduled runs need a registered test server. An admin can add one under Data Management.</p>
+              <p className="text-xs text-[var(--text-dim)]">Scheduled runs need a registered test server. An admin can add one under Settings → System & Storage.</p>
             ) : (
               <>
                 <div className="grid gap-3 sm:grid-cols-3">

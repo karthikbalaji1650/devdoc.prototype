@@ -7,7 +7,7 @@ from app.core.jscompat import js_dumps, js_iso_date, js_opt, js_spread, js_truth
 from app.db.params import pg_param
 from app.models.document import DocumentRecord, DocumentWrite
 from app.models.user import User
-from app.repositories.base import DocumentRepository
+from app.repositories.base import DocumentRepository, UserRepository
 from app.repositories.document_history import DocumentHistoryStore
 from app.services.permissions import can_delete_document, can_edit_document, is_admin, is_visible
 
@@ -22,6 +22,8 @@ def _with_updated_at(record: DocumentRecord) -> dict[str, Any]:
     # updatedAt lets the client tell a document it already has apart from
     # one that changed on the server since (syncFromBackend on the frontend).
     document = js_spread(record.document_json)
+    # Who may edit it, so the UI can decide by user id the way the server does. Never stored in the document.
+    document["ownerId"] = record.owner_id
     document["updatedAt"] = js_iso_date(record.updated_at)
     return document
 
@@ -35,9 +37,37 @@ def _iso(moment: datetime) -> str:
 
 
 class DocumentService:
-    def __init__(self, documents: DocumentRepository, history: DocumentHistoryStore) -> None:
+    def __init__(self, documents: DocumentRepository, history: DocumentHistoryStore, users: UserRepository) -> None:
         self._documents = documents
         self._history = history
+        self._users = users
+
+    async def _owner_and_author(
+        self, user: User, requested_author: Any, existing: DocumentRecord | None
+    ) -> tuple[str | None, str]:
+        """Who owns the saved document, and the author name shown on it.
+
+        A non-admin can only save as themselves: they own what they save, and
+        cannot use an edit to hand a document to someone else and lock
+        themselves out. An admin may name the author. The name is looked up
+        once, here, and must match exactly one user; if it is unchanged from
+        what is already on the document, the current owner is kept as it is.
+        """
+        if not is_admin(user):
+            return user.id, user.name
+        wanted = requested_author if js_truthy(requested_author) else user.name
+        if not isinstance(wanted, str):
+            raise ApiError(400, "author must be text.")
+        if existing is not None and wanted == existing.author:
+            return existing.owner_id, wanted
+        if wanted.strip().lower() == user.name.strip().lower():
+            return user.id, user.name
+        matches = await self._users.find_by_name(wanted)
+        if not matches:
+            raise ApiError(400, f'There is no user named "{wanted}". Choose an existing user as the author.')
+        if len(matches) > 1:
+            raise ApiError(409, f'More than one user is named "{wanted}", so the author cannot be chosen by name.')
+        return matches[0].id, matches[0].name
 
     async def _snapshot(self, record: DocumentRecord, label: str, user: User) -> None:
         now = datetime.now(UTC)
@@ -86,11 +116,7 @@ class DocumentService:
         if existing is not None and not can_edit_document(user, existing):
             raise ApiError(403, "You can only edit documents you authored.")
 
-        # A non-admin cannot author on someone else's behalf, and cannot use
-        # an edit to hand a document to a different author and lock
-        # themselves out.
-        requested_author = js_opt(metadata, "author")
-        author = (requested_author if js_truthy(requested_author) else user.name) if is_admin(user) else user.name
+        owner_id, author = await self._owner_and_author(user, js_opt(metadata, "author"), existing)
         saved_metadata = js_spread(metadata)
         saved_metadata["id"] = document_id
         saved_metadata["author"] = author
@@ -106,6 +132,7 @@ class DocumentService:
                 title=pg_param(saved_metadata.get("title")),
                 subtitle=pg_param(saved_metadata.get("subtitle")),
                 author=pg_param(author),
+                owner_id=owner_id,
                 department=pg_param(saved_metadata.get("department")),
                 doc_date=pg_param(date) if js_truthy(date) else None,
                 version=pg_param(saved_metadata.get("version")),
@@ -154,4 +181,8 @@ class DocumentService:
         if snapshot is None:
             raise ApiError(404, "That version is no longer in the history.")
         await self._snapshot(record, "Before restore", user)
-        return await self.save(user, document_id, snapshot["doc"])
+        # Restoring brings back the content, not the old author or owner.
+        restored = snapshot["doc"]
+        if isinstance(restored, dict) and isinstance(restored.get("metadata"), dict):
+            restored = {**restored, "metadata": {**restored["metadata"], "author": record.author}}
+        return await self.save(user, document_id, restored)

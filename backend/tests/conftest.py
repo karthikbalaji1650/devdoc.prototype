@@ -44,6 +44,9 @@ class Agent:
     def delete(self, url: str, **kw: Any) -> httpx.Response:
         return self.request("DELETE", url, **kw)
 
+    def patch(self, url: str, **kw: Any) -> httpx.Response:
+        return self.request("PATCH", url, **kw)
+
 
 @dataclass
 class Api:

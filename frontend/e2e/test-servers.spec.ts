@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signInThroughBackend, startStack, type Stack } from './backendHarness';
+import { openSystemAndStorage } from './helpers';
 
 // DDS-SRS-019 / 075: an admin registers a remote test server; its API key
 // is stored encrypted and never shown again; the connection check calls
@@ -12,7 +13,7 @@ test.beforeEach(async () => { await stack.reset(); });
 test('an admin registers, tests, edits and deletes a test server', async ({ page }) => {
   const [admin] = stack.users;
   await signInThroughBackend(page, stack, admin);
-  await page.getByRole('button', { name: 'Data Management' }).click();
+  await openSystemAndStorage(page);
 
   await page.getByRole('button', { name: 'Add server' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Lab Test PC 1');

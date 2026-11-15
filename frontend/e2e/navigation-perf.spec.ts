@@ -23,7 +23,6 @@ const SCREENS: { name: string; text: string }[] = [
   { name: 'Incident Tracker', text: 'Incident Reporting & Tracking System' },
   { name: 'Reviewers Log', text: 'Document Reviewers Log' },
   { name: 'Coder', text: 'VS Code + Cline Agent' },
-  { name: 'Data Management', text: 'Download server backup' },
   { name: 'Settings', text: 'Your account information from the active session.' },
   { name: 'Dashboard', text: 'Total Docs' },
 ];

@@ -33,7 +33,7 @@ export function loginWithCredentials(email: string, _pass: string): UserSession 
     email,
     title: 'Senior Systems Engineer',
     department: 'Engineering Organization',
-    role: 'firmware-lead',
+    role: 'user',
     avatarBg: 'from-blue-600 to-indigo-600',
     initials: email.slice(0, 2).toUpperCase()
   };

@@ -1,51 +1,97 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import type { DocumentModel, DocSection, SectionType } from './types/document';
-import type { AppView, OperationsTab } from './types/appState';
-import type { UserProfile } from './types/auth';
-import type { IncidentItem } from './types/operations';
-import type { SettingsTab } from './components/settings/SettingsPage';
-import { TEMPLATE_REGISTRY, getDefaultDocument } from './templates';
-import { HeaderNav } from './components/HeaderNav';
-import { DocumentSidebar } from './components/DocumentSidebar';
-import { SectionEditorContainer } from './components/SectionEditorContainer';
-import { MetadataEditor } from './components/editors/MetadataEditor';
-import { DocumentPreview } from './components/DocumentPreview';
-import { AiRephraseModal } from './components/ai/AiRephraseModal';
-import { AiSettingsModal } from './components/ai/AiSettingsModal';
-import { LoginPage } from './components/auth/LoginPage';
-import { AppSidebar } from './components/AppSidebar';
-import { DocumentsListPage } from './components/documents/DocumentsListPage';
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
+import type { DocumentModel, DocSection, SectionType } from "./types/document";
+import type { AppView, OperationsTab } from "./types/appState";
+import type { UserProfile } from "./types/auth";
+import type { IncidentItem } from "./types/operations";
+import type { SettingsTab } from "./components/settings/SettingsPage";
+import { TEMPLATE_REGISTRY, getDefaultDocument } from "./templates";
+import { startsOnReleases, useReleasesUrl } from "./hooks/useReleasesUrl";
+import { HeaderNav } from "./components/HeaderNav";
+import { DocumentSidebar } from "./components/DocumentSidebar";
+import { SectionEditorContainer } from "./components/SectionEditorContainer";
+import { MetadataEditor } from "./components/editors/MetadataEditor";
+import { DocumentPreview } from "./components/DocumentPreview";
+import { AiRephraseModal } from "./components/ai/AiRephraseModal";
+import { AiSettingsModal } from "./components/ai/AiSettingsModal";
+import { LoginPage } from "./components/auth/LoginPage";
+import { AppSidebar } from "./components/AppSidebar";
+import { DocumentsListPage } from "./components/documents/DocumentsListPage";
 import {
-  listDocuments, getDocument, saveDocument, generateDocumentId, moveDocumentToBin, moveSectionToBin,
-  loadDocuments, resetDocuments, restoreSnapshot, useDocuments, DOCUMENT_SAVE_ERROR_EVENT,
-} from './services/documentsStoreService';
-import { DocBinModal } from './components/documents/DocBinModal';
-import { VersionHistoryModal } from './components/documents/VersionHistoryModal';
-import { getStoredSession, loginWithProfile, logout } from './services/authService';
-import { checkBackendSession, isBackendConfigured, logoutBackend } from './services/backendAuthService';
-import { createDebouncedSaver } from './services/autosave';
-import { buildTrackedDocuments, filterTracked, type TrackedStatus } from './services/documentStats';
-import { getStoredReviewersLog, reviewersLog } from './services/reviewersLogService';
-import { useSharedCollection } from './services/sharedCollection';
-import { canEditDocument, canDeleteDocument, isAdmin, visibleDocumentsFor } from './services/permissions';
+  listDocuments,
+  getDocument,
+  getDocumentOwnerId,
+  saveDocument,
+  generateDocumentId,
+  moveDocumentToBin,
+  moveSectionToBin,
+  loadDocuments,
+  resetDocuments,
+  restoreSnapshot,
+  useDocuments,
+  DOCUMENT_SAVE_ERROR_EVENT,
+} from "./services/documentsStoreService";
+import { DocBinModal } from "./components/documents/DocBinModal";
+import { VersionHistoryModal } from "./components/documents/VersionHistoryModal";
+import {
+  getStoredSession,
+  loginWithProfile,
+  logout,
+} from "./services/authService";
+import {
+  checkBackendSession,
+  isBackendConfigured,
+  logoutBackend,
+} from "./services/backendAuthService";
+import { createDebouncedSaver } from "./services/autosave";
+import {
+  buildTrackedDocuments,
+  filterTracked,
+  type TrackedStatus,
+} from "./services/documentStats";
+import {
+  getStoredReviewersLog,
+  reviewersLog,
+} from "./services/reviewersLogService";
+import { useSharedCollection } from "./services/sharedCollection";
+import {
+  canEditDocument,
+  canDeleteDocument,
+  isAdmin,
+  visibleDocumentsFor,
+} from "./services/permissions";
 
-import { saveAs } from 'file-saver';
-import { 
+import { saveAs } from "file-saver";
+import {
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle,
   ShieldAlert,
   ArchiveRestore,
-  History
-} from 'lucide-react';
+  History,
+} from "lucide-react";
 
 // Heavy screens load on demand so the login/document screens ship a much
 // smaller first bundle.
-const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
-const LandingHub = lazy(() => import('./components/hub/LandingHub').then((m) => ({ default: m.LandingHub })));
-const OperationsLayout = lazy(() => import('./components/operations/OperationsLayout').then((m) => ({ default: m.OperationsLayout })));
-const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const CoderView = lazy(() => import('./components/coder/CoderView').then((m) => ({ default: m.CoderView })));
+const DashboardPage = lazy(() =>
+  import("./components/dashboard/DashboardPage").then((m) => ({
+    default: m.DashboardPage,
+  })),
+);
+const OperationsLayout = lazy(() =>
+  import("./components/operations/OperationsLayout").then((m) => ({
+    default: m.OperationsLayout,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("./components/settings/SettingsPage").then((m) => ({
+    default: m.SettingsPage,
+  })),
+);
+const CoderView = lazy(() =>
+  import("./components/coder/CoderView").then((m) => ({
+    default: m.CoderView,
+  })),
+);
 
 const PageLoading: React.FC = () => (
   <div className="flex h-screen items-center justify-center bg-[var(--bg)] text-xs font-mono uppercase tracking-[0.14em] text-[var(--text-dim)]">
@@ -63,31 +109,44 @@ export const App: React.FC = () => {
   // App routing state
   const [currentApp, setCurrentApp] = useState<AppView>(() => {
     const session = getStoredSession();
-    return session ? 'dashboard' : 'login';
+    // A link to a release (/releases/...) opens Release Master straight away.
+    return session ? (startsOnReleases() ? "operations" : "dashboard") : "login";
   });
 
-  const [activeOpsTab, setActiveOpsTab] = useState<OperationsTab>('incidents');
-  // Last Settings tab other than System & Storage, which is its own
-  // (admin-only) 'data-management' view.
-  const [settingsTab, setSettingsTab] = useState<Exclude<SettingsTab, 'data'>>('profile');
+  const [activeOpsTab, setActiveOpsTab] = useState<OperationsTab>(() =>
+    startsOnReleases() ? "releases" : "incidents",
+  );
+  // The Settings tab last opened.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
 
   // Document model state
   // The document being edited. Every saved document lives on the server
   // (documentsStoreService); this is only the open one's working copy.
-  const [document, setDocument] = useState<DocumentModel>(() => getDefaultDocument());
+  const [document, setDocument] = useState<DocumentModel>(() =>
+    getDefaultDocument(),
+  );
 
   // null = showing the documents list; a real id = editing that document
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
-  const [activeSectionId, setActiveSectionId] = useState<string | 'metadata'>('metadata');
-  const [viewMode, setViewMode] = useState<'paginated' | 'continuous'>('paginated');
+  const [activeSectionId, setActiveSectionId] = useState<string | "metadata">(
+    "metadata",
+  );
+  const [viewMode, setViewMode] = useState<"paginated" | "continuous">(
+    "paginated",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [documentSidebarWidth, setDocumentSidebarWidth] = useState(320);
-  const [activeTab, setActiveTab] = useState<'split' | 'editor-only' | 'preview-only'>('split');
+  const [activeTab, setActiveTab] = useState<
+    "split" | "editor-only" | "preview-only"
+  >("split");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [docBinOpen, setDocBinOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Set when the dashboard sends you to the list narrowed to one status.
-  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<TrackedStatus, 'OTHER'> | null>(null);
+  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<
+    TrackedStatus,
+    "OTHER"
+  > | null>(null);
   // Documents are loaded from the server; re-render when they load or change.
   const { version: documentListVersion } = useDocuments();
   // The documents list shows review status from the shared reviewers log: re-render once it loads.
@@ -96,15 +155,19 @@ export const App: React.FC = () => {
   // AI Modal States
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
-  const [aiInitialText, setAiInitialText] = useState('');
-  const [aiApplyCallback, setAiApplyCallback] = useState<((newText: string) => void) | null>(null);
+  const [aiInitialText, setAiInitialText] = useState("");
+  const [aiApplyCallback, setAiApplyCallback] = useState<
+    ((newText: string) => void) | null
+  >(null);
 
   // Auto-save the open document to the server. Saves are debounced so a
   // burst of keystrokes sends the document once, not once per keystroke.
   // Anything that reads the saved copy (or leaves the page / editor) calls
   // flush() first so no edit is lost. The server keeps version history.
   const autosaverRef = useRef(
-    createDebouncedSaver<DocumentModel>((doc) => { saveDocument(doc); }, 400)
+    createDebouncedSaver<DocumentModel>((doc) => {
+      saveDocument(doc);
+    }, 400),
   );
 
   // Signing in (or a page load with a stored session) loads that user's
@@ -120,13 +183,15 @@ export const App: React.FC = () => {
     if (!isBackendConfigured() || !getStoredSession()) return;
     let cancelled = false;
     void checkBackendSession().then((result) => {
-      if (cancelled || result !== 'signed-out') return;
+      if (cancelled || result !== "signed-out") return;
       logout();
       resetDocuments();
       setCurrentUser(null);
-      setCurrentApp('login');
+      setCurrentApp("login");
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on page load
   }, []);
 
@@ -146,12 +211,14 @@ export const App: React.FC = () => {
   useEffect(() => {
     const saver = autosaverRef.current;
     const flush = () => saver.flush();
-    const onVisibility = () => { if (window.document.visibilityState === 'hidden') flush(); };
-    window.addEventListener('pagehide', flush);
-    window.document.addEventListener('visibilitychange', onVisibility);
+    const onVisibility = () => {
+      if (window.document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    window.document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener('pagehide', flush);
-      window.document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener("pagehide", flush);
+      window.document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
@@ -162,10 +229,10 @@ export const App: React.FC = () => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!autosaverRef.current.hasPending()) return;
       e.preventDefault();
-      e.returnValue = '';
+      e.returnValue = "";
     };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // A save the server refused or never received: say so, rather than let
@@ -179,7 +246,8 @@ export const App: React.FC = () => {
       setTimeout(() => setToastMessage(null), 8000);
     };
     window.addEventListener(DOCUMENT_SAVE_ERROR_EVENT, onSaveError);
-    return () => window.removeEventListener(DOCUMENT_SAVE_ERROR_EVENT, onSaveError);
+    return () =>
+      window.removeEventListener(DOCUMENT_SAVE_ERROR_EVENT, onSaveError);
   }, []);
 
   const showToast = (msg: string) => {
@@ -193,10 +261,13 @@ export const App: React.FC = () => {
   // the editor is not opened on a document that would never be kept.
   const openDocumentInEditor = (doc: DocumentModel): boolean => {
     const id = doc.metadata.id || generateDocumentId();
-    const docWithId: DocumentModel = { ...doc, metadata: { ...doc.metadata, id } };
+    const docWithId: DocumentModel = {
+      ...doc,
+      metadata: { ...doc.metadata, id },
+    };
     if (!saveDocument(docWithId)) return false;
     setDocument(docWithId);
-    setActiveSectionId('metadata');
+    setActiveSectionId("metadata");
     setActiveDocumentId(id);
     return true;
   };
@@ -204,11 +275,11 @@ export const App: React.FC = () => {
   const handleOpenDocument = (id: string) => {
     const doc = getDocument(id);
     if (!doc) {
-      showToast('Could not find that document.');
+      showToast("Could not find that document.");
       return;
     }
     setDocument(doc);
-    setActiveSectionId('metadata');
+    setActiveSectionId("metadata");
     setActiveDocumentId(id);
   };
 
@@ -216,10 +287,11 @@ export const App: React.FC = () => {
     const tmpl = TEMPLATE_REGISTRY[0];
     const newDoc = tmpl.getBlankDoc();
     newDoc.metadata.id = generateDocumentId();
-    newDoc.metadata.author = currentUser?.name || 'Unknown';
-    newDoc.metadata.status = 'DRAFT';
-    newDoc.metadata.date = new Date().toISOString().split('T')[0];
-    if (openDocumentInEditor(newDoc)) showToast(`Created "${newDoc.metadata.title || 'New Document'}"`);
+    newDoc.metadata.author = currentUser?.name || "Unknown";
+    newDoc.metadata.status = "DRAFT";
+    newDoc.metadata.date = new Date().toISOString().split("T")[0];
+    if (openDocumentInEditor(newDoc))
+      showToast(`Created "${newDoc.metadata.title || "New Document"}"`);
   };
 
   const handleBackToDocumentsList = () => {
@@ -233,13 +305,19 @@ export const App: React.FC = () => {
     const doc = getDocument(id);
     if (!doc) return;
     // Same rule as editing (#2/#4): only the author or an admin may delete.
-    if (!canDeleteDocument(currentUser, doc)) {
-      showToast('You can only delete documents you authored.');
+    if (!canDeleteDocument(currentUser, doc, getDocumentOwnerId(id))) {
+      showToast("You can only delete documents you authored.");
       return;
     }
     moveDocumentToBin(doc).then(
-      () => showToast(`Moved "${doc.metadata.title || 'Untitled Document'}" to Doc Bin.`),
-      (err: unknown) => showToast(`⚠️ Not moved to the Doc Bin: ${err instanceof Error ? err.message : String(err)}`),
+      () =>
+        showToast(
+          `Moved "${doc.metadata.title || "Untitled Document"}" to Doc Bin.`,
+        ),
+      (err: unknown) =>
+        showToast(
+          `⚠️ Not moved to the Doc Bin: ${err instanceof Error ? err.message : String(err)}`,
+        ),
     );
   };
 
@@ -247,7 +325,7 @@ export const App: React.FC = () => {
   const handleLogin = (profile: UserProfile) => {
     loginWithProfile(profile);
     setCurrentUser(profile);
-    setCurrentApp('dashboard');
+    setCurrentApp("dashboard");
     showToast(`Welcome, ${profile.name}!`);
   };
 
@@ -260,8 +338,8 @@ export const App: React.FC = () => {
     logout();
     resetDocuments();
     setCurrentUser(null);
-    setCurrentApp('login');
-    showToast('Logged out successfully.');
+    setCurrentApp("login");
+    showToast("Logged out successfully.");
   };
 
   const handleUpdateAvatar = (avatarUrl?: string) => {
@@ -276,7 +354,7 @@ export const App: React.FC = () => {
 
   const handleLaunchApp = (app: AppView, opsTab?: OperationsTab) => {
     setCurrentApp(app);
-    if (app === 'doccraft') {
+    if (app === "doccraft") {
       // "Document Editor" in the sidebar is a launcher, not "resume last
       // doc" - always land on the documents list (flush so it shows the
       // latest edit).
@@ -289,22 +367,30 @@ export const App: React.FC = () => {
     }
   };
 
+  // Release Master lives at /releases/...: links, bookmarks and Back work.
+  useReleasesUrl(currentApp, activeOpsTab, handleLaunchApp, Boolean(currentUser));
+
   // Dashboard drill-downs: a status card opens the list for that status,
   // an activity row opens that document directly.
-  const handleOpenDocumentsByStatus = (status: Exclude<TrackedStatus, 'OTHER'> | null) => {
+  const handleOpenDocumentsByStatus = (
+    status: Exclude<TrackedStatus, "OTHER"> | null,
+  ) => {
     autosaverRef.current.flush();
     setDocumentsStatusFilter(status);
     setActiveDocumentId(null);
-    setCurrentApp('doccraft');
+    setCurrentApp("doccraft");
   };
 
   const handleOpenDocumentFromDashboard = (id: string) => {
     const doc = getDocument(id);
-    if (!doc) { showToast('Could not find that document.'); return; }
+    if (!doc) {
+      showToast("Could not find that document.");
+      return;
+    }
     setDocument(doc);
-    setActiveSectionId('metadata');
+    setActiveSectionId("metadata");
     setActiveDocumentId(id);
-    setCurrentApp('doccraft');
+    setCurrentApp("doccraft");
   };
 
   // Cross-App Incident -> RCA Document Generator
@@ -316,71 +402,78 @@ export const App: React.FC = () => {
         subtitle: `Investigation, Code Mitigations & Resolution Matrix for ${incident.id}`,
         docNumber: incident.jiraTicket || incident.id,
         author: incident.owner,
-        department: 'Platform Systems Engineering',
-        date: new Date().toISOString().split('T')[0],
-        version: '1.0',
-        classification: 'INTERNAL ONLY',
-        status: incident.status === 'Resolved' ? 'APPROVED' : 'IN_REVIEW',
-        templateType: 'technical-analysis',
-        logoUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><rect width="40" height="40" y="10" rx="8" fill="%232563EB"/><path d="M14 24h12v12H14z" fill="white"/><path d="M20 18v6m0 12v6m-6-12H8m24 0h-6" stroke="white" stroke-width="2" stroke-linecap="round"/><text x="50" y="38" fill="%231E3A8A" font-family="Arial" font-weight="bold" font-size="20">FIRMWARE</text></svg>',
-        logoPosition: 'center',
-        tags: ['RCA', 'Incident', incident.severity, incident.affectedSystem]
+        department: "Platform Systems Engineering",
+        date: new Date().toISOString().split("T")[0],
+        version: "1.0",
+        classification: "INTERNAL ONLY",
+        status: incident.status === "Resolved" ? "APPROVED" : "IN_REVIEW",
+        templateType: "technical-analysis",
+        logoUrl:
+          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><rect width="40" height="40" y="10" rx="8" fill="%232563EB"/><path d="M14 24h12v12H14z" fill="white"/><path d="M20 18v6m0 12v6m-6-12H8m24 0h-6" stroke="white" stroke-width="2" stroke-linecap="round"/><text x="50" y="38" fill="%231E3A8A" font-family="Arial" font-weight="bold" font-size="20">FIRMWARE</text></svg>',
+        logoPosition: "center",
+        tags: ["RCA", "Incident", incident.severity, incident.affectedSystem],
       },
       sections: [
         {
-          id: 'sec-summary',
-          title: '1. Executive Incident Summary',
+          id: "sec-summary",
+          title: "1. Executive Incident Summary",
           level: 1,
-          type: 'richText',
-          content: `On ${incident.reportedDate}, an engineering incident (${incident.id}) was detected on ${incident.affectedSystem} with severity classification **${incident.severity}**.\n\nImmediate mitigation and root-cause analysis was initiated by ${incident.owner}. Current resolution status is **${incident.status}**.`
+          type: "richText",
+          content: `On ${incident.reportedDate}, an engineering incident (${incident.id}) was detected on ${incident.affectedSystem} with severity classification **${incident.severity}**.\n\nImmediate mitigation and root-cause analysis was initiated by ${incident.owner}. Current resolution status is **${incident.status}**.`,
         },
         {
-          id: 'sec-root-cause',
-          title: '2. Root Cause Analysis (RCA)',
+          id: "sec-root-cause",
+          title: "2. Root Cause Analysis (RCA)",
           level: 1,
-          type: 'richText',
-          content: `${incident.rootCause}\n\nTechnical investigation identified error propagation across the subsystem daemon when parsing initial payload arguments.`
+          type: "richText",
+          content: `${incident.rootCause}\n\nTechnical investigation identified error propagation across the subsystem daemon when parsing initial payload arguments.`,
         },
         {
-          id: 'sec-matrix',
-          title: '3. Verification & Resolution Matrix',
+          id: "sec-matrix",
+          title: "3. Verification & Resolution Matrix",
           level: 1,
-          type: 'verificationMatrix',
+          type: "verificationMatrix",
           verificationMatrix: [
             {
-              id: '1',
+              id: "1",
               rootCause: incident.rootCause,
               fixLocation: `${incident.affectedSystem} payload parser`,
-              resolution: incident.status === 'Resolved' ? 'Code fix merged and regression verified on hardware testbed.' : 'Fix currently under review.',
-              status: incident.status === 'Resolved' ? 'PASSED' : 'PENDING'
-            }
-          ]
+              resolution:
+                incident.status === "Resolved"
+                  ? "Code fix merged and regression verified on hardware testbed."
+                  : "Fix currently under review.",
+              status: incident.status === "Resolved" ? "PASSED" : "PENDING",
+            },
+          ],
         },
         {
-          id: 'sec-signoff',
-          title: '4. Engineering Sign-off',
+          id: "sec-signoff",
+          title: "4. Engineering Sign-off",
           level: 1,
-          type: 'callout',
+          type: "callout",
           callout: {
-            type: incident.status === 'Resolved' ? 'success' : 'warning',
+            type: incident.status === "Resolved" ? "success" : "warning",
             title: `Incident ${incident.id} Status: ${incident.status}`,
-            text: `RCA document compiled automatically from Operations Hub by ${incident.owner}. Ready for formal peer review and JIRA release mapping.`
-          }
-        }
-      ]
+            text: `RCA document compiled automatically from Operations Hub by ${incident.owner}. Ready for formal peer review and JIRA release mapping.`,
+          },
+        },
+      ],
     };
 
     if (!openDocumentInEditor(rcaDoc)) return;
-    setCurrentApp('doccraft');
+    setCurrentApp("doccraft");
     showToast(`Generated RCA Document for ${incident.id}!`);
   };
 
-  const handleTriggerAi = (text: string, onApply?: (newText: string) => void) => {
+  const handleTriggerAi = (
+    text: string,
+    onApply?: (newText: string) => void,
+  ) => {
     setAiInitialText(text);
     setAiApplyCallback(() => (newText: string) => {
       if (onApply) {
         onApply(newText);
-        showToast('Applied AI rephrase!');
+        showToast("Applied AI rephrase!");
       }
     });
     setAiModalOpen(true);
@@ -390,33 +483,59 @@ export const App: React.FC = () => {
   // Requirement #2/#4: a user may only edit documents they authored;
   // admins may edit any document. Guarding here (not just visually)
   // means the restriction holds regardless of which UI path is used.
-  const canEditActiveDocument = (): boolean => canEditDocument(currentUser, document);
+  const canEditActiveDocument = (): boolean =>
+    canEditDocument(
+      currentUser,
+      document,
+      getDocumentOwnerId(document.metadata.id),
+    );
 
-  const handleUpdateMetadata = (updates: Partial<DocumentModel['metadata']>) => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    setDocument(prev => ({
+  const handleUpdateMetadata = (
+    updates: Partial<DocumentModel["metadata"]>,
+  ) => {
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    setDocument((prev) => ({
       ...prev,
-      metadata: { ...prev.metadata, ...updates }
+      metadata: { ...prev.metadata, ...updates },
     }));
   };
 
   const handleUpdateSection = (id: string, updates: Partial<DocSection>) => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    setDocument(prev => ({
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    setDocument((prev) => ({
       ...prev,
-      sections: prev.sections.map(s => (s.id === id ? { ...s, ...updates } : s))
+      sections: prev.sections.map((s) =>
+        s.id === id ? { ...s, ...updates } : s,
+      ),
     }));
   };
 
   const handleDeleteSection = (id: string) => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    const deletedSection = document.sections.find((section) => section.id === id);
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    const deletedSection = document.sections.find(
+      (section) => section.id === id,
+    );
     if (!deletedSection) return;
-    void moveSectionToBin(document, deletedSection, document.sections.findIndex((section) => section.id === id));
-    setDocument(prev => {
-      const newSections = prev.sections.filter(s => s.id !== id);
+    void moveSectionToBin(
+      document,
+      deletedSection,
+      document.sections.findIndex((section) => section.id === id),
+    );
+    setDocument((prev) => {
+      const newSections = prev.sections.filter((s) => s.id !== id);
       if (activeSectionId === id) {
-        setActiveSectionId(newSections.length > 0 ? newSections[0].id : 'metadata');
+        setActiveSectionId(
+          newSections.length > 0 ? newSections[0].id : "metadata",
+        );
       }
       return { ...prev, sections: newSections };
     });
@@ -424,33 +543,40 @@ export const App: React.FC = () => {
   };
 
   const handleDuplicateSection = (id: string) => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    setDocument(prev => {
-      const index = prev.sections.findIndex(s => s.id === id);
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    setDocument((prev) => {
+      const index = prev.sections.findIndex((s) => s.id === id);
       if (index === -1) return prev;
       const target = prev.sections[index];
       const duplicated: DocSection = {
         ...JSON.parse(JSON.stringify(target)),
         id: `sec-${Date.now()}`,
-        title: `${target.title} (Copy)`
+        title: `${target.title} (Copy)`,
       };
       const newSections = [...prev.sections];
       newSections.splice(index + 1, 0, duplicated);
       setActiveSectionId(duplicated.id);
       return { ...prev, sections: newSections };
     });
-    showToast('Section duplicated');
+    showToast("Section duplicated");
   };
 
-  const handleMoveSection = (id: string, direction: 'up' | 'down') => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    setDocument(prev => {
-      const index = prev.sections.findIndex(s => s.id === id);
+  const handleMoveSection = (id: string, direction: "up" | "down") => {
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    setDocument((prev) => {
+      const index = prev.sections.findIndex((s) => s.id === id);
       if (index === -1) return prev;
-      if (direction === 'up' && index === 0) return prev;
-      if (direction === 'down' && index === prev.sections.length - 1) return prev;
+      if (direction === "up" && index === 0) return prev;
+      if (direction === "down" && index === prev.sections.length - 1)
+        return prev;
 
-      const targetIdx = direction === 'up' ? index - 1 : index + 1;
+      const targetIdx = direction === "up" ? index - 1 : index + 1;
       const newSections = [...prev.sections];
       const [removed] = newSections.splice(index, 1);
       newSections.splice(targetIdx, 0, removed);
@@ -459,11 +585,23 @@ export const App: React.FC = () => {
   };
 
   const handleReorderSections = (draggedId: string, targetId: string) => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    setDocument(prev => {
-      const draggedIndex = prev.sections.findIndex(section => section.id === draggedId);
-      const targetIndex = prev.sections.findIndex(section => section.id === targetId);
-      if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return prev;
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    setDocument((prev) => {
+      const draggedIndex = prev.sections.findIndex(
+        (section) => section.id === draggedId,
+      );
+      const targetIndex = prev.sections.findIndex(
+        (section) => section.id === targetId,
+      );
+      if (
+        draggedIndex === -1 ||
+        targetIndex === -1 ||
+        draggedIndex === targetIndex
+      )
+        return prev;
 
       const newSections = [...prev.sections];
       const [draggedSection] = newSections.splice(draggedIndex, 1);
@@ -472,25 +610,41 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleAddSection = (level: 1 | 2 | 3, type: SectionType, title: string = 'New Section') => {
-    if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
+  const handleAddSection = (
+    level: 1 | 2 | 3,
+    type: SectionType,
+    title: string = "New Section",
+  ) => {
+    if (!canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
     const newId = `sec-${Date.now()}`;
     const newSection: DocSection = {
       id: newId,
       title,
       level,
       type,
-      content: type === 'richText' ? '' : undefined,
-      tableData: type === 'table' ? { headers: ['Parameter', 'Value'], rows: [['', '']] } : undefined,
-      codeSnippet: type === 'codeDiff' ? { filename: '', language: 'javascript', code: '', isDiff: false } : undefined,
-      testCases: type === 'testCases' ? [] : undefined,
-      verificationMatrix: type === 'verificationMatrix' ? [] : undefined,
-      callout: type === 'callout' ? { type: 'info', title: 'Note', text: '' } : undefined
+      content: type === "richText" ? "" : undefined,
+      tableData:
+        type === "table"
+          ? { headers: ["Parameter", "Value"], rows: [["", ""]] }
+          : undefined,
+      codeSnippet:
+        type === "codeDiff"
+          ? { filename: "", language: "javascript", code: "", isDiff: false }
+          : undefined,
+      testCases: type === "testCases" ? [] : undefined,
+      verificationMatrix: type === "verificationMatrix" ? [] : undefined,
+      callout:
+        type === "callout"
+          ? { type: "info", title: "Note", text: "" }
+          : undefined,
     };
 
-    setDocument(prev => ({
+    setDocument((prev) => ({
       ...prev,
-      sections: [...prev.sections, newSection]
+      sections: [...prev.sections, newSection],
     }));
     setActiveSectionId(newId);
     showToast(`Added ${title}`);
@@ -498,16 +652,21 @@ export const App: React.FC = () => {
 
   // Template Switching
   const handleLoadTemplate = (templateId: string, isBlank: boolean = false) => {
-    if (activeDocumentId && !canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-    const tmpl = TEMPLATE_REGISTRY.find(t => t.id === templateId) || TEMPLATE_REGISTRY[0];
+    if (activeDocumentId && !canEditActiveDocument()) {
+      showToast("Read-only: you can only edit documents you authored.");
+      return;
+    }
+    const tmpl =
+      TEMPLATE_REGISTRY.find((t) => t.id === templateId) ||
+      TEMPLATE_REGISTRY[0];
     const newDoc = isBlank ? tmpl.getBlankDoc() : tmpl.getSampleDoc();
     // Switching templates mid-edit replaces content, not the document's identity.
     if (activeDocumentId) {
       newDoc.metadata.id = activeDocumentId;
     }
     setDocument(newDoc);
-    setActiveSectionId('metadata');
-    showToast(`Loaded ${tmpl.name}${isBlank ? ' (Blank)' : ''}`);
+    setActiveSectionId("metadata");
+    showToast(`Loaded ${tmpl.name}${isBlank ? " (Blank)" : ""}`);
   };
 
   const handleResetSampleData = () => {
@@ -517,9 +676,11 @@ export const App: React.FC = () => {
 
   // Import / Export JSON
   const handleExportJson = () => {
-    const blob = new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' });
-    saveAs(blob, `${document.metadata.docNumber || 'document'}_draft.json`);
-    showToast('Draft project saved as JSON');
+    const blob = new Blob([JSON.stringify(document, null, 2)], {
+      type: "application/json",
+    });
+    saveAs(blob, `${document.metadata.docNumber || "document"}_draft.json`);
+    showToast("Draft project saved as JSON");
   };
 
   const handleImportJson = async (file: File) => {
@@ -527,44 +688,50 @@ export const App: React.FC = () => {
       const text = await file.text();
       const imported = JSON.parse(text);
       if (imported.metadata && imported.sections) {
-        if (openDocumentInEditor(imported)) showToast('Draft project loaded successfully');
+        if (openDocumentInEditor(imported))
+          showToast("Draft project loaded successfully");
       } else {
-        alert('Invalid document project JSON format');
+        alert("Invalid document project JSON format");
       }
     } catch (e) {
-      console.error('Failed to import JSON', e);
-      alert('Error parsing JSON file');
+      console.error("Failed to import JSON", e);
+      alert("Error parsing JSON file");
     }
   };
 
   // Upload DOCX template
   const handleUploadDocx = async (file: File) => {
     try {
-      showToast('Parsing uploaded Word template...');
-      const { parseDocxFile } = await import('./exporters/docxImporter');
+      showToast("Parsing uploaded Word template...");
+      const { parseDocxFile } = await import("./exporters/docxImporter");
       const importedDoc = await parseDocxFile(file);
-      if (openDocumentInEditor(importedDoc)) showToast(`Imported ${importedDoc.sections.length} sections from DOCX!`);
+      if (openDocumentInEditor(importedDoc))
+        showToast(
+          `Imported ${importedDoc.sections.length} sections from DOCX!`,
+        );
     } catch (e) {
-      console.error('Failed to parse docx', e);
-      alert('Could not parse Word document. Please ensure it is a valid .docx file.');
+      console.error("Failed to parse docx", e);
+      alert(
+        "Could not parse Word document. Please ensure it is a valid .docx file.",
+      );
     }
   };
 
+  const activeSection = document.sections.find((s) => s.id === activeSectionId);
+  const activeSectionIndex = document.sections.findIndex(
+    (s) => s.id === activeSectionId,
+  );
 
-
-  const activeSection = document.sections.find(s => s.id === activeSectionId);
-  const activeSectionIndex = document.sections.findIndex(s => s.id === activeSectionId);
-
-  const showEditor = (activeTab as string) !== 'preview-only';
-  const showPreview = (activeTab as string) !== 'editor-only';
+  const showEditor = (activeTab as string) !== "preview-only";
+  const showPreview = (activeTab as string) !== "editor-only";
 
   // 1. Render Login Screen
-  if (currentApp === 'login' || !currentUser) {
+  if (currentApp === "login" || !currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
   // 2. Render Dashboard (new landing page)
-  if (currentApp === 'dashboard') {
+  if (currentApp === "dashboard") {
     return (
       <Suspense fallback={<PageLoading />}>
         <DashboardPage
@@ -578,21 +745,8 @@ export const App: React.FC = () => {
     );
   }
 
-  // 3. Render Landing Hub Screen (legacy)
-  if (currentApp === 'hub') {
-    return (
-      <Suspense fallback={<PageLoading />}>
-        <LandingHub
-          user={currentUser}
-          onLaunchApp={handleLaunchApp}
-          onLogout={handleLogout}
-        />
-      </Suspense>
-    );
-  }
-
   // 4. Render Engineering Operations Suite Screen (Options 1-5 with Sidebar)
-  if (currentApp === 'operations') {
+  if (currentApp === "operations") {
     return (
       <Suspense fallback={<PageLoading />}>
         <OperationsLayout
@@ -600,13 +754,13 @@ export const App: React.FC = () => {
           onTabChange={setActiveOpsTab}
           user={currentUser}
           currentDocument={document}
-          onBackToHub={() => setCurrentApp('dashboard')}
+          onBackToHub={() => setCurrentApp("dashboard")}
           onLaunchDocCraft={(_docId, doc) => {
             if (doc) {
               setDocument(doc);
-              setActiveSectionId('metadata');
+              setActiveSectionId("metadata");
             }
-            setCurrentApp('doccraft');
+            setCurrentApp("doccraft");
           }}
           onExportIncidentToRCA={handleExportIncidentToRCA}
           onLogout={handleLogout}
@@ -617,8 +771,7 @@ export const App: React.FC = () => {
   }
 
   // 5. Render Settings Page
-  if (currentApp === 'settings' || currentApp === 'data-management') {
-    // SettingsPage itself falls back to Profile for a non-admin asking for data management.
+  if (currentApp === "settings") {
     return (
       <Suspense fallback={<PageLoading />}>
         <SettingsPage
@@ -626,23 +779,15 @@ export const App: React.FC = () => {
           onNavigate={handleLaunchApp}
           onLogout={handleLogout}
           onUpdateAvatar={handleUpdateAvatar}
-          activeTab={currentApp === 'data-management' ? 'data' : settingsTab}
-          onTabChange={(tab) => {
-            if (tab === 'data') {
-              setCurrentApp('data-management');
-            } else {
-              setSettingsTab(tab);
-              setCurrentApp('settings');
-            }
-          }}
+          activeTab={settingsTab}
+          onTabChange={setSettingsTab}
         />
       </Suspense>
     );
   }
 
-
   // 5b. Render Coder (VS Code + Cline Agent embedded iframe)
-  if (currentApp === 'coder') {
+  if (currentApp === "coder") {
     return (
       <Suspense fallback={<PageLoading />}>
         <CoderView
@@ -659,22 +804,42 @@ export const App: React.FC = () => {
     void documentListVersion;
     const userIsAdmin = isAdmin(currentUser);
     const tracked = filterTracked(
-      buildTrackedDocuments(visibleDocumentsFor(currentUser, listDocuments()), getStoredReviewersLog(), userIsAdmin),
+      buildTrackedDocuments(
+        visibleDocumentsFor(currentUser, listDocuments()),
+        getStoredReviewersLog(),
+        userIsAdmin,
+      ),
       documentsStatusFilter,
     );
     const visibleDocs = documentsStatusFilter
       ? tracked.flatMap((t) => (t.stored ? [t.stored] : []))
       : visibleDocumentsFor(currentUser, listDocuments());
-    const notStored = documentsStatusFilter ? tracked.filter((t) => !t.stored) : [];
-    const scopeBase = userIsAdmin ? 'All documents' : 'Documents currently in progress';
+    const notStored = documentsStatusFilter
+      ? tracked.filter((t) => !t.stored)
+      : [];
+    const scopeBase = userIsAdmin
+      ? "All documents"
+      : "Documents currently in progress";
     return (
       <>
         <DocumentsListPage
           user={currentUser}
           documents={visibleDocs}
-          scopeLabel={documentsStatusFilter ? `${scopeBase} · ${documentsStatusFilter.replace('_', ' ').toLowerCase()} only` : scopeBase}
-          onClearFilter={documentsStatusFilter ? () => setDocumentsStatusFilter(null) : undefined}
-          notStoredNote={notStored.length > 0 ? `${notStored.length} more tracked in the Reviewers Log but not stored on the server: ${notStored.map((t) => t.docNumber || t.title).join(', ')}` : undefined}
+          scopeLabel={
+            documentsStatusFilter
+              ? `${scopeBase} · ${documentsStatusFilter.replace("_", " ").toLowerCase()} only`
+              : scopeBase
+          }
+          onClearFilter={
+            documentsStatusFilter
+              ? () => setDocumentsStatusFilter(null)
+              : undefined
+          }
+          notStoredNote={
+            notStored.length > 0
+              ? `${notStored.length} more tracked in the Reviewers Log but not stored on the server: ${notStored.map((t) => t.docNumber || t.title).join(", ")}`
+              : undefined
+          }
           onOpen={handleOpenDocument}
           onCreate={handleCreateDocument}
           onDelete={handleMoveDocumentToBin}
@@ -706,228 +871,280 @@ export const App: React.FC = () => {
 
       {/* ── DocCraft content column ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--bg)]">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[var(--panel-alt)] text-[var(--text)] px-4 py-2.5 flex items-center gap-2 text-xs font-semibold animate-fade-in border border-[var(--success)]">
-          <CheckCircle className="w-4 h-4" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-[var(--panel-alt)] text-[var(--text)] px-4 py-2.5 flex items-center gap-2 text-xs font-semibold animate-fade-in border border-[var(--success)]">
+            <CheckCircle className="w-4 h-4" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
 
-      {/* AI Rephrase Modal */}
-      <AiRephraseModal
-        isOpen={aiModalOpen}
-        initialText={aiInitialText}
-        onClose={() => setAiModalOpen(false)}
-        onAccept={(rephrased) => {
-          if (aiApplyCallback) {
-            aiApplyCallback(rephrased);
-          }
-        }}
-        onOpenSettings={() => {
-          setAiModalOpen(false);
-          setAiSettingsOpen(true);
-        }}
-      />
-
-      {/* AI Settings Modal */}
-      <AiSettingsModal
-        isOpen={aiSettingsOpen}
-        onClose={() => setAiSettingsOpen(false)}
-      />
-
-      {/* Main Top Navigation */}
-      <HeaderNav
-        document={document}
-        user={currentUser}
-        onUpdateMetadata={handleUpdateMetadata}
-        onLoadTemplate={handleLoadTemplate}
-        onUploadDocx={handleUploadDocx}
-        onExportJson={handleExportJson}
-        onImportJson={handleImportJson}
-        onReset={handleResetSampleData}
-        viewMode={viewMode}
-        onToggleViewMode={setViewMode}
-        onOpenAiSettings={() => setAiSettingsOpen(true)}
-        onBackToHub={handleBackToDocumentsList}
-        onLaunchOperations={() => setCurrentApp('operations')}
-        onLogout={handleLogout}
-      />
-      {historyOpen && activeDocumentId && (
-        <VersionHistoryModal
-          documentId={activeDocumentId}
-          canRestore={canEditActiveDocument()}
-          onClose={() => setHistoryOpen(false)}
-          onRestore={(snap) => {
-            if (!canEditActiveDocument()) { showToast('Read-only: you can only edit documents you authored.'); return; }
-            // The server keeps the version being replaced, so the restore can be undone.
-            autosaverRef.current.flush();
-            restoreSnapshot(activeDocumentId, snap.id).then(
-              (doc) => {
-                setDocument(doc);
-                setHistoryOpen(false);
-                showToast(`Restored version from ${new Date(snap.savedAt).toLocaleString()}.`);
-              },
-              (err: unknown) => showToast(`⚠️ Not restored: ${err instanceof Error ? err.message : String(err)}`),
-            );
+        {/* AI Rephrase Modal */}
+        <AiRephraseModal
+          isOpen={aiModalOpen}
+          initialText={aiInitialText}
+          onClose={() => setAiModalOpen(false)}
+          onAccept={(rephrased) => {
+            if (aiApplyCallback) {
+              aiApplyCallback(rephrased);
+            }
+          }}
+          onOpenSettings={() => {
+            setAiModalOpen(false);
+            setAiSettingsOpen(true);
           }}
         />
-      )}
-      {docBinOpen && (
-        <DocBinModal
-          onClose={() => setDocBinOpen(false)}
-          onRestore={(restored) => {
-            if (restored.metadata.id === activeDocumentId) setDocument(restored);
-            showToast('Restored item from Doc Bin.');
-          }}
-        />
-      )}
 
-      {/* App Workspace Body */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Document Outline & Section Navigator */}
-        {sidebarOpen && (
-          <DocumentSidebar
-            sections={document.sections}
-            width={documentSidebarWidth}
-            onResize={setDocumentSidebarWidth}
-            activeSectionId={activeSectionId}
-            onSelectSection={setActiveSectionId}
-            onAddSection={handleAddSection}
-            onReorderSections={handleReorderSections}
+        {/* AI Settings Modal */}
+        <AiSettingsModal
+          isOpen={aiSettingsOpen}
+          onClose={() => setAiSettingsOpen(false)}
+        />
+
+        {/* Main Top Navigation */}
+        <HeaderNav
+          document={document}
+          user={currentUser}
+          onUpdateMetadata={handleUpdateMetadata}
+          onLoadTemplate={handleLoadTemplate}
+          onUploadDocx={handleUploadDocx}
+          onExportJson={handleExportJson}
+          onImportJson={handleImportJson}
+          onReset={handleResetSampleData}
+          viewMode={viewMode}
+          onToggleViewMode={setViewMode}
+          onOpenAiSettings={() => setAiSettingsOpen(true)}
+          onBackToHub={handleBackToDocumentsList}
+          onLaunchOperations={() => setCurrentApp("operations")}
+          onLogout={handleLogout}
+        />
+        {historyOpen && activeDocumentId && (
+          <VersionHistoryModal
+            documentId={activeDocumentId}
+            canRestore={canEditActiveDocument()}
+            onClose={() => setHistoryOpen(false)}
+            onRestore={(snap) => {
+              if (!canEditActiveDocument()) {
+                showToast(
+                  "Read-only: you can only edit documents you authored.",
+                );
+                return;
+              }
+              // The server keeps the version being replaced, so the restore can be undone.
+              autosaverRef.current.flush();
+              restoreSnapshot(activeDocumentId, snap.id).then(
+                (doc) => {
+                  setDocument(doc);
+                  setHistoryOpen(false);
+                  showToast(
+                    `Restored version from ${new Date(snap.savedAt).toLocaleString()}.`,
+                  );
+                },
+                (err: unknown) =>
+                  showToast(
+                    `⚠️ Not restored: ${err instanceof Error ? err.message : String(err)}`,
+                  ),
+              );
+            }}
+          />
+        )}
+        {docBinOpen && (
+          <DocBinModal
+            onClose={() => setDocBinOpen(false)}
+            onRestore={(restored) => {
+              if (restored.metadata.id === activeDocumentId)
+                setDocument(restored);
+              showToast("Restored item from Doc Bin.");
+            }}
           />
         )}
 
-        {/* Workspace Central Split Layout */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* View Split Switcher — persistent across Split/Editor/Preview modes */}
-          <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
-            <button
-              type="button"
-              onClick={() => { autosaverRef.current.flush(); setHistoryOpen(true); }}
-              className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--blue)] hover:text-[var(--blue)]"
-              title="Restore an earlier saved version of this document"
-            >
-              <History className="h-3.5 w-3.5" /> History
-            </button>
-            <button
-              type="button"
-              onClick={() => { autosaverRef.current.flush(); setDocBinOpen(true); }}
-              className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]"
-              title="View deleted documents and sections"
-            >
-              <ArchiveRestore className="h-3.5 w-3.5" /> Doc Bin
-            </button>
-            <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
-              <button
-                type="button"
-                onClick={() => setActiveTab('split')}
-                className={`px-2 py-1 text-[11px] font-medium ${
-                  activeTab === 'split' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                }`}
-              >
-                Split
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('editor-only')}
-                className={`px-2 py-1 text-[11px] font-medium ${
-                  activeTab === 'editor-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                }`}
-              >
-                Editor
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('preview-only')}
-                className={`px-2 py-1 text-[11px] font-medium ${
-                  activeTab === 'preview-only' ? 'bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold' : 'text-[var(--text-dim)] hover:text-[var(--success)]'
-                }`}
-              >
-                Preview
-              </button>
-            </div>
-          </div>
+        {/* App Workspace Body */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar: Document Outline & Section Navigator */}
+          {sidebarOpen && (
+            <DocumentSidebar
+              sections={document.sections}
+              width={documentSidebarWidth}
+              onResize={setDocumentSidebarWidth}
+              activeSectionId={activeSectionId}
+              onSelectSection={setActiveSectionId}
+              onAddSection={handleAddSection}
+              onReorderSections={handleReorderSections}
+            />
+          )}
 
-          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          {/* Section Form Editor Column */}
-          {showEditor && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-64px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
-              {/* Editor Sub-Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--panel-alt)] border-b border-[var(--border)] text-xs">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    title={sidebarOpen ? 'Collapse Outline' : 'Expand Outline'}
-                    className="p-1 text-[var(--text-dim)] hover:text-[var(--success)] hover:bg-[var(--panel)] transition-colors"
-                  >
-                    {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-                  </button>
-                  <span className="font-semibold text-[var(--text)]">
-                    {activeSectionId === 'metadata' ? 'Document Properties' : activeSection?.title || 'Section Editor'}
-                  </span>
-                </div>
+          {/* Workspace Central Split Layout */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* View Split Switcher — persistent across Split/Editor/Preview modes */}
+            <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--panel-alt)] shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  autosaverRef.current.flush();
+                  setHistoryOpen(true);
+                }}
+                className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--blue)] hover:text-[var(--blue)]"
+                title="Restore an earlier saved version of this document"
+              >
+                <History className="h-3.5 w-3.5" /> History
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  autosaverRef.current.flush();
+                  setDocBinOpen(true);
+                }}
+                className="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-dim)] hover:border-[var(--success)] hover:text-[var(--success)]"
+                title="View deleted documents and sections"
+              >
+                <ArchiveRestore className="h-3.5 w-3.5" /> Doc Bin
+              </button>
+              <div className="flex items-center gap-1 bg-[var(--panel)] p-0.5 border border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("split")}
+                  className={`px-2 py-1 text-[11px] font-medium ${
+                    activeTab === "split"
+                      ? "bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold"
+                      : "text-[var(--text-dim)] hover:text-[var(--success)]"
+                  }`}
+                >
+                  Split
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("editor-only")}
+                  className={`px-2 py-1 text-[11px] font-medium ${
+                    activeTab === "editor-only"
+                      ? "bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold"
+                      : "text-[var(--text-dim)] hover:text-[var(--success)]"
+                  }`}
+                >
+                  Editor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("preview-only")}
+                  className={`px-2 py-1 text-[11px] font-medium ${
+                    activeTab === "preview-only"
+                      ? "bg-[image:var(--signal-gradient)] text-[#07111d] font-semibold"
+                      : "text-[var(--text-dim)] hover:text-[var(--success)]"
+                  }`}
+                >
+                  Preview
+                </button>
               </div>
+            </div>
 
-              {!canEditActiveDocument() && (
-                <div className="px-4 py-2 bg-[#2a220b] border-b border-[var(--amber)] text-[11px] text-[var(--amber)] font-semibold flex items-center gap-2">
-                  <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                  Read-only — authored by {document.metadata.author || 'another user'}. You can only edit documents you authored.
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+              {/* Section Form Editor Column */}
+              {showEditor && (
+                <div className="flex-1 flex flex-col h-[calc(100vh-64px)] border-r border-[var(--border)] bg-[var(--panel)] overflow-hidden">
+                  {/* Editor Sub-Header */}
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--panel-alt)] border-b border-[var(--border)] text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        title={
+                          sidebarOpen ? "Collapse Outline" : "Expand Outline"
+                        }
+                        className="p-1 text-[var(--text-dim)] hover:text-[var(--success)] hover:bg-[var(--panel)] transition-colors"
+                      >
+                        {sidebarOpen ? (
+                          <PanelLeftClose className="w-4 h-4" />
+                        ) : (
+                          <PanelLeftOpen className="w-4 h-4" />
+                        )}
+                      </button>
+                      <span className="font-semibold text-[var(--text)]">
+                        {activeSectionId === "metadata"
+                          ? "Document Properties"
+                          : activeSection?.title || "Section Editor"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!canEditActiveDocument() && (
+                    <div className="px-4 py-2 bg-[#2a220b] border-b border-[var(--amber)] text-[11px] text-[var(--amber)] font-semibold flex items-center gap-2">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      Read-only — authored by{" "}
+                      {document.metadata.author || "another user"}. You can only
+                      edit documents you authored.
+                    </div>
+                  )}
+
+                  {/* Editor Body Area */}
+                  <div
+                    className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 ${!canEditActiveDocument() ? "pointer-events-none opacity-70 select-none" : ""}`}
+                  >
+                    {activeSectionId === "metadata" ? (
+                      <MetadataEditor
+                        metadata={document.metadata}
+                        onChange={handleUpdateMetadata}
+                        onTriggerAi={handleTriggerAi}
+                      />
+                    ) : activeSection ? (
+                      <SectionEditorContainer
+                        section={activeSection}
+                        onUpdate={(updates) =>
+                          handleUpdateSection(activeSection.id, updates)
+                        }
+                        onDelete={() => handleDeleteSection(activeSection.id)}
+                        onDuplicate={() =>
+                          handleDuplicateSection(activeSection.id)
+                        }
+                        onMoveUp={() =>
+                          handleMoveSection(activeSection.id, "up")
+                        }
+                        onMoveDown={() =>
+                          handleMoveSection(activeSection.id, "down")
+                        }
+                        onTriggerAi={handleTriggerAi}
+                        isFirst={activeSectionIndex === 0}
+                        isLast={
+                          activeSectionIndex === document.sections.length - 1
+                        }
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-[var(--text-dim)]">
+                        <p className="text-sm">
+                          Select a section from the outline to begin editing.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* Editor Body Area */}
-              <div className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 ${!canEditActiveDocument() ? 'pointer-events-none opacity-70 select-none' : ''}`}>
-                {activeSectionId === 'metadata' ? (
-                  <MetadataEditor
-                    metadata={document.metadata}
-                    onChange={handleUpdateMetadata}
-                    onTriggerAi={handleTriggerAi}
-                  />
-                ) : activeSection ? (
-                  <SectionEditorContainer
-                    section={activeSection}
-                    onUpdate={(updates) => handleUpdateSection(activeSection.id, updates)}
-                    onDelete={() => handleDeleteSection(activeSection.id)}
-                    onDuplicate={() => handleDuplicateSection(activeSection.id)}
-                    onMoveUp={() => handleMoveSection(activeSection.id, 'up')}
-                    onMoveDown={() => handleMoveSection(activeSection.id, 'down')}
-                    onTriggerAi={handleTriggerAi}
-                    isFirst={activeSectionIndex === 0}
-                    isLast={activeSectionIndex === document.sections.length - 1}
-                  />
-                ) : (
-                  <div className="p-8 text-center text-[var(--text-dim)]">
-                    <p className="text-sm">Select a section from the outline to begin editing.</p>
-                  </div>
-                )}
-              </div>
+              {/* High-Fidelity Live Document Preview Column */}
+              {showPreview && (
+                <DocumentPreview
+                  document={document}
+                  viewMode={viewMode}
+                  onUpdateTestCase={(sectionId, testCaseIndex, updates) => {
+                    const section = document.sections.find(
+                      (item) => item.id === sectionId,
+                    );
+                    if (!section?.testCases) return;
+                    const testCases = section.testCases.map(
+                      (testCase, index) =>
+                        index === testCaseIndex
+                          ? { ...testCase, ...updates }
+                          : testCase,
+                    );
+                    handleUpdateSection(sectionId, { testCases });
+                  }}
+                  onSelectSection={(id) => {
+                    setActiveSectionId(id);
+                    setActiveTab("split");
+                  }}
+                />
+              )}
             </div>
-          )}
-
-          {/* High-Fidelity Live Document Preview Column */}
-          {showPreview && (
-            <DocumentPreview
-              document={document}
-              viewMode={viewMode}
-              onUpdateTestCase={(sectionId, testCaseIndex, updates) => {
-                const section = document.sections.find((item) => item.id === sectionId);
-                if (!section?.testCases) return;
-                const testCases = section.testCases.map((testCase, index) => (
-                  index === testCaseIndex ? { ...testCase, ...updates } : testCase
-                ));
-                handleUpdateSection(sectionId, { testCases });
-              }}
-              onSelectSection={(id) => {
-                setActiveSectionId(id);
-                setActiveTab('split');
-              }}
-            />
-          )}
           </div>
         </div>
-      </div>
       </div>
     </div>
   );

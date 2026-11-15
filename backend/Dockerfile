@@ -21,6 +21,8 @@ RUN useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY app ./app
+COPY alembic.ini ./alembic.ini
+COPY migrations ./migrations
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PORT=8000
 
 USER app

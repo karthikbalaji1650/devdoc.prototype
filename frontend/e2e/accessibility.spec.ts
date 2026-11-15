@@ -74,14 +74,28 @@ test.describe('accessibility (axe, WCAG 2 A/AA)', () => {
     expect(await scan(page)).toEqual([]);
   });
 
-  test('release master', async ({ page }) => {
+  test('release master', async ({ page, stack }) => {
     await signInAs(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Release Master' }).first().click();
-    await expect(page.getByRole('tab', { name: /v13\.04\.00/ })).toBeVisible();
+    await expect(page.getByText(/No releases yet/)).toBeVisible();
     expect(await scan(page)).toEqual([]);
-    await page.getByRole('tab', { name: /^Builds/ }).click();
+    await page.getByRole('link', { name: 'New release' }).click();
+    await expect(page.getByRole('form', { name: 'New release' })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Add a signer' }).fill('Jud');
+    await expect(page.getByRole('listbox', { name: 'People' }).getByRole('option').first()).toBeVisible();
     expect(await scan(page)).toEqual([]);
+    // A release, and each of its tabs.
+    const people = await (await page.request.get(`${stack.apiUrl}/api/users?q=Vaishnavi`)).json();
+    const created = await page.request.post(`${stack.apiUrl}/api/releases`, {
+      data: { version: 'v1.0.0', type: 'Minor', targetDate: '2026-12-01', signerIds: [people.users[0].id] },
+    });
+    const id = (await created.json()).release.id;
+    for (const tab of ['', '/builds', '/blockers', '/notes', '/audit']) {
+      await page.goto(`/releases/${id}${tab}`);
+      await expect(page.getByRole('tablist', { name: 'Release sections' })).toBeVisible();
+      expect(await scan(page)).toEqual([]);
+    }
   });
 
   test('incident tracker', async ({ page }) => {

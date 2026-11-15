@@ -1,112 +1,120 @@
-"""Release management data in Redis (DDS-SRS-033 - 046).
+"""Release management storage (DDS-SRS-033 - 046).
 
-    dds:rel:releases              hash  release id -> release JSON
-    dds:rel:{id}:builds           hash  build id -> build JSON (RC and Final)
-    dds:rel:{id}:blockers         hash  blocker id -> blocker JSON
-    dds:rel:seq                   counter for insertion order
-    dds:rel:seeded                set once sample data has been loaded
-    dds:audit:releases:{id}       list  audit entries, oldest first (append-only)
+The service (services/releases.py) holds every rule; this is only where the
+data lives. Two implementations: Postgres (releases_postgres.py, production)
+and in memory (releases_memory.py, tests and the browser-test harness).
 
-The audit log lives under dds:audit: so the admin reset keeps it, like the
-session audit log. Nothing ever rewrites or removes an entry.
+Everything crosses this boundary as plain dicts in the API's own camelCase
+shape, so the service reads and writes the same structure the frontend sees:
+
+release   id, version, title, type, targetDate, segment, status, notes,
+          milestones [{key, name, plannedDate, actualDate}],
+          signers [{userId, name, title, department}] (creator first),
+          gateRules {minPassRate, requireNoOpenBlockers, mandatorySuiteIds},
+          blockerQuery, blockerSync, createdBy (user id), createdByName,
+          createdAt, updatedAt, cancelledReason, cancelledAt
+build     id, number, label, kind, imageName, commitSha, branchTag,
+          artifactUrl, repository, sha256, builtAt, pipelineBuildId,
+          testRunIds, gateOverride {by, byId, reason, at} | None,
+          promotedBy, promotedById, promotedAt, createdBy, createdAt,
+          signoffs {userId: {userId, userName, decision, comment, at}}
+blocker   id, key, tracker, title, url, severity, status, source, syncNote,
+          syncedAt, createdBy, updatedAt
+audit     seq, at, actorId, actor, actorRole, action, details, prevHash, hash
 """
 
-import json
-from typing import Any
-
-from redis.asyncio import Redis
-
-PREFIX = "dds:rel:"
+from collections.abc import Callable
+from typing import Any, Protocol
 
 
-def _ordered(raw: dict[str, str]) -> list[dict[str, Any]]:
-    items = [json.loads(v) for v in raw.values()]
-    items.sort(key=lambda i: i.get("_seq", 0))
-    for i in items:
-        i.pop("_seq", None)
-    return items
+class DuplicateVersion(Exception):
+    """Another release already has this version (ignoring case and spaces)."""
 
 
-def _load(raw: str | None) -> dict[str, Any] | None:
-    if raw is None:
-        return None
-    item = json.loads(raw)
-    item.pop("_seq", None)
-    return item
+class DuplicateBuild(Exception):
+    """A build with this number was registered at the same moment."""
 
 
-def audit_key(release_id: str) -> str:
-    return f"dds:audit:releases:{release_id}"
+class DuplicateBlocker(Exception):
+    """This issue is already listed on the release."""
 
 
-class ReleaseStore:
-    def __init__(self, redis: Redis) -> None:
-        self._redis = redis
+class ReleaseRepository(Protocol):
+    async def create(self, release: dict[str, Any], signer_ids: list[str]) -> None:
+        """Stores the release with its five milestones and its signers (the
+        creator first). Raises DuplicateVersion."""
+        ...
 
-    async def _put(self, key: str, item: dict[str, Any]) -> None:
-        existing = await self._redis.hget(key, item["id"])
-        seq = json.loads(existing).get("_seq") if existing else None
-        if seq is None:
-            seq = await self._redis.incr(f"{PREFIX}seq")
-        await self._redis.hset(key, item["id"], json.dumps({**item, "_seq": seq}))
+    async def get(self, release_id: str) -> dict[str, Any] | None: ...
 
-    # releases
-    async def list_releases(self) -> list[dict[str, Any]]:
-        return _ordered(await self._redis.hgetall(f"{PREFIX}releases"))
+    async def list_all(self) -> list[dict[str, Any]]:
+        """Oldest first."""
+        ...
 
-    async def get_release(self, release_id: str) -> dict[str, Any] | None:
-        return _load(await self._redis.hget(f"{PREFIX}releases", release_id))
+    async def update(self, release: dict[str, Any]) -> None:
+        """Writes the release's own fields, milestones and blocker query (not
+        its signers, builds or blockers). Raises DuplicateVersion."""
+        ...
 
-    async def put_release(self, release: dict[str, Any]) -> None:
-        await self._put(f"{PREFIX}releases", release)
+    async def cancel(self, release_id: str, reason: str) -> None: ...
 
-    async def delete_release(self, release_id: str) -> None:
-        """Removes the release with its builds and blockers; its audit log stays."""
-        async with self._redis.pipeline(transaction=True) as pipe:
-            pipe.hdel(f"{PREFIX}releases", release_id)
-            pipe.delete(f"{PREFIX}{release_id}:builds", f"{PREFIX}{release_id}:blockers")
-            await pipe.execute()
+    async def set_signers(self, release_id: str, signer_ids: list[str], added_by: str) -> None:
+        """Replaces the signers (creator first). A removed person's earlier
+        sign-offs stay stored."""
+        ...
 
-    # builds and blockers
+    async def set_blocker_sync(self, release_id: str, result: dict[str, Any]) -> None: ...
+
+    async def claim_sync(self, release_id: str, slot: int) -> bool:
+        """True once per release per slot, across API instances (044)."""
+        ...
+
+    # builds
     async def list_builds(self, release_id: str) -> list[dict[str, Any]]:
-        return _ordered(await self._redis.hgetall(f"{PREFIX}{release_id}:builds"))
+        """By number, with linked run ids and sign-offs."""
+        ...
 
-    async def get_build(self, release_id: str, build_id: str) -> dict[str, Any] | None:
-        return _load(await self._redis.hget(f"{PREFIX}{release_id}:builds", build_id))
+    async def get_build(self, release_id: str, build_id: str) -> dict[str, Any] | None: ...
 
-    async def put_build(self, release_id: str, build: dict[str, Any]) -> None:
-        await self._put(f"{PREFIX}{release_id}:builds", build)
+    async def add_build(self, release_id: str, build: dict[str, Any]) -> None:
+        """Raises DuplicateBuild."""
+        ...
 
-    async def list_blockers(self, release_id: str) -> list[dict[str, Any]]:
-        return _ordered(await self._redis.hgetall(f"{PREFIX}{release_id}:blockers"))
+    async def set_gate_override(self, release_id: str, build_id: str, by_id: str, reason: str, at: str) -> None: ...
 
-    async def get_blocker(self, release_id: str, blocker_id: str) -> dict[str, Any] | None:
-        return _load(await self._redis.hget(f"{PREFIX}{release_id}:blockers", blocker_id))
+    async def set_build_runs(self, release_id: str, build_id: str, run_ids: list[str]) -> None: ...
+
+    async def put_signoff(
+        self, release_id: str, build_id: str, user_id: str, decision: str, comment: str | None, at: str
+    ) -> None:
+        """One decision per person per build; a new one replaces the old."""
+        ...
+
+    async def promote(self, release_id: str, build_id: str, by_id: str, at: str, release_status: str) -> None:
+        """Makes the build Final and sets the release status, together."""
+        ...
+
+    # blockers
+    async def list_blockers(self, release_id: str) -> list[dict[str, Any]]: ...
+
+    async def get_blocker(self, release_id: str, blocker_id: str) -> dict[str, Any] | None: ...
 
     async def put_blocker(self, release_id: str, blocker: dict[str, Any]) -> None:
-        await self._put(f"{PREFIX}{release_id}:blockers", blocker)
+        """Inserts or replaces. Raises DuplicateBlocker."""
+        ...
 
-    async def delete_blocker(self, release_id: str, blocker_id: str) -> None:
-        await self._redis.hdel(f"{PREFIX}{release_id}:blockers", blocker_id)
+    async def delete_blocker(self, release_id: str, blocker_id: str) -> None: ...
 
-    # audit log (append-only)
-    async def audit_tail(self, release_id: str) -> dict[str, Any] | None:
-        raw = await self._redis.lindex(audit_key(release_id), -1)
-        return json.loads(raw) if raw else None
+    # audit (append-only)
+    async def append_audit(
+        self, release_id: str, make_entry: Callable[[dict[str, Any] | None], dict[str, Any]]
+    ) -> None:
+        """Builds the next entry from the current last one and stores it, with
+        no other entry added in between."""
+        ...
 
-    async def append_audit(self, release_id: str, entry: dict[str, Any]) -> None:
-        await self._redis.rpush(audit_key(release_id), json.dumps(entry))
+    async def audit(self, release_id: str) -> list[dict[str, Any]]: ...
 
-    async def audit(self, release_id: str) -> list[dict[str, Any]]:
-        return [json.loads(e) for e in await self._redis.lrange(audit_key(release_id), 0, -1)]
-
-    async def claim_sync(self, release_id: str, slot: int, ttl_s: int) -> bool:
-        """True once per release per sync slot, across API instances (044)."""
-        return bool(await self._redis.set(f"{PREFIX}{release_id}:sync:{slot}", "1", nx=True, ex=ttl_s * 2))
-
-    # sample data
-    async def claim_seed(self) -> bool:
-        return bool(await self._redis.set(f"{PREFIX}seeded", "1", nx=True))
-
-    async def is_seeded(self) -> bool:
-        return bool(await self._redis.exists(f"{PREFIX}seeded"))
+    async def export_all(self) -> list[dict[str, Any]]:
+        """Every release with builds, blockers and audit - for the admin backup."""
+        ...

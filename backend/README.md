@@ -22,8 +22,8 @@ app/
   models/          domain records (User, DocumentRecord, Job, ...)
   schemas/         Pydantic models describing the wire contract for /openapi.json
   db/              connection pool, node-postgres-compatible parameter coercion
-sql/init.sql       Postgres schema + seed data (docker-compose runs it on first start)
-tests/             pytest suite; parity/ compares against the old Node API
+migrations/        Alembic schema migrations (`uv run alembic upgrade head`); docker-compose's `migrate` service runs them
+tests/             pytest suite
 ```
 
 ## Endpoints
@@ -33,7 +33,7 @@ tests/             pytest suite; parity/ compares against the old Node API
 | `GET /api/health` | `{"ok": true}` |
 | `POST /api/auth/token` | A JWT access token for the current session (DDS-SRS-076): HS256, one hour, usable as `Authorization: Bearer` on any route, and revoked when the session signs out (each use checks the session). Key: `JWT_SECRET`, else derived from `SECRETS_KEY`. |
 | `GET /api/auth/sso/config`, `/api/auth/sso/login`, `/api/auth/sso/callback` | Single sign-on with any OpenID Connect provider (`OIDC_*`): authorization code + PKCE, state bound to a cookie, nonce, ID token verified against the provider's JWKS. Signs in only existing accounts by email; never creates users. |
-| `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | bcrypt check, random session id in an httpOnly `devdoc_sid` cookie, stored in `sessions` so logout revokes it at once. Login is rate-limited: 10 failures per IP per 15 min. |
+| `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | email + password check (password stored as typed: dev-only, see Users below), random session id in an httpOnly `devdoc_sid` cookie, stored in `sessions` so logout revokes it at once. Login is rate-limited: 10 failures per IP per 15 min. |
 | `GET/PUT/DELETE /api/documents[/:id]`, `DELETE /api/documents/:id/purge` | Each route re-checks the frontend's edit/visibility rules server-side. DELETE is a soft delete; purge removes the row. |
 | `GET /api/ai/providers`, `POST /api/ai/rephrase`, `POST /api/ai/generate-test-cases` | Proxies Gemini/OpenAI with server-side keys. |
 | `GET/POST /api/test-servers`, `PUT/DELETE /api/test-servers/:id`, `POST /api/test-servers/:id/check` | Remote test servers (DDS-SRS-019): endpoint URL, auth (none / API key / Basic / OAuth2 client credentials) and payload parameters. Admins manage them. Credentials are encrypted at rest with AES-256-GCM under `SECRETS_KEY` (DDS-SRS-075) and never returned. `check` authenticates and sends GET to the endpoint, reporting only status and timing. |
@@ -41,6 +41,8 @@ tests/             pytest suite; parity/ compares against the old Node API
 | `GET/POST /api/ci/tokens`, `DELETE /api/ci/tokens/:id` | CI tokens (DDS-SRS-026/027), admins only. Shown once; only the SHA-256 is stored. |
 | `POST /api/ci/runs`, `GET /api/ci/runs/:jobId`, `POST /api/ci/results` | For pipelines, with `Authorization: Bearer <CI token>`: run a stored suite on a registered test server and wait for its `outcome`, or upload a Robot `output.xml` (or JSON results) from tests the pipeline ran itself. Runs record the build (pipeline, URL, number, repository, branch, commit). Jenkins / Bitbucket setup and `ci/devdoc-ci.sh`: [docs/ci](../docs/ci/README.md). |
 | `GET /api/trackers`, `PUT/DELETE /api/trackers/:kind`, `POST /api/trackers/:kind/check` | Jira (Cloud: email + API token; Server/DC: PAT) and GitHub (or Enterprise) connections for release blockers (DDS-SRS-044), admins only; tokens sealed with `SECRETS_KEY`. |
+| `GET/POST /api/releases`, `GET/PATCH /api/releases/:id`, `PUT .../signers`, `POST .../cancel`, `.../builds`, `.../signoffs`, `.../promote`, `.../blockers`, `GET .../audit` | Release management (DDS-SRS-033 to 046), stored in Postgres (migration `0008`). Anyone signed in reads and creates; the creator is the first signer, picks 1 to 4 more, and is the only one who edits; any signer signs off, overrides gates and promotes, and every signer must approve a build first. Releases are cancelled, never deleted; the audit log is append-only (a database trigger) and hash-chained. Full contract: [docs/api-contract.md](../docs/api-contract.md#releases-session-required). |
+| `GET /api/users?q=` | People search for pickers (name, title, department only), any signed-in user. |
 | `POST /api/releases/:id/blockers/lookup`, `POST /api/releases/:id/blockers/sync` | Link an issue by key, read from the tracker; or sync the release's `blockerQuery` (Jira JQL and/or GitHub repo + label). The worker syncs active releases every 5 minutes; issues that stop matching are closed; each sync that changes something is one audit entry. |
 | `GET/POST /api/repos`, `POST /api/repos/:name/pull`, `DELETE /api/repos/:name` | Connect existing code (DDS-SRS-030): clone a Git repository into the code editor's workspace (`repos/<name>`) through its file bridge (`BRIDGE_URL`, `BRIDGE_TOKEN`), pull, remove. A private repository's token is sealed with `SECRETS_KEY` and reaches git only as a per-command header, never `.git/config`. |
 | `POST /api/test-exec/scripts`, `POST /api/test-exec/runs`, `GET /api/test-exec/runs/:jobId` | With `serverId`, the run goes to that registered test server using the [Test PC API](../docs/test-pc-api.md) (DDS-SRS-020). A background worker in the API polls it on the server's interval (5/10/30 s, DDS-SRS-021) and stores phase and progress (total, completed, passed, failed, %); status reads return that, never calling the Test PC, and the finished outcome is also written into the linked test run (`runId`). Status is `running`, `completed` (with results) or `failed` (with `error`). `GET /api/test-exec/runs/:jobId/events` pushes the same status as server-sent events, at once and on every change, until the run finishes (DDS-SRS-022); changes are announced over Redis pub/sub, so any API instance can serve the stream. Without it, a **mock** Test PC with in-memory state and randomized results. |
@@ -59,20 +61,37 @@ uv sync
 uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers --no-server-header
 ```
 
-This needs a Postgres reachable at `DATABASE_URL`, seeded by the repo's
-`sql/init.sql` (docker-compose does this on first start), and a Redis at
+This needs a Postgres reachable at `DATABASE_URL` with the schema applied
+(`uv run alembic upgrade head`; docker-compose's `migrate` service does this
+on every `up`), and a Redis at
 `REDIS_URL` for test management data (`docker compose up redis`). Tests
 use an in-process fake Redis, so they need neither.
 
-## Demo accounts
+## Users (dev-only, temporary)
 
-These are seeded by `sql/init.sql`. All three use the password `devdoc-demo` (local/demo use only).
+There are no built-in accounts. Create one with the command-line tool, which asks
+for name, email, password, admin yes/no, title and department (all required):
 
-| Email | Role |
-|---|---|
-| mani.thangavel@sanmina.com | admin |
-| vaishnavi.aasaithambi@sanmina.com | release-manager |
-| sahith.pattu@sanmina.com | firmware-lead |
+```
+cd backend && uv run python -m app.db.create_user                 # outside Docker, from backend/ (it reads backend/.env)
+docker compose run --rm migrate python -m app.db.create_user      # with docker-compose
+```
+
+There are two roles: `admin` and `user` (the SRS only distinguishes those).
+Positions such as "firmware lead" are not roles; they go in the title. Only
+admins manage data management and the full session audit view; releases follow
+the same rules for everyone (see above). Emails are stored
+lower-cased and must be unique.
+
+**The password is stored as typed, not hashed** (migration `0002`). This is a
+stand-in until the real user directory is connected, which will check
+passwords itself (single sign-on) or replace this table. Never put real people
+in it.
+
+**Documents belong to a user id** (`documents.owner_id`), not to a name. A
+non-admin edits only what they own; an admin edits anything. A document whose
+author could not be matched to exactly one user has no owner and is admin-only
+until an admin assigns one by saving it with that user's name as the author.
 
 ## Tests
 
@@ -85,3 +104,22 @@ TEST_DATABASE_URL=postgresql://...  uv run pytest tests/test_postgres.py   # rea
 `tests/e2e_server.py` is the API the Playwright specs `e2e/backend-login.spec.ts`
 and `e2e/remote-test-execution.spec.ts` start. It runs on in-memory repositories,
 so no database is needed.
+
+## Schema migrations (Alembic)
+
+The schema is versioned in `migrations/versions/`, applied with
+`uv run alembic upgrade head`. There is no ORM, so migrations are hand-written
+SQL (`op.execute`).
+
+```
+uv run alembic current                       # which migration this database is at
+uv run alembic revision -m "add foo table"   # new empty migration (0002_...)
+uv run alembic upgrade head                  # apply everything missing
+uv run alembic downgrade -1                  # undo the last one
+uv run alembic upgrade head --sql            # print the SQL instead of running it
+```
+
+Rules: never edit the schema by hand or edit a migration that has been merged;
+write a new one, with a working `downgrade()`. `0001_baseline` creates its
+tables `IF NOT EXISTS` so databases built by the old `init.sql` adopt Alembic
+with a plain `upgrade head`; later migrations must not.

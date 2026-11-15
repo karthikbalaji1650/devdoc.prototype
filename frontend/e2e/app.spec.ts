@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { test, expect, signInAs, seedDocuments, serverDocument } from './fixtures';
+import { openSystemAndStorage } from './helpers';
 
 // Runs against a real API (see fixtures.ts): documents are stored on the
 // server only. The browser-only demo is covered by demo.spec.ts.
@@ -188,27 +189,31 @@ test.describe('crash recovery', () => {
   });
 });
 
-test.describe('data management access (DDS-SRS-007/008/011)', () => {
-  test('an admin gets a Data Management sidebar entry that opens System & Storage', async ({ page }) => {
+test.describe('System & Storage access (DDS-SRS-007/008/011)', () => {
+  test('an admin finds it under Settings (no sidebar entry), with backups and everyone\'s sign-ins', async ({ page }) => {
     await signInAs(page, 'admin');
     await page.goto('/');
-    await page.getByRole('button', { name: 'Data Management' }).click();
-    await expect(page.getByText('Download server backup')).toBeVisible();
-    await expect(page.getByText('User Session Audit Log')).toBeVisible();
-    // Settings still opens on its own first tab, not on data management.
+    await expect(page.getByRole('button', { name: 'Data Management' })).toHaveCount(0);
+    // Settings opens on its own first tab.
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByText('Download server backup')).toHaveCount(0);
+    await openSystemAndStorage(page);
+    await expect(page.getByText('Download server backup')).toBeVisible();
+    await expect(page.getByText('User Session Audit Log')).toBeVisible();
+    await expect(page.getByText('All users')).toBeVisible();
   });
 
   for (const role of ['release-manager', 'firmware-lead'] as const) {
-    test(`a ${role} cannot reach data management or the session audit log`, async ({ page }) => {
+    test(`a ${role} gets System & Storage with only their own sign-ins and none of the admin panels`, async ({ page }) => {
       await signInAs(page, role);
       await page.goto('/');
       await expect(page.getByRole('button', { name: 'Data Management' })).toHaveCount(0);
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await expect(page.getByRole('button', { name: /Profile/ }).first()).toBeVisible();
-      await expect(page.getByRole('button', { name: /System & Storage/i })).toHaveCount(0);
-      await expect(page.getByText('User Session Audit Log')).toHaveCount(0);
+      await openSystemAndStorage(page);
+      await expect(page.getByText('User Session Audit Log')).toBeVisible();
+      await expect(page.getByText('Your sign-ins only')).toBeVisible();
+      await expect(page.getByText('VS Code + Cline Server URL')).toBeVisible();
+      await expect(page.getByText('Download server backup')).toHaveCount(0);
+      await expect(page.getByRole('columnheader', { name: 'User' })).toHaveCount(0);
     });
   }
 });
@@ -217,7 +222,7 @@ test.describe('server backup and reset (DDS-SRS-008)', () => {
   test('an admin downloads a backup of the server, and a typed confirmation resets it', async ({ page }) => {
     await signInAs(page, 'admin');
     await seedDocuments(page, [{ id: 'd1', title: 'Soon gone', docNumber: 'D-1', author: ADMIN }]);
-    await page.getByRole('button', { name: 'Data Management' }).click();
+    await openSystemAndStorage(page);
 
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download', exact: true }).click();

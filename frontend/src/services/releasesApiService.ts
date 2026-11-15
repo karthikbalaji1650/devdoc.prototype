@@ -1,22 +1,26 @@
 // Release management (DDS-SRS-033 - 046) on the server: /api/releases.
-// The server evaluates readiness gates and keeps the audit log; this
-// client only reads and sends changes. Every call throws with the
-// server's message on failure.
+// The server evaluates readiness gates, decides who may do what, and keeps
+// the audit log; this client only reads and sends changes. Every call throws
+// with the server's message on failure.
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 
 export type ReleaseType = 'Major' | 'Minor' | 'Patch' | 'Hotfix';
 export type ReleaseStatus = 'Planned' | 'In Progress' | 'RC Frozen' | 'Approved' | 'Deployed' | 'Cancelled';
 export const RELEASE_TYPES: ReleaseType[] = ['Major', 'Minor', 'Patch', 'Hotfix'];
-export const RELEASE_STATUSES: ReleaseStatus[] = ['Planned', 'In Progress', 'RC Frozen', 'Approved', 'Deployed', 'Cancelled'];
+/** Statuses a person can pick; cancelling is its own action. */
+export const SETTABLE_STATUSES: ReleaseStatus[] = ['Planned', 'In Progress', 'RC Frozen', 'Approved', 'Deployed'];
 export const SEVERITIES = ['Blocker', 'Critical', 'Major', 'Minor'] as const;
 export const REPOSITORIES = ['Artifactory', 'Nexus', 'AWS ECR', 'Other'] as const;
+/** A release has the creator plus 1 to 4 others. */
+export const MIN_SIGNERS = 2;
+export const MAX_SIGNERS = 5;
 
 export interface Milestone { key: string; name: string; plannedDate: string | null; actualDate: string | null }
-export interface SignoffRole { role: string; userName: string | null }
+export interface Signer { userId: string; name: string; title: string | null; department: string | null }
 export interface GateRules { minPassRate: number; requireNoOpenBlockers: boolean; mandatorySuiteIds: string[] }
 export interface GateCheck { id: string; label: string; passed: boolean; detail: string }
-export interface Signoff { userName: string; decision: 'Approved' | 'Rejected'; comment: string | null; at: string }
+export interface Signoff { userId: string; userName: string; decision: 'Approved' | 'Rejected'; comment: string | null; at: string }
 
 export interface Build {
   id: string;
@@ -32,32 +36,40 @@ export interface Build {
   builtAt: string | null;
   pipelineBuildId: string | null;
   testRunIds: string[];
+  /** By user id. */
   signoffs: Record<string, Signoff>;
-  gateOverride?: { by: string; reason: string; at: string };
-  promotedBy?: string;
-  promotedAt?: string;
+  gateOverride: { by: string; byId: string; reason: string; at: string } | null;
+  promotedBy: string | null;
+  promotedAt: string | null;
+  createdByName: string | null;
   createdAt: string;
   gates: {
     checks: GateCheck[]; passed: boolean; overridden: boolean; ready: boolean;
     passRate: number | null; coverage: number | null; linkedRuns: number;
     verification: 'Pending' | 'Verified' | 'Failed';
   };
-  signoffStatus: { required: number; approved: number; complete: boolean };
+  signoffStatus: { required: number; approved: number; rejected: number; waitingFor: string[]; complete: boolean };
 }
 
 export interface Blocker {
   id: string; key: string; tracker: 'Jira' | 'GitHub'; title: string | null; url: string | null;
   severity: (typeof SEVERITIES)[number]; status: 'Open' | 'Closed';
-  /** Read from Jira / GitHub (044): "synced" from the release's blocker query,
-   * "linked" by key; kept current by each sync. Absent: entered by hand. */
-  source?: 'synced' | 'linked';
-  syncedAt?: string;
-  syncNote?: string;
+  /** "manual": entered by hand. "synced": from the release's blocker query.
+   * "linked": by key. The last two are read from Jira / GitHub (044) and
+   * kept current by each sync. */
+  source: 'manual' | 'synced' | 'linked';
+  syncedAt: string | null;
+  syncNote: string | null;
 }
 
 /** Which Jira / GitHub issues are the release's blockers (044). */
 export interface BlockerQuery { jira?: { jql: string }; github?: { repo: string; label: string } }
 export interface BlockerSync { at: string; added: string[]; closed: string[]; reopened: string[]; error: string | null }
+
+export interface ReleaseMetrics {
+  milestonesDone: number; milestonesTotal: number; openBlockers: number; builds: number;
+  latestBuild: string | null; latestPassRate: number | null; latestCoverage: number | null; finalBuild: string | null;
+}
 
 export interface Release {
   id: string;
@@ -67,24 +79,40 @@ export interface Release {
   targetDate: string;
   segment: string | null;
   status: ReleaseStatus;
-  milestones: Milestone[];
-  signoffRoles: SignoffRole[];
-  gateRules: GateRules;
   notes: string;
-  documents: { id: string; title: string }[];
-  blockerQuery?: BlockerQuery | null;
-  blockerSync?: BlockerSync;
+  milestones: Milestone[];
+  /** The creator first. */
+  signers: Signer[];
+  gateRules: GateRules;
+  blockerQuery: BlockerQuery | null;
+  blockerSync: BlockerSync | null;
   createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  cancelledReason: string | null;
+  cancelledAt: string | null;
+  /** The signed-in user is the creator (and the release is not cancelled). */
+  canEdit: boolean;
+  /** The signed-in user is one of the signers. */
+  isSigner: boolean;
+  /** A build is Final or the release is cancelled, so the signers can no longer change. */
+  signersLocked: boolean;
   builds: Build[];
   blockers: Blocker[];
-  metrics: {
-    milestonesDone: number; milestonesTotal: number; openBlockers: number; builds: number;
-    latestBuild: string | null; latestPassRate: number | null; latestCoverage: number | null; finalBuild: string | null;
-  };
+  metrics: ReleaseMetrics;
+}
+
+/** One line of the release list. */
+export interface ReleaseLine {
+  id: string; version: string; title: string | null; type: ReleaseType; status: ReleaseStatus;
+  targetDate: string; segment: string | null; createdBy: string; createdByName: string;
+  signerCount: number; canEdit: boolean; isSigner: boolean;
+  metrics: { builds: number; latestBuild: string | null; finalBuild: string | null; openBlockers: number };
 }
 
 export interface AuditEntry {
-  seq: number; at: string; actor: string; actorRole: string; action: string;
+  seq: number; at: string; actorId: string; actor: string; actorRole: string; action: string;
   details: Record<string, unknown>; prevHash: string; hash: string;
 }
 
@@ -110,29 +138,37 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 const enc = encodeURIComponent;
 
-export interface ReleasesSnapshot { releases: Release[]; seeded: boolean; canManage: boolean }
+export const loadReleases = () => call<{ releases: ReleaseLine[] }>('GET', '').then((r) => r.releases);
+export const loadRelease = (id: string) => call<{ release: Release }>('GET', `/${enc(id)}`).then((r) => r.release);
 
-export const loadReleases = () => call<ReleasesSnapshot>('GET', '');
-export async function seedReleases(releases: unknown[]): Promise<ReleasesSnapshot> {
-  try {
-    return await call<ReleasesSnapshot>('POST', '/seed', { releases });
-  } catch (err) {
-    if ((err as { status?: number }).status === 409) return loadReleases(); // someone else seeded
-    throw err;
-  }
+export interface NewRelease {
+  version: string; type: ReleaseType; targetDate: string; segment?: string; title?: string;
+  /** The 1 to 4 people besides you; you are added as the first signer. */
+  signerIds: string[];
 }
-export const saveRelease = (id: string, release: Partial<Release>) => call<{ release: Release }>('PUT', `/${enc(id)}`, release);
-export const deleteRelease = (id: string) => call<null>('DELETE', `/${enc(id)}`);
+export const createRelease = (release: NewRelease) => call<{ release: Release }>('POST', '', release).then((r) => r.release);
+
+/** The fields of a release a person can edit; only those sent change. */
+export type ReleaseChanges = Partial<Pick<Release,
+  'version' | 'title' | 'type' | 'targetDate' | 'segment' | 'status' | 'notes' | 'milestones' | 'gateRules' | 'blockerQuery'>>;
+export const updateRelease = (id: string, changes: ReleaseChanges) => call<{ release: Release }>('PATCH', `/${enc(id)}`, changes).then((r) => r.release);
+export const setSigners = (id: string, userIds: string[]) => call<{ release: Release }>('PUT', `/${enc(id)}/signers`, { userIds }).then((r) => r.release);
+export const cancelRelease = (id: string, reason: string) => call<{ release: Release }>('POST', `/${enc(id)}/cancel`, { reason }).then((r) => r.release);
+
 export const registerBuild = (id: string, build: Record<string, string>) => call<{ build: Build }>('POST', `/${enc(id)}/builds`, build);
 export const linkRuns = (id: string, buildId: string, testRunIds: string[]) =>
   call<{ build: Build }>('PUT', `/${enc(id)}/builds/${enc(buildId)}/runs`, { testRunIds });
 export const overrideGates = (id: string, buildId: string, reason: string) =>
   call<{ build: Build }>('POST', `/${enc(id)}/builds/${enc(buildId)}/override`, { reason });
-export const signOff = (id: string, buildId: string, role: string, decision: 'Approved' | 'Rejected', comment: string) =>
-  call<{ build: Build }>('POST', `/${enc(id)}/builds/${enc(buildId)}/signoffs`, { role, decision, comment: comment || undefined });
+/** The signed-in signer's own decision. */
+export const signOff = (id: string, buildId: string, decision: 'Approved' | 'Rejected', comment: string) =>
+  call<{ build: Build }>('POST', `/${enc(id)}/builds/${enc(buildId)}/signoffs`, { decision, comment: comment || undefined });
 export const promoteBuild = (id: string, buildId: string) => call<{ build: Build }>('POST', `/${enc(id)}/builds/${enc(buildId)}/promote`);
-export const saveBlocker = (id: string, blockerId: string, blocker: Partial<Blocker>) =>
-  call<{ blocker: Blocker }>('PUT', `/${enc(id)}/blockers/${enc(blockerId)}`, blocker);
+
+export interface NewBlocker { key: string; tracker: 'Jira' | 'GitHub'; title?: string; url?: string; severity: (typeof SEVERITIES)[number] }
+export const addBlocker = (id: string, blocker: NewBlocker) => call<{ blocker: Blocker }>('POST', `/${enc(id)}/blockers`, blocker);
+export const updateBlocker = (id: string, blockerId: string, changes: Partial<Pick<Blocker, 'status' | 'severity' | 'title' | 'url' | 'key'>>) =>
+  call<{ blocker: Blocker }>('PATCH', `/${enc(id)}/blockers/${enc(blockerId)}`, changes);
 export const deleteBlocker = (id: string, blockerId: string) => call<null>('DELETE', `/${enc(id)}/blockers/${enc(blockerId)}`);
 /** Links a Jira (PROJ-123) or GitHub (owner/repo#123) issue, read from the tracker. */
 export const lookupBlocker = (id: string, tracker: 'Jira' | 'GitHub', key: string) =>

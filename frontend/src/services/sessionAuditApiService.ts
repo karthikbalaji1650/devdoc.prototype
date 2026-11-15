@@ -1,6 +1,7 @@
 // The session audit log (DDS-SRS-011) is recorded by the server at every
 // sign-in and sign-out, for every user on every machine - not kept in this
-// browser. Admins only; see backend app/routers/audit.py.
+// browser. Admins get everyone's, anyone else only their own; see backend
+// app/routers/audit.py.
 import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 

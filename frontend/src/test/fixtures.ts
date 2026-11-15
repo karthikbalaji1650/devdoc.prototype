@@ -34,7 +34,7 @@ export function makeUser(overrides: Partial<UserProfile> = {}): UserProfile {
     email: 'ada@example.com',
     title: 'Engineer',
     department: 'Eng',
-    role: 'firmware-lead',
+    role: 'user',
     avatarBg: 'from-blue-600 to-indigo-600',
     initials: 'AA',
     ...overrides,
