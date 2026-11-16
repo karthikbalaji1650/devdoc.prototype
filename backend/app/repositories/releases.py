@@ -9,7 +9,7 @@ shape, so the service reads and writes the same structure the frontend sees:
 
 release   id, version, title, type, targetDate, segment, status, notes,
           milestones [{key, name, plannedDate, actualDate}],
-          signers [{userId, name, title, department}] (creator first),
+          signers [{userId, name, designation, department}] (creator first),
           gateRules {minPassRate, requireNoOpenBlockers, mandatorySuiteIds},
           blockerQuery, blockerSync, createdBy (user id), createdByName,
           createdAt, updatedAt, cancelledReason, cancelledAt
@@ -114,6 +114,11 @@ class ReleaseRepository(Protocol):
         ...
 
     async def audit(self, release_id: str) -> list[dict[str, Any]]: ...
+
+    async def recent_audit(self, limit: int) -> list[dict[str, Any]]:
+        """The latest `limit` entries across every release, newest written
+        first, each with its `releaseId` (the dashboard's recent activity)."""
+        ...
 
     async def export_all(self) -> list[dict[str, Any]]:
         """Every release with builds, blockers and audit - for the admin backup."""

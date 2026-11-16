@@ -34,7 +34,10 @@ test('sign in with the provider, then use and revoke a JWT access token', async 
   const me = await page.request.get(`${stack.apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
   expect((await me.json()).user.email).toBe(admin.email);
 
-  // ...until the session it came from signs out.
+  // ...until the session it came from signs out. A press in the page content
+  // closes the sidebar (its sign-out button is hidden then), so open it first.
+  const maximize = page.getByRole('button', { name: 'Maximize sidebar' });
+  if (await maximize.isVisible()) await maximize.click();
   await page.getByRole('button', { name: /log ?out|sign ?out/i }).first().click();
   await expect(page.getByPlaceholder('Enter your password')).toBeVisible();
   const after = await page.request.get(`${stack.apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import type { DocumentModel, DocSection, SectionType } from "./types/document";
 import type { AppView, OperationsTab } from "./types/appState";
 import type { UserProfile } from "./types/auth";
-import type { IncidentItem } from "./types/operations";
 import type { SettingsTab } from "./components/settings/SettingsPage";
 import { TEMPLATE_REGISTRY, getDefaultDocument } from "./templates";
 import { startsOnReleases, useReleasesUrl } from "./hooks/useReleasesUrl";
@@ -43,16 +42,7 @@ import {
   logoutBackend,
 } from "./services/backendAuthService";
 import { createDebouncedSaver } from "./services/autosave";
-import {
-  buildTrackedDocuments,
-  filterTracked,
-  type TrackedStatus,
-} from "./services/documentStats";
-import {
-  getStoredReviewersLog,
-  reviewersLog,
-} from "./services/reviewersLogService";
-import { useSharedCollection } from "./services/sharedCollection";
+import { filterByStatus, type DocumentFilter } from "./services/documentStats";
 import {
   canEditDocument,
   canDeleteDocument,
@@ -114,7 +104,7 @@ export const App: React.FC = () => {
   });
 
   const [activeOpsTab, setActiveOpsTab] = useState<OperationsTab>(() =>
-    startsOnReleases() ? "releases" : "incidents",
+    startsOnReleases() ? "releases" : "test-cases",
   );
   // The Settings tab last opened.
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
@@ -143,14 +133,10 @@ export const App: React.FC = () => {
   const [docBinOpen, setDocBinOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Set when the dashboard sends you to the list narrowed to one status.
-  const [documentsStatusFilter, setDocumentsStatusFilter] = useState<Exclude<
-    TrackedStatus,
-    "OTHER"
-  > | null>(null);
+  const [documentsStatusFilter, setDocumentsStatusFilter] =
+    useState<DocumentFilter | null>(null);
   // Documents are loaded from the server; re-render when they load or change.
   const { version: documentListVersion } = useDocuments();
-  // The documents list shows review status from the shared reviewers log: re-render once it loads.
-  useSharedCollection(reviewersLog);
 
   // AI Modal States
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -325,7 +311,8 @@ export const App: React.FC = () => {
   const handleLogin = (profile: UserProfile) => {
     loginWithProfile(profile);
     setCurrentUser(profile);
-    setCurrentApp("dashboard");
+    // A release link opened while signed out is still open once signed in.
+    setCurrentApp(startsOnReleases() ? "operations" : "dashboard");
     showToast(`Welcome, ${profile.name}!`);
   };
 
@@ -373,7 +360,7 @@ export const App: React.FC = () => {
   // Dashboard drill-downs: a status card opens the list for that status,
   // an activity row opens that document directly.
   const handleOpenDocumentsByStatus = (
-    status: Exclude<TrackedStatus, "OTHER"> | null,
+    status: DocumentFilter | null,
   ) => {
     autosaverRef.current.flush();
     setDocumentsStatusFilter(status);
@@ -391,78 +378,6 @@ export const App: React.FC = () => {
     setActiveSectionId("metadata");
     setActiveDocumentId(id);
     setCurrentApp("doccraft");
-  };
-
-  // Cross-App Incident -> RCA Document Generator
-  const handleExportIncidentToRCA = (incident: IncidentItem) => {
-    const rcaDoc: DocumentModel = {
-      metadata: {
-        id: `rca-${incident.id.toLowerCase()}`,
-        title: `Root Cause Analysis: ${incident.title}`,
-        subtitle: `Investigation, Code Mitigations & Resolution Matrix for ${incident.id}`,
-        docNumber: incident.jiraTicket || incident.id,
-        author: incident.owner,
-        department: "Platform Systems Engineering",
-        date: new Date().toISOString().split("T")[0],
-        version: "1.0",
-        classification: "INTERNAL ONLY",
-        status: incident.status === "Resolved" ? "APPROVED" : "IN_REVIEW",
-        templateType: "technical-analysis",
-        logoUrl:
-          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><rect width="40" height="40" y="10" rx="8" fill="%232563EB"/><path d="M14 24h12v12H14z" fill="white"/><path d="M20 18v6m0 12v6m-6-12H8m24 0h-6" stroke="white" stroke-width="2" stroke-linecap="round"/><text x="50" y="38" fill="%231E3A8A" font-family="Arial" font-weight="bold" font-size="20">FIRMWARE</text></svg>',
-        logoPosition: "center",
-        tags: ["RCA", "Incident", incident.severity, incident.affectedSystem],
-      },
-      sections: [
-        {
-          id: "sec-summary",
-          title: "1. Executive Incident Summary",
-          level: 1,
-          type: "richText",
-          content: `On ${incident.reportedDate}, an engineering incident (${incident.id}) was detected on ${incident.affectedSystem} with severity classification **${incident.severity}**.\n\nImmediate mitigation and root-cause analysis was initiated by ${incident.owner}. Current resolution status is **${incident.status}**.`,
-        },
-        {
-          id: "sec-root-cause",
-          title: "2. Root Cause Analysis (RCA)",
-          level: 1,
-          type: "richText",
-          content: `${incident.rootCause}\n\nTechnical investigation identified error propagation across the subsystem daemon when parsing initial payload arguments.`,
-        },
-        {
-          id: "sec-matrix",
-          title: "3. Verification & Resolution Matrix",
-          level: 1,
-          type: "verificationMatrix",
-          verificationMatrix: [
-            {
-              id: "1",
-              rootCause: incident.rootCause,
-              fixLocation: `${incident.affectedSystem} payload parser`,
-              resolution:
-                incident.status === "Resolved"
-                  ? "Code fix merged and regression verified on hardware testbed."
-                  : "Fix currently under review.",
-              status: incident.status === "Resolved" ? "PASSED" : "PENDING",
-            },
-          ],
-        },
-        {
-          id: "sec-signoff",
-          title: "4. Engineering Sign-off",
-          level: 1,
-          type: "callout",
-          callout: {
-            type: incident.status === "Resolved" ? "success" : "warning",
-            title: `Incident ${incident.id} Status: ${incident.status}`,
-            text: `RCA document compiled automatically from Operations Hub by ${incident.owner}. Ready for formal peer review and JIRA release mapping.`,
-          },
-        },
-      ],
-    };
-
-    if (!openDocumentInEditor(rcaDoc)) return;
-    setCurrentApp("doccraft");
-    showToast(`Generated RCA Document for ${incident.id}!`);
   };
 
   const handleTriggerAi = (
@@ -762,7 +677,6 @@ export const App: React.FC = () => {
             }
             setCurrentApp("doccraft");
           }}
-          onExportIncidentToRCA={handleExportIncidentToRCA}
           onLogout={handleLogout}
           onNavigate={handleLaunchApp}
         />
@@ -803,20 +717,10 @@ export const App: React.FC = () => {
   if (!activeDocumentId) {
     void documentListVersion;
     const userIsAdmin = isAdmin(currentUser);
-    const tracked = filterTracked(
-      buildTrackedDocuments(
-        visibleDocumentsFor(currentUser, listDocuments()),
-        getStoredReviewersLog(),
-        userIsAdmin,
-      ),
+    const visibleDocs = filterByStatus(
+      visibleDocumentsFor(currentUser, listDocuments()),
       documentsStatusFilter,
     );
-    const visibleDocs = documentsStatusFilter
-      ? tracked.flatMap((t) => (t.stored ? [t.stored] : []))
-      : visibleDocumentsFor(currentUser, listDocuments());
-    const notStored = documentsStatusFilter
-      ? tracked.filter((t) => !t.stored)
-      : [];
     const scopeBase = userIsAdmin
       ? "All documents"
       : "Documents currently in progress";
@@ -833,11 +737,6 @@ export const App: React.FC = () => {
           onClearFilter={
             documentsStatusFilter
               ? () => setDocumentsStatusFilter(null)
-              : undefined
-          }
-          notStoredNote={
-            notStored.length > 0
-              ? `${notStored.length} more tracked in the Reviewers Log but not stored on the server: ${notStored.map((t) => t.docNumber || t.title).join(", ")}`
               : undefined
           }
           onOpen={handleOpenDocument}

@@ -40,6 +40,11 @@ class DocumentListResponse(WireModel):
     documents: list[StoredDocument]
 
 
+class DocumentStatsResponse(WireModel):
+    total: int
+    byStatus: dict[DocumentStatus, int]
+
+
 class StoredDocumentResponse(WireModel):
     document: StoredDocument
 

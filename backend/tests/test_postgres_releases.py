@@ -66,7 +66,7 @@ def test_a_release_goes_from_creation_to_final_and_back_out_of_postgres(client: 
     release = created.json()["release"]
     rid = release["id"]
     assert [s["name"] for s in release["signers"]] == ["Vaishnavi Aasaithambi", "Manivannan Thangavel"]
-    assert release["signers"][0]["title"] == "Technical lead"
+    assert release["signers"][0]["designation"] == "Technical lead"
     assert release["targetDate"] == "2026-12-01" and release["gateRules"]["minPassRate"] == 98
     assert [m["key"] for m in release["milestones"]] == [
         "code-freeze",
@@ -116,7 +116,7 @@ def test_a_release_goes_from_creation_to_final_and_back_out_of_postgres(client: 
     first = client.post(f"/api/releases/{rid}/builds", json=build(), headers=author).json()["build"]
     second = client.post(f"/api/releases/{rid}/builds", json=build(sha256="B" * 64), headers=author).json()["build"]
     assert (first["label"], second["label"]) == ("v2.4.0-RC100", "v2.4.0-RC101")
-    assert second["sha256"] == "b" * 64 and first["builtAt"] == "2026-11-20T10:00" and first["kind"] == "RC"
+    assert second["sha256"] == "B" * 64 and first["builtAt"] == "2026-11-20T10:00" and first["kind"] == "RC"
     runs = {
         "name": "R",
         "suiteId": "s1",
@@ -188,6 +188,22 @@ def test_the_audit_log_cannot_be_changed_in_the_database(client: TestClient) -> 
         with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
             sql(statement)
     assert sql("SELECT count(*) FROM release_audit")[0][0] == 1
+
+
+def test_recent_activity_reads_the_latest_audit_entries_across_releases(client: TestClient) -> None:
+    author = sign_in(client, AUTHOR_EMAIL)
+    admin_id = people(client, author)["Manivannan Thangavel"]
+    first = client.post("/api/releases", json=body(version="v1.0.0", signerIds=[admin_id]), headers=author).json()
+    client.post("/api/releases", json=body(version="v2.0.0", signerIds=[admin_id]), headers=author)
+    client.post(f"/api/releases/{first['release']['id']}/builds", json=build(), headers=author)
+    res = client.get("/api/releases/activity?limit=2", headers=sign_in(client, ADMIN_EMAIL))
+    assert res.status_code == 200, res.text
+    entries = res.json()["entries"]
+    assert [(e["version"], e["action"]) for e in entries] == [
+        ("v1.0.0", "build-registered"),
+        ("v2.0.0", "release-created"),
+    ]
+    assert entries[0]["details"]["build"] == "v1.0.0-RC100" and "hash" not in entries[0]
 
 
 def test_the_database_enforces_the_release_rules_itself(client: TestClient) -> None:

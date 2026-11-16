@@ -103,7 +103,7 @@ class TestCreate:
         creator, rid = make_release(api)
         assert [s["name"] for s in get(creator, rid)["signers"]] == [CREATOR.name, OTHER.name, ADMIN.name]
         first = get(creator, rid)["signers"][0]
-        assert first == {"userId": CREATOR.id, "name": CREATOR.name, "title": None, "department": None}
+        assert first == {"userId": CREATOR.id, "name": CREATOR.name, "designation": None, "department": None}
 
     def test_two_to_five_signers_in_all(self, api: Api) -> None:
         creator = api.sign_in(CREATOR)
@@ -326,17 +326,22 @@ class TestBuilds:
         first = creator.post(f"{BASE}/{rid}/builds", json=build_body()).json()["build"]
         second = creator.post(f"{BASE}/{rid}/builds", json=build_body(sha256="B" * 64)).json()["build"]
         assert (first["label"], second["label"]) == ("v2.4.0-RC100", "v2.4.0-RC101")
-        assert second["sha256"] == "b" * 64 and second["kind"] == "RC"
+        assert second["sha256"] == "B" * 64 and second["kind"] == "RC"
         assert first["pipelineBuildId"] == "jenkins-482" and first["repository"] == "Artifactory"
         assert first["createdByName"] == CREATOR.name
 
-    def test_checksum_commit_and_url_are_checked(self, api: Api) -> None:
+    def test_checksum_commit_and_url_accept_any_text(self, api: Api) -> None:
+        # Format checks relaxed for testing the sign-off flow: any text is kept as entered.
         creator, rid = make_release(api)
-        assert creator.post(f"{BASE}/{rid}/builds", json=build_body(sha256="123")).json() == {
-            "error": "sha256 must be a 64-character hex SHA-256 checksum."
+        res = creator.post(
+            f"{BASE}/{rid}/builds", json=build_body(sha256="My Checksum", commitSha="zzz", artifactUrl="ftp://x")
+        )
+        assert res.status_code == 200, res.json()
+        build = res.json()["build"]
+        assert (build["sha256"], build["commitSha"], build["artifactUrl"]) == ("My Checksum", "zzz", "ftp://x")
+        assert creator.post(f"{BASE}/{rid}/builds", json=build_body(sha256="")).json() == {
+            "error": "sha256 is required."
         }
-        assert creator.post(f"{BASE}/{rid}/builds", json=build_body(commitSha="zzz")).status_code == 400
-        assert creator.post(f"{BASE}/{rid}/builds", json=build_body(artifactUrl="ftp://x")).status_code == 400
 
     def test_only_the_creator_registers_builds_and_links_runs(self, api: Api) -> None:
         creator, rid = make_release(api)
@@ -541,6 +546,39 @@ class TestAuditLog:
         admin.post("/api/admin/reset", json={"confirm": "DELETE ALL DATA"})
         assert [e["action"] for e in admin.get(f"{BASE}/{rid}/audit").json()["entries"]] == ["release-created"]
         assert get(creator, rid)["version"] == "v2.4.0"
+
+
+class TestActivity:
+    """The dashboard's recent activity: the latest audit entries across every
+    release, newest first, readable by anyone signed in."""
+
+    def test_latest_entries_across_releases_newest_first_without_hashes(self, api: Api) -> None:
+        creator, first = make_release(api, version="v1.0.0")
+        make_release(api, version="v2.0.0")
+        creator.post(f"{BASE}/{first}/builds", json=build_body())
+        entries = api.sign_in(OTHER).get(f"{BASE}/activity").json()["entries"]  # OTHER is not a signer
+        assert [(e["version"], e["action"]) for e in entries] == [
+            ("v1.0.0", "build-registered"),
+            ("v2.0.0", "release-created"),
+            ("v1.0.0", "release-created"),
+        ]
+        newest = entries[0]
+        assert newest["releaseId"] == first and newest["actor"] == CREATOR.name
+        assert newest["details"]["build"] == "v1.0.0-RC100"
+        assert {"at", "seq"} <= set(newest) and not {"hash", "prevHash"} & set(newest)
+
+    def test_limit_defaults_to_10_and_is_checked(self, api: Api) -> None:
+        creator, rid = make_release(api)
+        for i in range(11):
+            creator.patch(f"{BASE}/{rid}", json={"title": f"t{i}"})
+        assert len(creator.get(f"{BASE}/activity").json()["entries"]) == 10
+        assert len(creator.get(f"{BASE}/activity?limit=3").json()["entries"]) == 3
+        for bad in ("0", "51", "x"):
+            assert creator.get(f"{BASE}/activity?limit={bad}").status_code == 400
+
+    def test_empty_without_releases_and_needs_a_session(self, api: Api) -> None:
+        assert api.sign_in(OTHER).get(f"{BASE}/activity").json() == {"entries": []}
+        assert api.anonymous().get(f"{BASE}/activity").status_code == 401
 
 
 class TestBlockers:

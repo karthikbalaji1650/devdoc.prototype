@@ -7,7 +7,6 @@ export type AppView =
   | 'settings';
 
 export type OperationsTab =
-  | 'incidents'
   | 'releases'
   | 'reviewers'
   | 'test-cases';

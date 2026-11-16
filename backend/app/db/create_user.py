@@ -2,15 +2,15 @@
 
     uv run python -m app.db.create_user
 
-Asks for name, email, password, whether the user is an admin, title and
+Asks for name, email, password, whether the user is an admin, designation and
 department. Every question can also be given as a flag (--name, --email,
---password, --admin / --no-admin, --title, --department) for scripts.
+--password, --admin / --no-admin, --designation, --department) for scripts.
 
 DEV-ONLY: the password is stored as typed (see migration 0002). This is the
 stand-in until the real user directory is connected; do not use it for real
 people.
 
-There are two roles: an admin gets `admin`, everyone else `user`. Title and
+There are two roles: an admin gets `admin`, everyone else `user`. Designation and
 department are required (they are shown on the account; positions are not
 tracked as roles). The email is stored lower-cased (login lower-cases what is
 typed) and must not already belong to another user. This only ever inserts: it
@@ -60,20 +60,20 @@ def initials(name: str) -> str:
 
 
 def create_user(
-    database_url: str, *, name: str, email: str, password: str, is_admin: bool, title: str, department: str
+    database_url: str, *, name: str, email: str, password: str, is_admin: bool, designation: str, department: str
 ) -> str:
     """Inserts the user and returns its id."""
     name = name.strip()
     email = email.strip().lower()
-    title = title.strip()
+    designation = designation.strip()
     department = department.strip()
     if not name:
         raise UserInputError("Name is required.")
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         raise UserInputError("Enter a valid email address.")
     check_password(password)
-    if not title:
-        raise UserInputError("Title is required.")
+    if not designation:
+        raise UserInputError("Designation is required.")
     if not department:
         raise UserInputError("Department is required.")
 
@@ -83,9 +83,18 @@ def create_user(
         if conn.execute("SELECT 1 FROM users WHERE lower(email) = %s", (email,)).fetchone():
             raise UserInputError(f"A user with the email {email} already exists.")
         conn.execute(
-            """INSERT INTO users (id, name, email, password, role, title, department, initials)
+            """INSERT INTO users (id, name, email, password, role, designation, department, initials)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (user_id, name, email, password, ADMIN_ROLE if is_admin else USER_ROLE, title, department, initials(name)),
+            (
+                user_id,
+                name,
+                email,
+                password,
+                ADMIN_ROLE if is_admin else USER_ROLE,
+                designation,
+                department,
+                initials(name),
+            ),
         )
     return user_id
 
@@ -127,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--password")
     parser.add_argument("--admin", dest="admin", action="store_true", default=None)
     parser.add_argument("--no-admin", dest="admin", action="store_false")
-    parser.add_argument("--title")
+    parser.add_argument("--designation")
     parser.add_argument("--department")
     args = parser.parse_args(argv)
 
@@ -139,12 +148,18 @@ def main(argv: list[str] | None = None) -> None:
     email = _ask("Email: ", args.email)
     password = args.password if args.password is not None else _ask_password()
     is_admin = _ask_admin(args.admin)
-    title = _ask("Title: ", args.title)
+    designation = _ask("Designation: ", args.designation)
     department = _ask("Department: ", args.department)
 
     try:
         user_id = create_user(
-            url, name=name, email=email, password=password, is_admin=is_admin, title=title, department=department
+            url,
+            name=name,
+            email=email,
+            password=password,
+            is_admin=is_admin,
+            designation=designation,
+            department=department,
         )
     except UserInputError as error:
         sys.exit(f"Not created: {error}")

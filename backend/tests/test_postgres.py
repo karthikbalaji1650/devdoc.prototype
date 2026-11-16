@@ -44,7 +44,7 @@ def seed_users(url: str) -> None:
         email=ADMIN_EMAIL,
         password=ADMIN_PASSWORD,
         is_admin=True,
-        title="Software engineering manager",
+        designation="Software engineering manager",
         department="Platform Systems Engineering",
     )
     create_user(
@@ -53,7 +53,7 @@ def seed_users(url: str) -> None:
         email=AUTHOR_EMAIL,
         password=AUTHOR_PASSWORD,
         is_admin=False,
-        title="Technical lead",
+        designation="Technical lead",
         department="SW engineering",
     )
 
@@ -101,7 +101,7 @@ def test_login_me_logout_against_created_users(client: TestClient) -> None:
     assert user == {
         "name": "Manivannan Thangavel",
         "email": ADMIN_EMAIL,
-        "title": "Software engineering manager",
+        "designation": "Software engineering manager",
         "department": "Platform Systems Engineering",
         "role": "admin",
         "avatarBg": "from-blue-600 to-indigo-600",
@@ -115,19 +115,19 @@ def test_login_me_logout_against_created_users(client: TestClient) -> None:
     assert client.get("/api/auth/me", headers=cookie).status_code == 401
 
 
-def test_user_search_matches_name_title_department_and_treats_wildcards_as_text(client: TestClient) -> None:
+def test_user_search_matches_name_designation_department_and_treats_wildcards_as_text(client: TestClient) -> None:
     cookie = sign_in(client, AUTHOR_EMAIL)
 
     def names(q: str) -> list[str]:
         return [u["name"] for u in client.get("/api/users", params={"q": q}, headers=cookie).json()["users"]]
 
     assert names("  VAISH ") == ["Vaishnavi Aasaithambi"]  # name, any case
-    assert names("software engineering") == ["Manivannan Thangavel"]  # title
+    assert names("software engineering") == ["Manivannan Thangavel"]  # designation
     assert names("sw eng") == ["Vaishnavi Aasaithambi"]  # department
     assert names("") == ["Manivannan Thangavel", "Vaishnavi Aasaithambi"]
     assert names("%") == [] and names("_") == [] and names("\\") == []
     user = client.get("/api/users", headers=cookie).json()["users"][0]
-    assert set(user) == {"id", "name", "title", "department"}
+    assert set(user) == {"id", "name", "designation", "department"}
 
 
 def test_document_lifecycle(client: TestClient) -> None:
@@ -306,26 +306,26 @@ def test_create_user_rules() -> None:
         email="Ada@Example.com",
         password="pw",
         is_admin=False,
-        title="Mathematician",
+        designation="Mathematician",
         department="Analytical Engines",
     )
     user_id = create_user(DATABASE_URL, **make)
     with psycopg.connect(DATABASE_URL) as conn:
         row = conn.execute(
-            "SELECT email, role, initials, password, title, department FROM users WHERE id = %s", (user_id,)
+            "SELECT email, role, initials, password, designation, department FROM users WHERE id = %s", (user_id,)
         ).fetchone()
-    # lower-cased email, stored as typed, role from the admin yes/no, title and department saved
+    # lower-cased email, stored as typed, role from the admin yes/no, designation and department saved
     assert row == ("ada@example.com", "user", "AL", "pw", "Mathematician", "Analytical Engines")
 
     with pytest.raises(UserInputError, match="already exists"):
         create_user(DATABASE_URL, **{**make, "email": "ADA@example.com"})  # any casing of the same email
     with pytest.raises(UserInputError, match="valid email"):
         create_user(DATABASE_URL, **{**make, "email": "nope"})
-    for field, message in (("password", "Password"), ("title", "Title"), ("department", "Department")):
+    for field, message in (("password", "Password"), ("designation", "Designation"), ("department", "Department")):
         with pytest.raises(UserInputError, match=f"{message} is required"):
             create_user(DATABASE_URL, **{**make, "email": "c@example.com", field: ""})
-    with pytest.raises(UserInputError, match="Title is required"):  # spaces alone are not a title
-        create_user(DATABASE_URL, **{**make, "email": "c@example.com", "title": "   "})
+    with pytest.raises(UserInputError, match="Designation is required"):  # spaces alone are not a designation
+        create_user(DATABASE_URL, **{**make, "email": "c@example.com", "designation": "   "})
 
     admin_id = create_user(DATABASE_URL, **{**make, "email": "root@example.com", "is_admin": True})
     with psycopg.connect(DATABASE_URL) as conn:
@@ -338,20 +338,20 @@ def test_the_database_itself_enforces_roles_and_a_required_profile() -> None:
     _wipe(DATABASE_URL)
     command.upgrade(alembic_config(DATABASE_URL), "head")
     insert = (
-        "INSERT INTO users (id, name, email, password, role, title, department) VALUES (%s, 'N', %s, 'p', %s, %s, %s)"
+        "INSERT INTO users (id, name, email, password, role, designation, department) VALUES (%s, 'N', %s, 'p', %s, %s, %s)"
     )
     with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
         conn.execute(insert, ("u1", "u1@x.com", "user", "T", "D"))  # type: ignore[call-overload]
         for args in (
             ("u2", "u2@x.com", "firmware-lead", "T", "D"),  # not one of the two roles
             ("u3", "u3@x.com", "Admin ", "T", "D"),  # a typo does not slip through
-            ("u4", "u4@x.com", "user", None, "D"),  # title required
+            ("u4", "u4@x.com", "user", None, "D"),  # designation required
             ("u5", "u5@x.com", "user", "T", "  "),  # department required
         ):
             with pytest.raises(psycopg.errors.CheckViolation):
                 conn.execute(insert, args)  # type: ignore[call-overload]
         conn.execute(
-            "INSERT INTO users (id, name, email, password, title, department) VALUES ('u6','N','u6@x.com','p','T','D')"
+            "INSERT INTO users (id, name, email, password, designation, department) VALUES ('u6','N','u6@x.com','p','T','D')"
         )
         assert conn.execute("SELECT role FROM users WHERE id = 'u6'").fetchone() == ("user",)  # the default role
 
@@ -497,3 +497,31 @@ def test_session_audit_is_append_only_in_the_database(client: TestClient) -> Non
         with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
             conn.execute("UPDATE session_audit SET logout_at = now()")  # ...but only once
         assert conn.execute("SELECT count(*) FROM session_audit").fetchone() == (1,)
+
+
+def test_migration_0009_renames_title_to_designation_and_keeps_the_values() -> None:
+    if not DATABASE_URL:
+        pytest.skip("TEST_DATABASE_URL not set")
+    _wipe(DATABASE_URL)
+    config = alembic_config(DATABASE_URL)
+    command.upgrade(config, "0008")
+    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO users (id, name, email, password, title, department) VALUES ('u1','N','u1@x.com','p','QA Lead','D')"
+        )
+    command.upgrade(config, "0009")
+    with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+        assert conn.execute("SELECT designation FROM users WHERE id = 'u1'").fetchone() == ("QA Lead",)  # kept
+        with pytest.raises(psycopg.errors.UndefinedColumn):
+            conn.execute("SELECT title FROM users")
+        with pytest.raises(psycopg.errors.CheckViolation):  # still required, now under the new name
+            conn.execute(
+                "INSERT INTO users (id, name, email, password, designation, department)"
+                " VALUES ('u2','N','u2@x.com','p','  ','D')"
+            )
+        names = {r[0] for r in conn.execute("SELECT conname FROM pg_constraint WHERE conrelid = 'users'::regclass")}
+        assert "users_designation_required" in names and "users_title_required" not in names
+    command.downgrade(config, "0008")
+    with psycopg.connect(DATABASE_URL) as conn:
+        assert conn.execute("SELECT title FROM users WHERE id = 'u1'").fetchone() == ("QA Lead",)
+    command.upgrade(config, "head")

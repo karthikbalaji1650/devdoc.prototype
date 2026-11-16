@@ -1,6 +1,6 @@
 """The user picker's search (releases: choosing sign-off people).
 
-Any signed-in user can search. Only id, name, title and department are
+Any signed-in user can search. Only id, name, designation and department are
 returned - never an email, role or password.
 """
 
@@ -10,8 +10,8 @@ from tests.conftest import AUTHOR, OTHER, Api
 URL = "/api/users"
 
 
-def _add(api: Api, user_id: str, name: str, title: str | None, department: str | None) -> None:
-    api.store.add_user(User(user_id, name, f"{user_id}@sanmina.com", title, department, "user", None, None), "pw")
+def _add(api: Api, user_id: str, name: str, designation: str | None, department: str | None) -> None:
+    api.store.add_user(User(user_id, name, f"{user_id}@sanmina.com", designation, department, "user", None, None), "pw")
 
 
 def test_needs_a_session(api: Api) -> None:
@@ -29,10 +29,10 @@ def test_without_a_search_lists_people_by_name(api: Api) -> None:
 def test_returns_only_the_fields_a_picker_needs(api: Api) -> None:
     _add(api, "usr-10", "Priya Raman", "QA Engineer", "Quality")
     users = api.sign_in(AUTHOR).get(URL, params={"q": "priya"}).json()["users"]
-    assert users == [{"id": "usr-10", "name": "Priya Raman", "title": "QA Engineer", "department": "Quality"}]
+    assert users == [{"id": "usr-10", "name": "Priya Raman", "designation": "QA Engineer", "department": "Quality"}]
 
 
-def test_matches_name_title_or_department_ignoring_case_and_spaces(api: Api) -> None:
+def test_matches_name_designation_or_department_ignoring_case_and_spaces(api: Api) -> None:
     _add(api, "usr-10", "Priya Raman", "QA Engineer", "Quality")
     _add(api, "usr-11", "Arun Kumar", "Firmware Lead", "Platform")
     agent = api.sign_in(AUTHOR)
@@ -41,14 +41,14 @@ def test_matches_name_title_or_department_ignoring_case_and_spaces(api: Api) -> 
         return [u["id"] for u in agent.get(URL, params={"q": q}).json()["users"]]
 
     assert ids("  RAMAN ") == ["usr-10"]  # name
-    assert ids("firmware") == ["usr-11"]  # title
+    assert ids("firmware") == ["usr-11"]  # designation
     assert ids("quality") == ["usr-10"]  # department
     assert ids("nobody-called-this") == []
 
 
-def test_a_person_without_title_or_department_can_still_be_found(api: Api) -> None:
+def test_a_person_without_designation_or_department_can_still_be_found(api: Api) -> None:
     users = api.sign_in(AUTHOR).get(URL, params={"q": OTHER.name}).json()["users"]
-    assert users == [{"id": OTHER.id, "name": OTHER.name, "title": None, "department": None}]
+    assert users == [{"id": OTHER.id, "name": OTHER.name, "designation": None, "department": None}]
 
 
 def test_percent_and_underscore_are_searched_as_plain_text(api: Api) -> None:

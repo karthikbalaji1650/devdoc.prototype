@@ -2,10 +2,8 @@ import React from 'react';
 import type { AppView, OperationsTab } from '../../types/appState';
 import type { UserProfile } from '../../types/auth';
 import type { DocumentModel } from '../../types/document';
-import type { IncidentItem } from '../../types/operations';
 
 import { AppSidebar } from '../AppSidebar';
-import { IncidentTracker } from './IncidentTracker';
 import { ReleaseMaster } from './ReleaseMaster';
 import { ReviewersLog } from './ReviewersLog';
 import { TestCaseManager } from './TestCaseManager';
@@ -17,7 +15,6 @@ interface OperationsLayoutProps {
   currentDocument?: DocumentModel;
   onBackToHub: () => void;
   onLaunchDocCraft: (docId?: string, doc?: DocumentModel) => void;
-  onExportIncidentToRCA: (incident: IncidentItem) => void;
   onLogout: () => void;
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
 }
@@ -27,7 +24,6 @@ export const OperationsLayout: React.FC<OperationsLayoutProps> = ({
   user,
   currentDocument,
   onLaunchDocCraft,
-  onExportIncidentToRCA,
   onLogout,
   onNavigate,
 }) => {
@@ -42,9 +38,6 @@ export const OperationsLayout: React.FC<OperationsLayoutProps> = ({
       />
 
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#0a0a0a] p-6 md:p-8">
-        {activeTab === 'incidents' && (
-          <IncidentTracker onExportToDocCraftRCA={onExportIncidentToRCA} />
-        )}
         {activeTab === 'releases' && (
           <ReleaseMaster />
         )}

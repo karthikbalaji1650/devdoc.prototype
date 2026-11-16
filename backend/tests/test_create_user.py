@@ -34,7 +34,7 @@ class TestCreateUserRefusesABadPasswordBeforeTouchingTheDatabase:
                 email="ada@x.com",
                 password="\x1b[sahith",
                 is_admin=False,
-                title="T",
+                designation="T",
                 department="D",
             )
 

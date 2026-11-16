@@ -113,3 +113,11 @@ describe('rephraseText — backend proxy preference', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:11434/api/generate');
   });
 });
+
+describe('rewrite tones', () => {
+  it('offers no RCA / incident rewrite (removed with the incident tracker)', async () => {
+    const { REPHRASE_TONES } = await load();
+    expect(REPHRASE_TONES.map((t) => t.id)).not.toContain('rca-formal');
+    expect(REPHRASE_TONES.some((t) => /RCA|Incident/i.test(t.label + t.prompt))).toBe(false);
+  });
+});

@@ -1,42 +1,42 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Bell,
-  LogOut,
-  CheckCircle2,
-  Clock,
-  UploadCloud,
-  HelpCircle,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, FileText, GitBranch, HelpCircle, UploadCloud } from 'lucide-react';
 import type { UserProfile } from '../../types/auth';
 import type { AppView, OperationsTab } from '../../types/appState';
-import { getStoredReviewersLog, reviewersLog } from '../../services/reviewersLogService';
+import type { DocStatus } from '../../types/document';
 import { useSharedCollection } from '../../services/sharedCollection';
-import { listDocuments, useDocuments } from '../../services/documentsStoreService';
-import { visibleDocumentsFor } from '../../services/permissions';
-import { buildTrackedDocuments, countTracked, findDocumentByNumber, type TrackedStatus } from '../../services/documentStats';
-import { isAdmin } from '../../services/permissions';
+import { getDocumentUpdatedAt, listDocuments, loadDocumentStats, useDocuments } from '../../services/documentsStoreService';
+import { DOC_STATUSES, type DocumentFilter, type DocumentStats } from '../../services/documentStats';
+import { isAdmin, visibleDocumentsFor } from '../../services/permissions';
 import { driveExportLog, getLatestDriveExport } from '../../services/googleDriveStatusService';
+import { isReleasesAvailable, loadReleaseActivity } from '../../services/releasesApiService';
+import { navigateTo, releasesPath } from '../../services/releasesRoute';
+import { mergeActivity, type ReleaseActivityEntry } from '../../services/recentActivity';
 import { AppSidebar } from '../AppSidebar';
 import { WelcomeModal } from '../onboarding/WelcomeModal';
 import { hasSeenWelcome, markWelcomeSeen } from '../../services/onboardingService';
+
+// The landing page after sign-in (DDS-SRS-005): how many documents exist,
+// how many are approved and under review, and the Google Drive upload status.
+// Counts are team-wide numbers from the server. Recent activity mixes document
+// updates (only those this user may open, DDS-SRS-001 to 004) with release
+// events from the release audit log, which anyone signed in can read.
 
 interface DashboardPageProps {
   user: UserProfile;
   onNavigate: (app: AppView, opsTab?: OperationsTab) => void;
   onLogout: () => void;
   /** Opens the documents list, optionally narrowed to one status. */
-  onOpenDocuments: (status: Exclude<TrackedStatus, 'OTHER'> | null) => void;
+  onOpenDocuments: (status: DocumentFilter | null) => void;
   onOpenDocument: (id: string) => void;
 }
 
-type ActivityItem = {
-  id: string;
-  type: 'APPROVED' | 'IN_REVIEW' | 'PENDING' | 'CHANGES_REQUESTED';
-  docNumber: string;
-  docTitle: string;
-  reviewer: string;
-  reviewerRole: string;
-  date: string;
+const ACTIVITY_LIMIT = 8;
+
+const STATUS: Record<DocStatus, { label: string; color: string; badge: string }> = {
+  DRAFT: { label: 'Draft', color: 'var(--text-faint)', badge: 'text-[var(--text-dim)] border-[var(--border)]' },
+  IN_REVIEW: { label: 'In review', color: 'var(--amber)', badge: 'status-warning' },
+  APPROVED: { label: 'Approved', color: 'var(--success)', badge: 'status-success' },
+  PUBLISHED: { label: 'Published', color: 'var(--blue)', badge: 'text-[var(--blue)] border-[var(--blue)] bg-[rgba(62,199,255,0.12)]' },
 };
 
 function getGreeting(): string {
@@ -57,314 +57,201 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-const STATUS_STYLES: Record<ActivityItem['type'], { bg: string; dot: string; label: string }> = {
-  APPROVED: { bg: 'bg-[#142b1d] text-[#4ade80] border border-[#1f5d39]', dot: 'bg-[#4ade80]', label: 'Approved' },
-  IN_REVIEW: { bg: 'bg-[#111d2f] text-[#a78bfa] border border-[#304c7d]', dot: 'bg-[#a78bfa]', label: 'In Review' },
-  PENDING: { bg: 'bg-[#2a220b] text-[#fbbf24] border border-[#6a4d12]', dot: 'bg-[#fbbf24]', label: 'Pending' },
-  CHANGES_REQUESTED: { bg: 'bg-[#2a1212] text-[#f87171] border border-[#7d2d2d]', dot: 'bg-[#f87171]', label: 'Changes Req.' },
+const panel = 'rounded-xl border border-[var(--border)] bg-[var(--panel)]';
+const eyebrow = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-dim)]';
+
+const StatusBadge: React.FC<{ status: DocStatus }> = ({ status }) => (
+  <span className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STATUS[status].badge}`}>{STATUS[status].label}</span>
+);
+
+/** A headline number. A button when it opens a list, plain text when it can't. */
+const StatCard: React.FC<{ label: string; value: React.ReactNode; note: string; tone?: string; onOpen?: () => void }> = ({ label, value, note, tone = 'text-[var(--text)]', onOpen }) => {
+  const body = (
+    <>
+      <span className={`block ${eyebrow}`}>{label}</span>
+      <span className={`mt-2 block text-3xl font-bold tabular-nums ${tone}`}>{value}</span>
+      <span className="mt-1 block text-[11px] text-[var(--text-dim)]">{note}</span>
+    </>
+  );
+  return onOpen ? (
+    <button type="button" onClick={onOpen} className={`${panel} flex flex-col justify-start p-5 text-left transition-colors hover:border-[var(--text-faint)] hover:bg-[var(--panel-alt)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]`}>{body}</button>
+  ) : (
+    <div className={`${panel} flex flex-col justify-start p-5`}>{body}</div>
+  );
+};
+
+/** Documents by status as a ring, with the numbers beside it. */
+const StatusRing: React.FC<{ stats: DocumentStats }> = ({ stats }) => {
+  const r = 46;
+  const circumference = 2 * Math.PI * r;
+  const summary = `${stats.total} documents: ${DOC_STATUSES.map((s) => `${stats.byStatus[s]} ${STATUS[s].label.toLowerCase()}`).join(', ')}`;
+  let offset = 0;
+  return (
+    <div className="flex flex-col sm:flex-row xl:flex-col 2xl:flex-row items-center gap-6">
+      <div className="relative h-32 w-32 shrink-0">
+        <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120" role="img" aria-label={summary}>
+          <circle cx="60" cy="60" r={r} fill="none" strokeWidth="14" style={{ stroke: 'var(--border-soft)' }} />
+          {stats.total > 0 && DOC_STATUSES.map((s) => {
+            const length = (stats.byStatus[s] / stats.total) * circumference;
+            const segment = (
+              <circle key={s} cx="60" cy="60" r={r} fill="none" strokeWidth="14"
+                strokeDasharray={`${length} ${circumference}`} strokeDashoffset={-offset} style={{ stroke: STATUS[s].color }} />
+            );
+            offset += length;
+            return length > 0 ? segment : null;
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold tabular-nums text-[var(--text)]">{stats.total}</span>
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">documents</span>
+        </div>
+      </div>
+      <ul className="w-full space-y-2" aria-label="Status counts">
+        {DOC_STATUSES.map((s) => (
+          <li key={s} className="flex items-center justify-between gap-3 border-b border-[var(--border-soft)] pb-2 last:border-b-0 last:pb-0 text-xs">
+            <span className="flex items-center gap-2 text-[var(--text-dim)]"><span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS[s].color }} />{STATUS[s].label}</span>
+            <span className="font-semibold tabular-nums text-[var(--text)]">{stats.byStatus[s]}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout, onOpenDocuments, onOpenDocument }) => {
-  const [notifOpen, setNotifOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(() => !hasSeenWelcome());
-  const [chartHover, setChartHover] = useState<'approved' | 'in-review' | null>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const [stats, setStats] = useState<DocumentStats | null>(null);
+  const [statsError, setStatsError] = useState('');
+  const admin = isAdmin(user);
 
-  useEffect(() => {
-    if (!notifOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [notifOpen]);
-
-  // Shared on the server: these re-render once loaded.
-  const { items: reviewerItems } = useSharedCollection(reviewersLog);
-  const reviewers = useMemo(() => getStoredReviewersLog(), [reviewerItems]);
-  const approvedDocs = reviewers.filter(r => r.reviewStatus === 'APPROVED').length;
-  const inReviewDocs = reviewers.filter(r => r.reviewStatus === 'IN_REVIEW').length;
-  const { items: driveExports } = useSharedCollection(driveExportLog);
-  const latestDriveExport = useMemo(() => getLatestDriveExport(), [driveExports]);
-  const reviewedDocs = approvedDocs + inReviewDocs;
-  const approvalRate = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
-  const inReviewRate = reviewedDocs > 0 ? Math.round((inReviewDocs / reviewedDocs) * 100) : 0;
-  const testProgress = reviewedDocs > 0 ? Math.round((approvedDocs / reviewedDocs) * 100) : 0;
-  const chartRadius = 46;
-  const chartCircumference = 2 * Math.PI * chartRadius;
-  const approvedArc = (approvedDocs / (reviewedDocs || 1)) * chartCircumference;
-  const reviewArc = (inReviewDocs / (reviewedDocs || 1)) * chartCircumference;
-
-  // The headline cards count distinct documents (stored documents merged
-  // with reviewer sign-offs), so they agree with Recent Activity and
-  // with the list each card opens.
+  // Re-count whenever the documents change (a save, a delete, the first load).
   const { version: documentsVersion } = useDocuments();
-  const visibleDocs = useMemo(() => visibleDocumentsFor(user, listDocuments()), [user, documentsVersion]);
-  const docCounts = countTracked(buildTrackedDocuments(visibleDocs, reviewers, isAdmin(user)));
+  useEffect(() => {
+    let current = true;
+    loadDocumentStats().then(
+      (s) => { if (current) { setStats(s); setStatsError(''); } },
+      (err: Error) => { if (current) setStatsError(err.message); },
+    );
+    return () => { current = false; };
+  }, [documentsVersion]);
 
-  const STATS: { label: string; value: number; status: Exclude<TrackedStatus, 'OTHER'> | null; valueColor: string }[] = [
-    { label: 'total docs', value: docCounts.total, status: null, valueColor: 'text-[#ededed]' },
-    { label: 'approved', value: docCounts.approved, status: 'APPROVED', valueColor: 'text-[#4ade80]' },
-    { label: 'in review', value: docCounts.inReview, status: 'IN_REVIEW', valueColor: 'text-[#fbbf24]' },
-  ];
+  // Release events: read once on arrival (they change on the Release Master screen).
+  const [releaseEvents, setReleaseEvents] = useState<ReleaseActivityEntry[]>([]);
+  const [releaseEventsError, setReleaseEventsError] = useState(false);
+  useEffect(() => {
+    if (!isReleasesAvailable()) return;
+    let current = true;
+    loadReleaseActivity(ACTIVITY_LIMIT).then(
+      (entries) => { if (current) setReleaseEvents(entries); },
+      () => { if (current) setReleaseEventsError(true); },
+    );
+    return () => { current = false; };
+  }, []);
 
-  const recentActivity: ActivityItem[] = useMemo(
-    () => reviewers.slice(0, 5).map(r => ({
-      id: r.id,
-      type: r.reviewStatus,
-      docNumber: r.docNumber,
-      docTitle: r.docTitle,
-      reviewer: r.reviewerName,
-      reviewerRole: r.reviewerRole,
-      date: r.reviewDate,
-    })),
-    [reviewers]
+  const activity = useMemo(
+    () => mergeActivity(
+      visibleDocumentsFor(user, listDocuments()).map((doc) => ({ doc, updatedAt: getDocumentUpdatedAt(doc.metadata.id) })),
+      releaseEvents,
+      ACTIVITY_LIMIT,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, documentsVersion, releaseEvents],
   );
 
+  const { items: driveExports } = useSharedCollection(driveExportLog);
+  const latestDriveExport = useMemo(() => getLatestDriveExport(), [driveExports]);
+
+  const count = (n: number | undefined) => (stats ? n : '–');
+
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-[#ededed] overflow-hidden">
+    <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       <AppSidebar user={user} activeView="dashboard" onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-24 flex items-center justify-between px-7 border-b border-[#242424] bg-[#0d0d0d] shrink-0">
+        <header className="flex items-center justify-between gap-4 px-7 py-5 border-b border-[var(--border)] bg-[var(--panel)] shrink-0">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Dashboard overview</div>
-            <h1 className="text-xl font-bold text-[#ededed] mt-1">{getGreeting()}, {user.name.split(' ')[0]}</h1>
+            <div className={eyebrow}>Dashboard</div>
+            <h1 className="text-xl font-bold text-[var(--text)] mt-1">{getGreeting()}, {user.name.split(' ')[0]}</h1>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setWelcomeOpen(true)}
-              className="ui-button ui-button-icon"
-              title="Show the welcome guide again"
-              aria-label="Help"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-            <div ref={notifRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setNotifOpen((o) => !o)}
-                className="ui-button ui-button-icon relative"
-                title="Notifications"
-              >
-                <Bell className="w-4 h-4" />
-                {recentActivity.length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#4ade80]" />
-                )}
-              </button>
-              {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 border border-[#242424] bg-[#111111] shadow-lg z-50">
-                  <div className="px-3 py-2.5 border-b border-[#242424] text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">
-                    Notifications
-                  </div>
-                  {recentActivity.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-[11px] text-[#8a8a8a] font-mono">
-                      No recent activity.
-                    </div>
-                  ) : (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-[#242424]">
-                      {recentActivity.map((item) => {
-                        const ss = STATUS_STYLES[item.type];
-                        return (
-                          <div key={item.id} className="px-3 py-2.5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-[10px] uppercase tracking-[0.1em] text-[#8a8a8a] font-mono truncate">{item.docNumber}</div>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.1em] font-mono shrink-0 ${ss.bg}`}>
-                                <span className={`w-1 h-1 rounded-full ${ss.dot}`} />
-                                {ss.label}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-xs font-medium text-[#ededed] truncate">{item.docTitle}</div>
-                            <div className="mt-1 text-[10px] text-[#8a8a8a] font-mono">{item.reviewer} · {item.date}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="border-l border-[#242424] h-6 ml-1" />
-            <div className="ui-panel flex items-center gap-3 px-2 py-1.5">
-              <div className="w-8 h-8 border border-[#242424] bg-[#131313] flex items-center justify-center text-[10px] font-bold text-[#ededed] font-mono uppercase">
-                {user.initials}
-              </div>
-              <div className="hidden sm:block text-right">
-                <div className="text-[10px] font-bold text-[#ededed] uppercase tracking-[0.08em] font-mono">{user.name}</div>
-                <div className="text-[9px] text-[#8a8a8a] uppercase tracking-[0.12em] font-mono">{user.title}</div>
-              </div>
-            </div>
-            <button type="button" onClick={onLogout} className="ui-button ui-button-danger">
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
-            </button>
-          </div>
+          <button type="button" onClick={() => setWelcomeOpen(true)} className="ui-button ui-button-icon" title="Show the welcome guide again" aria-label="Help">
+            <HelpCircle className="w-4 h-4" />
+          </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-7 bg-[#0a0a0a]">
-          <div className="border border-[#242424] bg-[#0f0f0f]">
-            <section className="p-6">
-              <div className="border-b border-[#242424] pb-5 mb-5">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">System overview</div>
-                <div className="text-[28px] font-bold text-[#ededed] leading-none">Engineering workspace</div>
-              </div>
+        <main className="flex-1 overflow-y-auto p-6 md:p-7 space-y-6">
+          {statsError && <p role="alert" className="rounded-lg border border-[var(--danger)] bg-[rgba(255,84,112,0.12)] px-3 py-2 text-xs text-[var(--danger)]">Could not load the document counts: {statsError}</p>}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border border-[#242424] bg-[#111111]">
-                {STATS.map((stat) => (
-                  <button
-                    key={stat.label}
-                    type="button"
-                    onClick={() => onOpenDocuments(stat.status)}
-                    title={`View ${stat.label === 'total docs' ? 'all documents' : `${stat.label} documents`}`}
-                    className="border-r border-[#242424] last:border-r-0 p-5 text-left transition-colors hover:bg-[#161616] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#4ade80]"
-                  >
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">{stat.label}</div>
-                    <div className={`text-3xl font-bold ${stat.valueColor} font-mono`}>{stat.value}</div>
-                  </button>
-                ))}
-                <div className="p-5">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-[#8a8a8a] font-mono mb-3">
-                    <UploadCloud className="w-3 h-3" /> google drive
-                  </div>
-                  {latestDriveExport ? (
-                    <>
-                      <div className="text-lg font-bold text-[#4ade80] font-mono leading-tight">Synced {formatRelativeTime(latestDriveExport.exportedAt)}</div>
-                      <div className="text-[10px] text-[#8a8a8a] mt-1 truncate">{latestDriveExport.docTitle}</div>
-                    </>
-                  ) : (
-                    <div className="text-lg font-bold text-[#8a8a8a] font-mono leading-tight">Not synced yet</div>
-                  )}
-                </div>
+          <section aria-label="Document counts" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="Total documents" value={count(stats?.total)} note="Every document created, except those in the Doc Bin" onOpen={() => onOpenDocuments(null)} />
+            <StatCard label="Approved" value={count(stats?.byStatus.APPROVED)} tone="text-[var(--success)]"
+              note={admin ? 'Approved by their reviewers' : 'Approved documents open for admins only'}
+              onOpen={admin ? () => onOpenDocuments('APPROVED') : undefined} />
+            <StatCard label="Under review" value={count(stats?.byStatus.IN_REVIEW)} tone="text-[var(--amber)]" note="Waiting on a review" onOpen={() => onOpenDocuments('IN_REVIEW')} />
+            <div className={`${panel} p-5`}>
+              <span className={`flex items-center gap-1.5 ${eyebrow}`}><UploadCloud aria-hidden className="w-3.5 h-3.5" /> Google Drive</span>
+              {latestDriveExport ? (
+                <>
+                  <span className="mt-2 block text-lg font-bold text-[var(--success)] leading-tight">Synced {formatRelativeTime(latestDriveExport.exportedAt)}</span>
+                  <span className="mt-1 block truncate text-[11px] text-[var(--text-dim)]">{latestDriveExport.docTitle}</span>
+                </>
+              ) : (
+                <>
+                  <span className="mt-2 block text-lg font-bold text-[var(--text-dim)] leading-tight">Not synced yet</span>
+                  <span className="mt-1 block text-[11px] text-[var(--text-dim)]">No document uploaded to Google Drive</span>
+                </>
+              )}
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] gap-6 items-start">
+            <section aria-label="Recent activity" className={`${panel} p-5 space-y-4`}>
+              <div>
+                <h2 className="text-sm font-semibold text-[var(--text)]">Recent activity</h2>
+                <p className="mt-0.5 text-[11px] text-[var(--text-dim)]">Document updates and release events, newest first.</p>
               </div>
+              {releaseEventsError && <p className="text-[11px] text-[var(--amber)]">Release events could not be loaded; showing documents only.</p>}
+              {activity.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[var(--border)] p-8 text-center">
+                  <Activity aria-hidden className="w-6 h-6 text-[var(--text-faint)] mx-auto mb-2" />
+                  <p className="text-xs text-[var(--text-dim)]">Nothing yet. New and updated documents and release changes show up here.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[var(--border-soft)] rounded-lg border border-[var(--border-soft)]">
+                  {activity.map((item) => (
+                    <li key={item.key}>
+                      <button type="button"
+                        onClick={() => (item.kind === 'document'
+                          ? onOpenDocument(item.docId)
+                          : navigateTo(releasesPath({ view: 'release', releaseId: item.releaseId, tab: 'overview', buildId: null })))}
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--panel-alt)]">
+                        <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-dim)]">
+                          {item.kind === 'document' ? <FileText className="w-4 h-4" /> : <GitBranch className="w-4 h-4" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-[var(--text)]">
+                            {item.kind === 'document' ? item.title : <>{item.version} <span className="text-[var(--text-dim)]">·</span> {item.title}</>}
+                          </div>
+                          <div className="mt-0.5 truncate text-[11px] text-[var(--text-dim)]">
+                            {item.kind === 'document'
+                              ? ['Document', item.docNumber, item.author ? `by ${item.author}` : ''].filter(Boolean).join(' · ')
+                              : `Release · ${item.line}`}
+                          </div>
+                        </div>
+                        {item.kind === 'document' && <StatusBadge status={item.status} />}
+                        <span className="hidden sm:block w-16 shrink-0 text-right text-[11px] text-[var(--text-dim)]">{formatRelativeTime(item.at)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.75fr)] items-start border-t border-[#242424]">
-              <aside className="p-6 border-b xl:border-b-0 xl:border-r border-[#242424]">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono mb-3">Recent activity</div>
-                <div className="space-y-3">
-                  {recentActivity.map((item) => {
-                    const ss = STATUS_STYLES[item.type];
-                    const linked = findDocumentByNumber(visibleDocs, item.docNumber);
-                    const Wrapper = (linked ? 'button' : 'div') as React.ElementType;
-                    return (
-                      <Wrapper
-                        key={item.id}
-                        {...(linked ? { type: 'button', onClick: () => onOpenDocument(linked.metadata.id), title: 'Open this document' } : {})}
-                        className={`block w-full text-left border border-[#242424] bg-[#111111] p-3 ${linked ? 'transition-colors hover:border-[#4ade80] hover:bg-[#161616]' : ''}`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.docNumber}</div>
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] font-mono ${ss.bg}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} />
-                            {ss.label}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-sm font-medium text-[#ededed]">{item.docTitle}</div>
-                        <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.reviewer}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#8a8a8a] font-mono">{item.date}</div>
-                      </Wrapper>
-                    );
-                  })}
-                </div>
-              </aside>
-
-              <aside className="self-start w-full p-5 bg-[#0d0d0d]">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Review results</div>
-                    <div className="mt-1 text-sm font-semibold text-[#ededed]">Approval progress</div>
-                  </div>
-                  <div className="text-[10px] text-[#8a8a8a] font-mono">LIVE DATA</div>
-                </div>
-
-                <div className="mt-4 flex flex-col sm:flex-row xl:flex-col 2xl:flex-row items-center gap-4">
-                  <div className="relative shrink-0 w-28 h-28">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120" role="img" aria-label={`${approvalRate}% approved, ${inReviewDocs} in review`}>
-                      <circle cx="60" cy="60" r={chartRadius} fill="none" stroke="#242424" strokeWidth="13" />
-                      {reviewedDocs > 0 && (
-                        <>
-                          <circle
-                            cx="60" cy="60" r={chartRadius} fill="none" stroke="#4ade80" strokeWidth="13" strokeLinecap="butt"
-                            strokeDasharray={`${Math.max(approvedArc - 4, 0)} ${chartCircumference}`}
-                            className="cursor-pointer"
-                            tabIndex={0}
-                            onMouseEnter={() => setChartHover('approved')}
-                            onMouseLeave={() => setChartHover(null)}
-                            onFocus={() => setChartHover('approved')}
-                            onBlur={() => setChartHover(null)}
-                          />
-                          {inReviewDocs > 0 && (
-                            <circle
-                              cx="60" cy="60" r={chartRadius} fill="none" stroke="#fbbf24" strokeWidth="13" strokeLinecap="butt"
-                              strokeDasharray={`${Math.max(reviewArc - 4, 0)} ${chartCircumference}`}
-                              strokeDashoffset={-approvedArc}
-                              className="cursor-pointer"
-                              tabIndex={0}
-                              onMouseEnter={() => setChartHover('in-review')}
-                              onMouseLeave={() => setChartHover(null)}
-                              onFocus={() => setChartHover('in-review')}
-                              onBlur={() => setChartHover(null)}
-                            />
-                          )}
-                        </>
-                      )}
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xl font-bold text-[#ededed] font-mono">{approvalRate}%</span>
-                      <span className="text-[8px] uppercase tracking-[0.13em] text-[#8a8a8a] font-mono">approved</span>
-                    </div>
-                    {chartHover && (
-                      <div role="status" className="absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 whitespace-nowrap border border-[#303030] bg-[#171717] px-2.5 py-1.5 text-[10px] text-[#ededed] shadow-lg font-mono">
-                        <span className={chartHover === 'approved' ? 'text-[#4ade80]' : 'text-[#fbbf24]'}>
-                          {chartHover === 'approved' ? 'Approved' : 'In review'}
-                        </span>
-                        {' — '}{chartHover === 'approved' ? approvedDocs : inReviewDocs} documents ({chartHover === 'approved' ? approvalRate : inReviewRate}%)
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="w-full space-y-2.5">
-                    <div className="flex items-center justify-between gap-3 border-b border-[#242424] pb-2.5">
-                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
-                        <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#4ade80]" /> Approved
-                      </div>
-                      <span className="text-base font-bold text-[#4ade80] font-mono">{approvedDocs}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-xs text-[#bdbdbd]">
-                        <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
-                        <Clock className="w-3.5 h-3.5 text-[#fbbf24]" /> In review
-                      </div>
-                      <span className="text-base font-bold text-[#fbbf24] font-mono">{inReviewDocs}</span>
-                    </div>
-                    <div className="pt-1 text-[9px] text-[#8a8a8a] font-mono">{reviewedDocs} DOCUMENTS IN REVIEW PIPELINE</div>
-                  </div>
-                </div>
-
-                <div className="mt-5 border-t border-[#242424] pt-4">
-                  <div className="text-[9px] uppercase tracking-[0.16em] text-[#8a8a8a] font-mono">Delivery forecast</div>
-                  <div className="mt-3">
-                    <div className="border border-[#242424] bg-[#111111] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] text-[#bdbdbd]">Live test cases</div>
-                        <span className="text-xs font-bold text-[#a78bfa] font-mono">{reviewedDocs}</span>
-                      </div>
-                      <div className="mt-3 h-2 overflow-hidden bg-[#242424]">
-                        <div className="h-full bg-[#4ade80]" style={{ width: `${testProgress}%` }} />
-                      </div>
-                      <div className="mt-2 flex justify-between text-[9px] text-[#8a8a8a] font-mono">
-                        <span>{approvedDocs} PASSED</span>
-                        <span className="text-[#fbbf24]">{inReviewDocs} RUNNING</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </aside>
+            <section aria-label="Documents by status" className={`${panel} p-5 space-y-4`}>
+              <div>
+                <h2 className="text-sm font-semibold text-[var(--text)]">Documents by status</h2>
+                <p className="mt-0.5 text-[11px] text-[var(--text-dim)]">Every document, team-wide.</p>
+              </div>
+              {stats ? <StatusRing stats={stats} /> : !statsError && <p role="status" className="text-xs text-[var(--text-dim)]">Loading counts…</p>}
             </section>
           </div>
         </main>

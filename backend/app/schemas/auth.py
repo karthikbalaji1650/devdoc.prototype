@@ -11,7 +11,7 @@ class SessionUser(WireModel):
     id: str
     name: str
     email: str
-    title: str | None
+    designation: str | None
     department: str | None
     role: str
     avatarBg: str | None
@@ -28,7 +28,7 @@ def session_user(user: User) -> dict[str, str | None]:
         "id": user.id,
         "name": user.name,
         "email": user.email,
-        "title": user.title,
+        "designation": user.designation,
         "department": user.department,
         "role": user.role,
         "avatarBg": user.avatar_bg,

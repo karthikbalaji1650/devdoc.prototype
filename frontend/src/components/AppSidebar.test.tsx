@@ -216,3 +216,18 @@ describe('AppSidebar open/close behaviour', () => {
     expect(isOpen()).toBe(true);
   });
 });
+
+describe('AppSidebar entries', () => {
+  it('has no Incident Tracker (removed: not in the SRS)', () => {
+    renderScreen();
+    const labels = [...host!.querySelectorAll<HTMLButtonElement>('nav button')].map((b) => b.textContent?.trim());
+    expect(labels.some((l) => l?.includes('Incident'))).toBe(false);
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Test Management'),
+        expect.stringContaining('Release Master'),
+        expect.stringContaining('Reviewers Log'),
+      ]),
+    );
+  });
+});

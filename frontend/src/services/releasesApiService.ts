@@ -17,7 +17,7 @@ export const MIN_SIGNERS = 2;
 export const MAX_SIGNERS = 5;
 
 export interface Milestone { key: string; name: string; plannedDate: string | null; actualDate: string | null }
-export interface Signer { userId: string; name: string; title: string | null; department: string | null }
+export interface Signer { userId: string; name: string; designation: string | null; department: string | null }
 export interface GateRules { minPassRate: number; requireNoOpenBlockers: boolean; mandatorySuiteIds: string[] }
 export interface GateCheck { id: string; label: string; passed: boolean; detail: string }
 export interface Signoff { userId: string; userName: string; decision: 'Approved' | 'Rejected'; comment: string | null; at: string }
@@ -116,6 +116,16 @@ export interface AuditEntry {
   details: Record<string, unknown>; prevHash: string; hash: string;
 }
 
+/** What each audit action is called on screen. */
+export const AUDIT_ACTIONS: Record<string, string> = {
+  'release-created': 'Release created', 'release-edited': 'Release details changed', 'status-changed': 'Status changed',
+  'release-cancelled': 'Release cancelled', 'signers-changed': 'Signers changed', 'build-registered': 'Build registered',
+  'test-runs-linked': 'Test runs linked', 'gates-overridden': 'Gates overridden', 'signed-off': 'Signed off',
+  'promoted-to-final': 'Promoted to Final', 'blocker-logged': 'Blocker logged', 'blocker-closed': 'Blocker closed',
+  'blocker-open': 'Blocker reopened', 'blocker-removed': 'Blocker removed', 'blockers-synced': 'Blockers synced from Jira / GitHub',
+  'blocker-query-changed': 'Blocker query changed', 'gate-rules-changed': 'Readiness rules changed',
+};
+
 export { isBackendConfigured as isReleasesAvailable };
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -174,6 +184,9 @@ export const deleteBlocker = (id: string, blockerId: string) => call<null>('DELE
 export const lookupBlocker = (id: string, tracker: 'Jira' | 'GitHub', key: string) =>
   call<{ blocker: Blocker }>('POST', `/${enc(id)}/blockers/lookup`, { tracker, key });
 export const syncBlockers = (id: string) => call<BlockerSync>('POST', `/${enc(id)}/blockers/sync`);
+/** The latest audit entries across every release, newest first (the dashboard's recent activity). */
+export const loadReleaseActivity = (limit = 10) =>
+  call<{ entries: import('./recentActivity').ReleaseActivityEntry[] }>('GET', `/activity?limit=${limit}`).then((r) => r.entries);
 export const loadAudit = (id: string) => call<{ entries: AuditEntry[]; intact: boolean }>('GET', `/${enc(id)}/audit`);
 
 /** A Markdown draft of the release notes from what the release holds. */

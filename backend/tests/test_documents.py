@@ -152,6 +152,39 @@ class TestGet:
         assert '[{"1":"a","2":"b","x":0.5}]' in raw
 
 
+class TestStats:
+    """Dashboard counts (DDS-SRS-005): numbers for every non-deleted document,
+    the same for everyone signed in, with no titles or other content."""
+
+    def test_counts_every_document_by_status_even_ones_the_user_cannot_open(self, api: Api) -> None:
+        agent = api.sign_in(AUTHOR)
+        for doc_id, status in (
+            ("a", "DRAFT"),
+            ("b", "APPROVED"),
+            ("c", "IN_REVIEW"),
+            ("d", "APPROVED"),
+            ("e", "PUBLISHED"),
+        ):
+            agent.put(f"/api/documents/{doc_id}", json=doc(doc_id, status=status))
+        expected = {"total": 5, "byStatus": {"DRAFT": 1, "IN_REVIEW": 1, "APPROVED": 2, "PUBLISHED": 1}}
+        assert agent.get("/api/documents/stats").json() == expected  # AUTHOR can only open a and c
+        assert api.sign_in(OTHER).get("/api/documents/stats").json() == expected
+        assert api.sign_in(ADMIN).get("/api/documents/stats").json() == expected
+
+    def test_deleted_documents_are_not_counted_and_every_status_is_listed(self, api: Api) -> None:
+        agent = api.sign_in(AUTHOR)
+        agent.put("/api/documents/a", json=doc("a"))
+        agent.put("/api/documents/b", json=doc("b"))
+        agent.delete("/api/documents/b")
+        assert agent.get("/api/documents/stats").json() == {
+            "total": 1,
+            "byStatus": {"DRAFT": 1, "IN_REVIEW": 0, "APPROVED": 0, "PUBLISHED": 0},
+        }
+
+    def test_needs_a_session(self, api: Api) -> None:
+        assert api.anonymous().get("/api/documents/stats").status_code == 401
+
+
 class TestDelete:
     def test_soft_deletes(self, api: Api) -> None:
         agent = api.sign_in(AUTHOR)

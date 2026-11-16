@@ -15,6 +15,7 @@ import { isBackendConfigured } from './backendAuthService';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import { createSharedCollection } from './sharedCollection';
 import { sampleADRDoc } from '../templates/adrTemplate';
+import { countByStatus, type DocumentStats } from './documentStats';
 
 export const DOCUMENT_SAVE_ERROR_EVENT = 'devdoc:document-save-error';
 
@@ -123,6 +124,20 @@ export function useDocuments(): { status: DocumentsStatus; version: number } {
 /** Most recently saved first. */
 export function listDocuments(): DocumentModel[] {
   return [...entries.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((e) => e.doc);
+}
+
+/** When the document was last saved (ISO), as the server last said. */
+export function getDocumentUpdatedAt(id: string): string | undefined {
+  return entries.get(id)?.updatedAt;
+}
+
+/** Counts of every document by status, the same for everyone (DDS-SRS-005).
+ * Without a backend, the documents this browser holds. */
+export async function loadDocumentStats(): Promise<DocumentStats> {
+  if (!isBackendConfigured()) return countByStatus(listDocuments());
+  const stats = await call<DocumentStats>('GET', '/stats');
+  if (!stats) throw new Error('Server error (no counts).');
+  return stats;
 }
 
 export function getDocument(id: string): DocumentModel | null {

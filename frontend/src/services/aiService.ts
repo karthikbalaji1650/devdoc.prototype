@@ -15,7 +15,6 @@ export type RephraseTone =
   | 'professional' 
   | 'concise' 
   | 'technical' 
-  | 'rca-formal' 
   | 'executive' 
   | 'fix-grammar';
 
@@ -37,12 +36,6 @@ export const REPHRASE_TONES: { id: RephraseTone; label: string; icon: string; pr
     label: 'Concise & Bullet Points',
     icon: '🎯',
     prompt: 'Condense the following text into crisp, high-impact bullet points and short executive sentences while preserving all core facts and parameters.'
-  },
-  {
-    id: 'rca-formal',
-    label: 'Formal RCA & Problem Statement',
-    icon: '🛠️',
-    prompt: 'Format this text into an industry-standard Root Cause Analysis (RCA) or Incident Statement with clear cause-and-effect relationship.'
   },
   {
     id: 'fix-grammar',
@@ -282,12 +275,6 @@ function simulateSmartRephrase(text: string, tone: RephraseTone, _custom?: strin
         if (!result.includes('Specifically,') && result.length > 50) {
           result = `Investigation revealed that ${result.charAt(0).toLowerCase() + result.slice(1)}`;
         }
-        resolve(result);
-        return;
-      }
-
-      if (tone === 'rca-formal') {
-        result = `**Root Cause Statement**:\n${result}\n\n**Impact & Scope**:\n- Affects target firmware execution and client interaction.\n- Remediation requires deterministic input sanitization and strict schema enforcement.`;
         resolve(result);
         return;
       }

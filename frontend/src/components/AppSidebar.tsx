@@ -10,7 +10,6 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  ShieldAlert,
   ClipboardCheck,
 } from 'lucide-react';
 import type { UserProfile } from '../types/auth';
@@ -60,13 +59,6 @@ const NAV_ITEMS = [
     icon: GitBranch,
     app: 'operations' as AppView,
     opsTab: 'releases' as OperationsTab,
-  },
-  {
-    id: 'incidents',
-    label: 'Incident Tracker',
-    icon: ShieldAlert,
-    app: 'operations' as AppView,
-    opsTab: 'incidents' as OperationsTab,
   },
   {
     id: 'reviewers',
@@ -263,7 +255,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             text re-truncating on every frame of the animation. */}
         <div aria-hidden={!expanded} className={`w-[150px] shrink-0 min-w-0 ${fade}`}>
           <div className="text-[10px] font-bold text-[#ededed] uppercase tracking-[0.08em] truncate font-mono">{user.name}</div>
-          <div className="text-[9px] text-[#8a8a8a] uppercase tracking-[0.1em] truncate font-mono">{user.title}</div>
+          <div className="text-[9px] text-[#8a8a8a] uppercase tracking-[0.1em] truncate font-mono">{user.designation}</div>
         </div>
         <button
           type="button"

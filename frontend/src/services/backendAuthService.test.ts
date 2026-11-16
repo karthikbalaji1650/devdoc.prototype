@@ -28,7 +28,7 @@ describe('loginWithBackend', () => {
 
   it('posts credentials with the cookie included and maps the returned user', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      user: { id: 'usr-01', name: 'Manivannan Thangavel', email: 'mani@x.com', title: 'Manager', department: 'Eng', role: 'admin', avatarBg: 'x', initials: 'MT' },
+      user: { id: 'usr-01', name: 'Manivannan Thangavel', email: 'mani@x.com', designation: 'Manager', department: 'Eng', role: 'admin', avatarBg: 'x', initials: 'MT' },
     }), { status: 200 }));
     const { loginWithBackend } = await load();
     const user = await loginWithBackend('mani@x.com', 'secret');
@@ -40,13 +40,13 @@ describe('loginWithBackend', () => {
     expect(JSON.parse(init.body)).toEqual({ email: 'mani@x.com', password: 'secret' });
   });
 
-  it('fills in reasonable defaults for a user with no title, department or avatar set', async () => {
+  it('fills in reasonable defaults for a user with no designation, department or avatar set', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      user: { id: 'usr-09', name: 'New Person', email: 'new@x.com', title: null, department: null, role: 'user', avatarBg: null, initials: null },
+      user: { id: 'usr-09', name: 'New Person', email: 'new@x.com', designation: null, department: null, role: 'user', avatarBg: null, initials: null },
     }), { status: 200 }));
     const { loginWithBackend } = await load();
     const user = await loginWithBackend('new@x.com', 'secret');
-    expect(user.title).toBe('');
+    expect(user.designation).toBe('');
     expect(user.initials).toBe('NE');
   });
 

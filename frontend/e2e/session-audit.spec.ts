@@ -4,6 +4,10 @@ import { openSystemAndStorage } from './helpers';
 
 // DDS-SRS-011: the server records every sign-in and sign-out, for every
 // user on every machine. Admins read everyone's, anyone else only their own.
+// Both tests share one server on fixed ports: run them one after the other,
+// or two workers each start a server on the same ports and one times out.
+test.describe.configure({ mode: 'serial' });
+
 let stack: Stack;
 test.beforeAll(async () => { stack = await startStack(4155, 5240); });
 test.afterAll(() => stack?.stop());

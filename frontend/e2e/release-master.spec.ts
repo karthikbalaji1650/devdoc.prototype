@@ -202,7 +202,7 @@ test('every release and tab has its own link, Back works, and a release can be c
   await page.reload(); // a refresh keeps you where you were
   await expect(page.getByRole('table', { name: 'Release blockers' })).toBeVisible();
 
-  await page.getByRole('link', { name: '← All releases' }).click();
+  await page.getByRole('link', { name: 'All releases' }).click();
   await expect(page.getByRole('table', { name: 'Releases' })).toContainText('v4.0.0');
 
   // A release that does not exist says so.
@@ -223,7 +223,7 @@ test('every release and tab has its own link, Back works, and a release can be c
   await expect(page.getByRole('table', { name: 'Audit log' })).toContainText('Release cancelled');
 });
 
-test('the signer picker finds people by name, title or department and enforces 2 to 5 signers', async ({ page }) => {
+test('the signer picker finds people by name, designation or department and enforces 2 to 5 signers', async ({ page }) => {
   await signInAs(page, 'admin');
   await openReleaseMaster(page);
   await page.getByRole('link', { name: 'New release' }).click();
@@ -257,4 +257,25 @@ test('opening Release Master from the sidebar sets its address, leaving clears i
   await expect(page).toHaveURL(/\/releases$/);
   await page.goForward();
   await expect(page.getByText(/Good (Morning|Afternoon|Evening)/)).toBeVisible();
+});
+
+test('a release link opened while signed out is still open after signing in', async ({ page, stack }) => {
+  await page.addInitScript(() => localStorage.setItem('devdoc_studio_welcome_seen_v1', '1'));
+  await page.goto('/releases');
+  await page.getByPlaceholder('engineer@sanmina.com').fill(stack.users[0].email);
+  await page.getByPlaceholder('Enter your password').fill(stack.users[0].password);
+  await page.getByRole('button', { name: /sign in to platform/i }).click();
+  await expect(page.getByRole('heading', { name: 'Release Master' })).toBeVisible();
+  await expect(page).toHaveURL(/\/releases$/);
+});
+
+test('a message about one change does not follow you to another page', async ({ page }) => {
+  await signInAs(page, 'release-manager');
+  await openReleaseMaster(page);
+  await createRelease(page, 'v5.0.0', ['Manivannan Thangavel']);
+  await page.getByRole('button', { name: 'Save release' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Release saved.' })).toBeVisible();
+  await page.getByRole('link', { name: /All releases/ }).click();
+  await expect(page.getByRole('table', { name: 'Releases' })).toBeVisible();
+  await expect(page.getByText('Release saved.')).toHaveCount(0);
 });

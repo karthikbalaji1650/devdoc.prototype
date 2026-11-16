@@ -71,7 +71,7 @@ class MemoryUserRepository:
         found = [
             s.user
             for s in self._store.users.values()
-            if wanted in f"{s.user.name}\n{s.user.title or ''}\n{s.user.department or ''}".lower()
+            if wanted in f"{s.user.name}\n{s.user.designation or ''}\n{s.user.department or ''}".lower()
         ]
         return sorted(found, key=lambda u: (u.name.lower(), u.id))[:limit]
 

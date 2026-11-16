@@ -232,7 +232,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onNavigate, on
                   {[
                     { label: 'Full Name',  value: user.name },
                     { label: 'Email',      value: user.email },
-                    { label: 'Title',      value: user.title },
+                    { label: 'Designation', value: user.designation },
                     { label: 'Department', value: user.department },
                     { label: 'Role',       value: ROLE_LABELS[user.role] ?? user.role },
                     { label: 'User ID',    value: user.id },

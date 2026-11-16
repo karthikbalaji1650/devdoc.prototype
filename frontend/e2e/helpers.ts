@@ -2,10 +2,10 @@ import type { Page } from '@playwright/test';
 
 export type Role = 'admin' | 'release-manager' | 'firmware-lead';
 
-const USERS: Record<Role, { id: string; name: string; title: string; initials: string }> = {
-  admin: { id: 'usr-01', name: 'Manivannan Thangavel', title: 'Admin', initials: 'MT' },
-  'release-manager': { id: 'usr-02', name: 'Vaishnavi Aasaithambi', title: 'Release Manager', initials: 'VA' },
-  'firmware-lead': { id: 'usr-03', name: 'Judia Lumina', title: 'Firmware Lead', initials: 'JL' },
+const USERS: Record<Role, { id: string; name: string; designation: string; initials: string }> = {
+  admin: { id: 'usr-01', name: 'Manivannan Thangavel', designation: 'Admin', initials: 'MT' },
+  'release-manager': { id: 'usr-02', name: 'Vaishnavi Aasaithambi', designation: 'Release Manager', initials: 'VA' },
+  'firmware-lead': { id: 'usr-03', name: 'Judia Lumina', designation: 'Firmware Lead', initials: 'JL' },
 };
 
 /** Browser-only demo (no backend): starts the app already signed in, once per

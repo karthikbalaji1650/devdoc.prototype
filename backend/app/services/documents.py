@@ -97,6 +97,17 @@ class DocumentService:
         records = await self._documents.list_active()
         return [_with_updated_at(r) for r in records if is_visible(user, r)]
 
+    async def stats(self) -> dict[str, Any]:
+        """Counts of every non-deleted document by status (DDS-SRS-005). The
+        same for everyone signed in: numbers only, so a user who cannot open
+        approved documents still sees how many there are."""
+        by_status = dict.fromkeys(VALID_STATUSES, 0)
+        records = await self._documents.list_active()
+        for record in records:
+            if record.status in by_status:
+                by_status[record.status] += 1
+        return {"total": len(records), "byStatus": by_status}
+
     async def get_visible(self, user: User, document_id: str) -> dict[str, Any]:
         record = await self._documents.get_active(document_id)
         if record is None or not is_visible(user, record):

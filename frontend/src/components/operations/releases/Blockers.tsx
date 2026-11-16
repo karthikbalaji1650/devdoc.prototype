@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { SEVERITIES, addBlocker, deleteBlocker, lookupBlocker, syncBlockers, updateBlocker, updateRelease, type BlockerQuery, type Release } from '../../../services/releasesApiService';
 import { connected, loadTrackers } from '../../../services/trackersApiService';
-import { type Act, Badge, btn, card, input } from './common';
+import { type Act, Badge, Field, btn, card, input, severityTone, tableFrame, td, th, tr } from './common';
 
 export const Blockers: React.FC<{ release: Release; act: Act }> = ({ release, act }) => {
   const canManage = release.canEdit;
@@ -41,7 +41,7 @@ export const Blockers: React.FC<{ release: Release; act: Act }> = ({ release, ac
       {anyTracker && (
         <section aria-label="Blocker query" className={`${card} space-y-2`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-bold text-slate-900">Issues marked as blockers for this release</div>
+            <h3 className="text-sm font-semibold text-[var(--text)]">Issues marked as blockers for this release</h3>
             <div className="flex items-center gap-2 text-[11px] text-slate-500">
               {sync && (sync.error
                 ? <span className="text-[var(--danger)]">Last sync failed: {sync.error}</span>
@@ -53,13 +53,13 @@ export const Blockers: React.FC<{ release: Release; act: Act }> = ({ release, ac
           </div>
           <div className="grid gap-2 md:grid-cols-3">
             {trackers.jira && (
-              <label className="text-xs md:col-span-3">Jira JQL
+              <Field label="Jira JQL" className="md:col-span-3">
                 <input className={`${input} font-mono`} disabled={!canManage} value={jql} onChange={(e) => setJql(e.target.value)} placeholder={`fixVersion = "${release.version}" AND labels = release-blocker`} />
-              </label>
+              </Field>
             )}
             {trackers.github && <>
-              <label className="text-xs md:col-span-2">GitHub repository<input className={`${input} font-mono`} disabled={!canManage} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="owner/repo" /></label>
-              <label className="text-xs">Label<input className={`${input} font-mono`} disabled={!canManage} value={label} onChange={(e) => setLabel(e.target.value)} /></label>
+              <Field label="GitHub repository" className="md:col-span-2"><input className={`${input} font-mono`} disabled={!canManage} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="owner/repo" /></Field>
+              <Field label="Label"><input className={`${input} font-mono`} disabled={!canManage} value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
             </>}
           </div>
           {canManage && <button type="button" onClick={() => void saveQuery()} className={`${btn} bg-blue-600 text-white`}>Save and sync</button>}
@@ -67,41 +67,53 @@ export const Blockers: React.FC<{ release: Release; act: Act }> = ({ release, ac
         </section>
       )}
 
-      <table className={`${card} w-full text-xs`} aria-label="Release blockers"><thead><tr className="text-left text-slate-500"><th>Issue</th><th>Title</th><th>Severity</th><th>Status</th><th /></tr></thead><tbody>
-        {release.blockers.map((b) => (
-          <tr key={b.id} className="border-t border-slate-100">
-            <td className="py-1 font-mono">{b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">{b.key}</a> : b.key} <span className="text-slate-400">{b.tracker}{fromTracker(b) ? ` · ${b.source === 'synced' ? 'from query' : 'linked'}` : ''}</span></td>
-            <td>{b.title ?? '-'}{b.syncNote && <div className="text-[10px] text-slate-500">{b.syncNote}</div>}</td><td>{b.severity}</td><td><Badge tone={b.status === 'Open' ? 'red' : 'green'}>{b.status}</Badge></td>
-            <td className="text-right">{canManage && <>
-              {!fromTracker(b) && (
-                <button type="button" onClick={() => act(() => updateBlocker(release.id, b.id, { status: b.status === 'Open' ? 'Closed' : 'Open' }), `${b.key} ${b.status === 'Open' ? 'closed' : 'reopened'}.`)} className="text-blue-700 hover:underline mr-2">{b.status === 'Open' ? 'Close' : 'Reopen'}</button>
-              )}
-              <button type="button" aria-label={`Remove ${b.key}`} onClick={() => act(() => deleteBlocker(release.id, b.id), `${b.key} removed.`)} className="text-slate-400 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-            </>}</td>
-          </tr>
-        ))}
-        {release.blockers.length === 0 && <tr><td colSpan={5} className="py-2 text-slate-500">No blockers.</td></tr>}
-      </tbody></table>
+      <div className={tableFrame}>
+        <table className="w-full text-xs" aria-label="Release blockers">
+          <thead><tr><th className={th}>Issue</th><th className={th}>Title</th><th className={th}>Severity</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr></thead>
+          <tbody>
+            {release.blockers.map((b) => (
+              <tr key={b.id} className={tr}>
+                <td className={`${td} whitespace-nowrap`}>
+                  <div className="font-mono font-semibold">{b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">{b.key}</a> : b.key}</div>
+                  <div className="mt-0.5 text-[10px] text-[var(--text-dim)]">{b.tracker}{fromTracker(b) ? ` · ${b.source === 'synced' ? 'from query' : 'linked'}` : ''}</div>
+                </td>
+                <td className={td}>{b.title ?? '-'}{b.syncNote && <div className="mt-0.5 text-[10px] text-slate-500">{b.syncNote}</div>}</td>
+                <td className={td}><Badge tone={severityTone(b.severity)}>{b.severity}</Badge></td>
+                <td className={td}><Badge tone={b.status === 'Open' ? 'red' : 'green'}>{b.status}</Badge></td>
+                <td className={`${td} text-right whitespace-nowrap`}>{canManage && <>
+                  {!fromTracker(b) && (
+                    <button type="button" onClick={() => act(() => updateBlocker(release.id, b.id, { status: b.status === 'Open' ? 'Closed' : 'Open' }), `${b.key} ${b.status === 'Open' ? 'closed' : 'reopened'}.`)} className="text-blue-700 hover:underline mr-3">{b.status === 'Open' ? 'Close' : 'Reopen'}</button>
+                  )}
+                  <button type="button" aria-label={`Remove ${b.key}`} onClick={() => act(() => deleteBlocker(release.id, b.id), `${b.key} removed.`)} className="align-middle text-[var(--text-dim)] hover:text-rose-600"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                </>}</td>
+              </tr>
+            ))}
+            {release.blockers.length === 0 && <tr className={tr}><td colSpan={5} className={`${td} text-slate-500`}>No blockers.</td></tr>}
+          </tbody>
+        </table>
+      </div>
 
       {canManage && anyTracker && (
-        <form aria-label="Link issue" className={`${card} flex flex-wrap gap-2 items-end`} onSubmit={(e) => { e.preventDefault(); void act(async () => { await lookupBlocker(release.id, link.tracker, link.key); setLink({ ...link, key: '' }); }, `${link.key} linked.`); }}>
-          <label className="text-xs">Tracker<select className={input} value={link.tracker} onChange={(e) => setLink({ ...link, tracker: e.target.value as 'Jira' | 'GitHub' })}>
+        <form aria-label="Link issue" className={`${card} flex flex-wrap gap-3 items-end`} onSubmit={(e) => { e.preventDefault(); void act(async () => { await lookupBlocker(release.id, link.tracker, link.key); setLink({ ...link, key: '' }); }, `${link.key} linked.`); }}>
+          <Field label="Tracker"><select className={input} value={link.tracker} onChange={(e) => setLink({ ...link, tracker: e.target.value as 'Jira' | 'GitHub' })}>
             {trackers.jira && <option>Jira</option>}{trackers.github && <option>GitHub</option>}
-          </select></label>
-          <label className="text-xs flex-1 min-w-40">Issue key<input className={`${input} font-mono`} value={link.key} onChange={(e) => setLink({ ...link, key: e.target.value })} placeholder={link.tracker === 'Jira' ? 'WH3-1300' : 'owner/repo#42'} required /></label>
+          </select></Field>
+          <Field label="Issue key" className="flex-1 min-w-40"><input className={`${input} font-mono`} value={link.key} onChange={(e) => setLink({ ...link, key: e.target.value })} placeholder={link.tracker === 'Jira' ? 'WH3-1300' : 'owner/repo#42'} required /></Field>
           <button type="submit" className={`${btn} bg-blue-600 text-white`}>Link issue</button>
         </form>
       )}
       {canManage && (
         <details className={card} open={!anyTracker}>
-          <summary className="cursor-pointer text-xs font-semibold text-slate-700">Log a blocker by hand</summary>
-          <form aria-label="Log blocker" className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 items-end" onSubmit={(e) => { e.preventDefault(); void act(async () => { await addBlocker(release.id, { ...form, title: form.title || undefined, url: form.url || undefined }); setForm(empty); }, `${form.key} logged.`); }}>
-            <label className="text-xs">Issue key<input className={input} value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} placeholder="WH3-1300 or #42" required /></label>
-            <label className="text-xs">Tracker<select className={input} value={form.tracker} onChange={(e) => setForm({ ...form, tracker: e.target.value as 'Jira' | 'GitHub' })}><option>Jira</option><option>GitHub</option></select></label>
-            <label className="text-xs">Title<input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
-            <label className="text-xs">URL<input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://" /></label>
-            <label className="text-xs">Severity<select className={input} value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as (typeof SEVERITIES)[number] })}>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}</select></label>
-            <button type="submit" className={`${btn} bg-blue-600 text-white`}>Log blocker</button>
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--text)]">Log a blocker by hand</summary>
+          <form aria-label="Log blocker" className="mt-3 space-y-3" onSubmit={(e) => { e.preventDefault(); void act(async () => { await addBlocker(release.id, { ...form, title: form.title || undefined, url: form.url || undefined }); setForm(empty); }, `${form.key} logged.`); }}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Issue key"><input className={`${input} font-mono`} value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} placeholder="WH3-1300 or #42" required /></Field>
+              <Field label="Tracker"><select className={input} value={form.tracker} onChange={(e) => setForm({ ...form, tracker: e.target.value as 'Jira' | 'GitHub' })}><option>Jira</option><option>GitHub</option></select></Field>
+              <Field label="Severity"><select className={input} value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as (typeof SEVERITIES)[number] })}>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}</select></Field>
+              <Field label="URL"><input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://" /></Field>
+              <Field label="Title" className="sm:col-span-2 lg:col-span-4"><input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+            </div>
+            <div className="flex justify-end"><button type="submit" className={`${btn} bg-blue-600 text-white`}>Log blocker</button></div>
           </form>
         </details>
       )}

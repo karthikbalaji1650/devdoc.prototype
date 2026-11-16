@@ -1,32 +1,3 @@
-export type IncidentSeverity = 'P1 - Blocker' | 'P2 - Critical' | 'P3 - Major' | 'P4 - Minor';
-export type IncidentStatus = 'Investigating' | 'Identified' | 'Monitoring' | 'Resolved';
-
-export interface IncidentItem {
-  id: string; // e.g. "INC-2026-0813"
-  title: string;
-  severity: IncidentSeverity;
-  status: IncidentStatus;
-  affectedSystem: string;
-  rootCause: string;
-  owner: string;
-  reportedDate: string;
-  resolvedDate?: string;
-  ttrHours?: number;
-  jiraTicket?: string; // e.g. "WH3-1205"
-}
-
-export interface JiraIssue {
-  key: string; // e.g. "WH3-1205"
-  summary: string;
-  issueType: 'Bug' | 'Story' | 'Task' | 'Epic';
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
-  priority: 'High' | 'Highest' | 'Medium' | 'Low';
-  storyPoints: number;
-  assignee: string;
-  fixVersion: string;
-  linkedDocTitle?: string;
-}
-
 export interface ReviewerLogItem {
   id: string;
   docId: string;

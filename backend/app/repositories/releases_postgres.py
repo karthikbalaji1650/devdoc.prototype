@@ -59,13 +59,13 @@ class PgReleaseRepository:
             milestones[m["release_id"]][m["key"]] = m
         signers: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for s in await self._fetch(
-            """SELECT s.release_id, u.id, u.name, u.title, u.department
+            """SELECT s.release_id, u.id, u.name, u.designation, u.department
                  FROM release_signers s JOIN users u ON u.id = s.user_id
                 WHERE s.release_id = ANY(%s) ORDER BY s.release_id, s.position""",
             (ids,),
         ):
             signers[s["release_id"]].append(
-                {"userId": s["id"], "name": s["name"], "title": s["title"], "department": s["department"]}
+                {"userId": s["id"], "name": s["name"], "designation": s["designation"], "department": s["department"]}
             )
         out = []
         for r in rows:
@@ -462,6 +462,27 @@ class PgReleaseRepository:
                 "details": r["details"],
                 "prevHash": r["prev_hash"].strip(),
                 "hash": r["hash"].strip(),
+            }
+            for r in rows
+        ]
+
+    async def recent_audit(self, limit: int) -> list[dict[str, Any]]:
+        # The identity column is write order: two entries can share a timestamp.
+        rows = await self._fetch(
+            """SELECT release_id, seq, at, actor_id, actor, actor_role, action, details
+               FROM release_audit ORDER BY id DESC LIMIT %s""",
+            (limit,),
+        )
+        return [
+            {
+                "releaseId": r["release_id"],
+                "seq": r["seq"],
+                "at": r["at"],
+                "actorId": r["actor_id"],
+                "actor": r["actor"],
+                "actorRole": r["actor_role"],
+                "action": r["action"],
+                "details": r["details"],
             }
             for r in rows
         ]

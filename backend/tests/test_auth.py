@@ -22,7 +22,7 @@ class TestLogin:
 
     def test_returns_the_user_with_every_field_in_node_order(self, api: Api) -> None:
         user = login(api, ADMIN.email, ADMIN.password).json()["user"]
-        assert list(user) == ["id", "name", "email", "title", "department", "role", "avatarBg", "initials"]
+        assert list(user) == ["id", "name", "email", "designation", "department", "role", "avatarBg", "initials"]
 
     def test_secure_attribute_is_off_by_default_for_plain_http_deployments(self, api: Api) -> None:
         # Regression carried over from Node: Secure tied to NODE_ENV broke

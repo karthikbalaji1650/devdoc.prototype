@@ -35,6 +35,13 @@ async def create_release(request: Request, user: CurrentUser, services: Services
     return JsonResponse({"release": await services.releases.create_release(user, json_body(request))})
 
 
+# Declared before "/{release_id}" so "activity" is not read as a release id.
+@get_route(router, "/activity", responses={400: {"model": ErrorResponse}})
+async def release_activity(services: ServicesDep, limit: str | None = None) -> Response:
+    """The latest audit entries across every release, newest first (default 10, at most 50)."""
+    return JsonResponse(await services.releases.activity(limit))
+
+
 @get_route(router, "/{release_id}", responses={404: {"model": ErrorResponse}})
 async def get_release(release_id: str, user: CurrentUser, services: ServicesDep) -> Response:
     """One release with its signers, builds (gates evaluated), blockers and metrics."""

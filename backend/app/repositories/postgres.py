@@ -32,7 +32,7 @@ class PgUserRepository(_PgRepository):
 
     async def find_by_name(self, name: str) -> list[User]:
         rows = await self._fetch(
-            """SELECT id, name, email, title, department, role, avatar_bg, initials
+            """SELECT id, name, email, designation, department, role, avatar_bg, initials
                  FROM users WHERE lower(btrim(name)) = lower(btrim(%s)) ORDER BY id""",
             (name,),
         )
@@ -40,7 +40,7 @@ class PgUserRepository(_PgRepository):
 
     async def find_by_ids(self, user_ids: list[str]) -> list[User]:
         rows = await self._fetch(
-            """SELECT id, name, email, title, department, role, avatar_bg, initials
+            """SELECT id, name, email, designation, department, role, avatar_bg, initials
                  FROM users WHERE id = ANY(%s) ORDER BY id""",
             (list(dict.fromkeys(user_ids)),),
         )
@@ -49,9 +49,9 @@ class PgUserRepository(_PgRepository):
     async def search(self, query: str, limit: int) -> list[User]:
         like = "%" + query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         rows = await self._fetch(
-            """SELECT id, name, email, title, department, role, avatar_bg, initials
+            """SELECT id, name, email, designation, department, role, avatar_bg, initials
                  FROM users
-                WHERE name ILIKE %(q)s OR coalesce(title, '') ILIKE %(q)s OR coalesce(department, '') ILIKE %(q)s
+                WHERE name ILIKE %(q)s OR coalesce(designation, '') ILIKE %(q)s OR coalesce(department, '') ILIKE %(q)s
                 ORDER BY lower(name), id LIMIT %(n)s""",
             {"q": like, "n": limit},
         )
@@ -69,7 +69,7 @@ class PgSessionRepository(_PgRepository):
 
     async def find_active_user(self, session_id: str) -> User | None:
         rows = await self._fetch(
-            """SELECT u.id, u.name, u.email, u.title, u.department, u.role, u.avatar_bg, u.initials
+            """SELECT u.id, u.name, u.email, u.designation, u.department, u.role, u.avatar_bg, u.initials
                  FROM sessions s JOIN users u ON u.id = s.user_id
                 WHERE s.id = %s AND s.expires_at > now()""",
             (session_id,),

@@ -503,7 +503,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                 <div className="absolute right-0 mt-2 w-56 rounded-xl glass-dropdown z-50 p-2 animate-fade-in space-y-2 text-left">
                   <div className="p-2 border-b border-slate-200">
                     <div className="text-xs font-bold text-slate-900">{user.name}</div>
-                    <div className="text-[10px] text-slate-500">{user.title}</div>
+                    <div className="text-[10px] text-slate-500">{user.designation}</div>
                     <div className="text-[10px] text-slate-400 font-mono mt-0.5">{user.email}</div>
                   </div>
 

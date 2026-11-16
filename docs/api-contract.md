@@ -48,7 +48,7 @@ and the route tests guard it now.
 ### User object
 
 ```json
-{"id": "usr-01", "name": "…", "email": "…", "title": "…|null", "department": "…|null",
+{"id": "usr-01", "name": "…", "email": "…", "designation": "…|null", "department": "…|null",
  "role": "admin|release-manager|firmware-lead|…", "avatarBg": "…|null", "initials": "…|null"}
 ```
 
@@ -56,7 +56,7 @@ and the route tests guard it now.
 
 `GET /api/users?q=<text>` (any signed-in user) feeds the user pickers, for example choosing who signs off a release.
 
-- Returns `200 {"users": [{"id", "name", "title": "…|null", "department": "…|null"}]}`: up to 20 people whose name, title or department contains `q`, ignoring case and surrounding spaces, ordered by name. `%` and `_` in `q` are plain text. An empty or missing `q` returns the first 20 by name.
+- Returns `200 {"users": [{"id", "name", "designation": "…|null", "department": "…|null"}]}`: up to 20 people whose name, designation or department contains `q`, ignoring case and surrounding spaces, ordered by name. `%` and `_` in `q` are plain text. An empty or missing `q` returns the first 20 by name.
 - Never includes email, role or any credential. Only the first 100 characters of `q` are used.
 
 ### Session audit log
@@ -132,6 +132,7 @@ Changing the author name therefore changes ownership: an admin who names another
 | Route | Success | Errors |
 |---|---|---|
 | `GET /api/documents` | `200 {"documents": [Document + "ownerId" + "updatedAt"]}`, visible and not deleted, most recently updated first | — |
+| `GET /api/documents/stats` | `200 {"total": n, "byStatus": {"DRAFT": n, "IN_REVIEW": n, "APPROVED": n, "PUBLISHED": n}}`: every non-deleted document, the same for everyone signed in (numbers only; the dashboard cards, DDS-SRS-005) | — |
 | `GET /api/documents/:id` | `200 {"document": Document + "ownerId" + "updatedAt"}` | `404 Document not found.` (missing, deleted or invisible) |
 | `PUT /api/documents/:id` | `200 {"document": Document}` (see below; no `updatedAt`) | `400 Body must be a document with metadata and sections.` · `400 status must be one of DRAFT, IN_REVIEW, APPROVED, PUBLISHED.` · `403 You can only edit documents you authored.` |
 | `DELETE /api/documents/:id` | `204` (soft delete) | `404 Document not found.` · `403 You can only delete documents you authored.` |
@@ -209,6 +210,7 @@ Release management (SRS-033 to 046). Admins and regular users are treated the sa
 | Route | Who | Body → result |
 |---|---|---|
 | `GET /api/releases` | any | `{"releases": [line]}`; line = `id, version, title, type, status, targetDate, segment, createdBy, createdByName, signerCount, canEdit, isSigner, metrics{builds, latestBuild, finalBuild, openBlockers}` |
+| `GET /api/releases/activity?limit=` | any | `{"entries": [{releaseId, version, seq, at, actorId, actor, action, details}]}`: the latest audit entries across every release, newest first (default 10, 1 to 50; `400` otherwise). The dashboard's recent activity |
 | `GET /api/releases/{id}` | any | `{"release": …}` full release (below); `404 Release not found.` |
 | `POST /api/releases` | any | `{version, type, targetDate, status?, title?, segment?, notes?, milestones?, gateRules?, blockerQuery?, signerIds: [1 to 4 user ids]}` → `{"release"}`. The caller is added as first signer (also listing them is ignored). `400 A release needs 2 to 5 signers: you and 1 to 4 others.` / `400 Unknown user: <id>.` / `409 A release with version <v> already exists.` (version is unique ignoring case and surrounding spaces) |
 | `PATCH /api/releases/{id}` | creator | any of `version, title, type, targetDate, segment, status, notes, milestones, gateRules, blockerQuery`; only the fields sent change. `status` cannot be `Cancelled` (use cancel). `409` if the version changes after a build exists, or the readiness rules change after a build is Final. |
@@ -226,7 +228,7 @@ Release management (SRS-033 to 046). Admins and regular users are treated the sa
 | `POST /api/releases/{id}/blockers/lookup` | creator | `{tracker, key}` → `{"blocker"}` read from Jira / GitHub |
 | `POST /api/releases/{id}/blockers/sync` | creator | → `{at, added, closed, reopened, error}`; a background worker also syncs every 5 minutes |
 
-**Full release** (`GET /api/releases/{id}` and every release-returning route): `id, version, title, type, targetDate, segment, status, notes, milestones [{key, name, plannedDate, actualDate}], signers [{userId, name, title, department}] (creator first), gateRules {minPassRate, requireNoOpenBlockers, mandatorySuiteIds}, blockerQuery, blockerSync, createdBy (user id), createdByName, createdAt, updatedAt, cancelledReason, cancelledAt, canEdit, isSigner, signersLocked, metrics, blockers, builds`.
+**Full release** (`GET /api/releases/{id}` and every release-returning route): `id, version, title, type, targetDate, segment, status, notes, milestones [{key, name, plannedDate, actualDate}], signers [{userId, name, designation, department}] (creator first), gateRules {minPassRate, requireNoOpenBlockers, mandatorySuiteIds}, blockerQuery, blockerSync, createdBy (user id), createdByName, createdAt, updatedAt, cancelledReason, cancelledAt, canEdit, isSigner, signersLocked, metrics, blockers, builds`.
 
 **Build**: `id, number, label, kind (RC|Final), imageName, commitSha, branchTag, artifactUrl, repository, sha256, builtAt, pipelineBuildId, testRunIds, gateOverride {by, byId, reason, at}|null, promotedBy, promotedById, promotedAt, createdBy, createdByName, createdAt, signoffs {userId: {userId, userName, decision, comment, at}}`, plus on the full release `gates {checks, passed, overridden, ready, passRate, coverage, linkedRuns, verification}` and `signoffStatus {required, approved, rejected, waitingFor, complete}`.
 

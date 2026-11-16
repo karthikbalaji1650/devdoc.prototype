@@ -36,11 +36,11 @@ export async function signInAs(page: Page, role: Role = 'admin'): Promise<void> 
   const res = await page.request.post(`${stack.apiUrl}/api/auth/login`, { data: { email: user.email, password: user.password } });
   if (!res.ok()) throw new Error(`login failed: ${res.status()}`);
   const { user: profile } = await res.json();
-  await page.addInitScript(([p, title]) => {
+  await page.addInitScript(([p, designation]) => {
     if (sessionStorage.getItem('e2e-signed-in')) return;
     sessionStorage.setItem('e2e-signed-in', '1');
     localStorage.setItem('devdoc_studio_user_session_v1', JSON.stringify({
-      user: { ...p, title, department: 'Engineering', avatarBg: 'x', initials: p.name.split(' ').map((w: string) => w[0]).join('') },
+      user: { ...p, designation, department: 'Engineering', avatarBg: 'x', initials: p.name.split(' ').map((w: string) => w[0]).join('') },
       token: 'e2e', loginTime: new Date().toISOString(), isAuthenticated: true,
     }));
     localStorage.setItem('devdoc_studio_welcome_seen_v1', '1');

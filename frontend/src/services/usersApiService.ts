@@ -1,8 +1,8 @@
 // People search for pickers: GET /api/users?q= (any signed-in user).
-// Only what a picker shows comes back: id, name, title and department.
+// Only what a picker shows comes back: id, name, designation and department.
 import { fetchWithTimeout } from './fetchWithTimeout';
 
-export interface PersonOption { id: string; name: string; title: string | null; department: string | null }
+export interface PersonOption { id: string; name: string; designation: string | null; department: string | null }
 
 export async function searchUsers(query: string): Promise<PersonOption[]> {
   const base = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
@@ -18,5 +18,5 @@ export async function searchUsers(query: string): Promise<PersonOption[]> {
 }
 
 /** "Technical lead · SW engineering", or nothing if neither is known. */
-export const describePerson = (p: { title: string | null; department: string | null }): string =>
-  [p.title, p.department].filter(Boolean).join(' · ');
+export const describePerson = (p: { designation: string | null; department: string | null }): string =>
+  [p.designation, p.department].filter(Boolean).join(' · ');

@@ -8,6 +8,7 @@ from app.schemas.common import ErrorResponse
 from app.schemas.documents import (
     DocumentListResponse,
     DocumentModel,
+    DocumentStatsResponse,
     SavedDocumentResponse,
     StoredDocumentResponse,
 )
@@ -28,6 +29,13 @@ _forbidden = {403: {"model": ErrorResponse}}
 @get_route(router, "", response_model=DocumentListResponse)
 async def list_documents(user: CurrentUser, services: ServicesDep) -> Response:
     return JsonResponse({"documents": await services.documents.list_visible(user)})
+
+
+# Declared before "/{document_id}" so "stats" is not read as a document id.
+@get_route(router, "/stats", response_model=DocumentStatsResponse)
+async def document_stats(services: ServicesDep) -> Response:
+    """Dashboard counts: every non-deleted document by status, for anyone signed in."""
+    return JsonResponse(await services.documents.stats())
 
 
 @get_route(router, "/{document_id}", response_model=StoredDocumentResponse, responses=_not_found)

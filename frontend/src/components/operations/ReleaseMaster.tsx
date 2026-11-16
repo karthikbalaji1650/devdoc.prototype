@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { getStoredSession } from '../../services/authService';
 import { loadTestManagement } from '../../services/testManagementApiService';
 import type { TestRunItem, TestSuiteItem } from '../../types/operations';
@@ -30,7 +30,8 @@ const TAB_LABELS = (r: Release): Record<ReleaseTab, string> => ({
 });
 
 export const ReleaseMaster: React.FC = () => {
-  const route = parseReleasesPath(useLocationPath());
+  const path = useLocationPath();
+  const route = parseReleasesPath(path);
   const me = getStoredSession()?.user;
   const [lines, setLines] = useState<ReleaseLine[] | null>(null);
   const [release, setRelease] = useState<Release | null>(null);
@@ -39,6 +40,9 @@ export const ReleaseMaster: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const openId = route.view === 'release' ? route.releaseId : null;
+
+  // A message is about the page it was shown on: clear it on leaving.
+  useEffect(() => { setNotice(''); setError(''); }, [path]);
 
   const refresh = useCallback(async () => {
     if (openId) setRelease(await loadRelease(openId));
@@ -79,8 +83,8 @@ export const ReleaseMaster: React.FC = () => {
         )}
       </div>
 
-      {error && <p role="alert" className="text-xs text-rose-600">{error}</p>}
-      {notice && <p role="status" className="text-xs text-emerald-700">{notice}</p>}
+      {error && <p role="alert" className="text-xs rounded-lg border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2">{error}</p>}
+      {notice && <p role="status" className="text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2">{notice}</p>}
 
       {route.view === 'new' && me && (
         <NewReleaseForm creatorId={me.id} creatorName={me.name} onCancel={() => navigateTo(releasesPath())}
@@ -104,19 +108,30 @@ export const ReleaseMaster: React.FC = () => {
           ? (!error && <p role="status" className="text-xs text-slate-500">Loading release…</p>)
           : (
             <>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <AppLink to={releasesPath()} className="text-blue-700 hover:underline">← All releases</AppLink>
-                <span className="text-lg font-bold text-slate-900">{release.version}</span>
-                {release.title && <span className="text-slate-600">{release.title}</span>}
-                <Badge tone={statusTone(release.status)}>{release.status}</Badge>
-                <span className="text-slate-500">
-                  {release.createdBy === me?.id ? 'You created this release' : release.isSigner ? `You are a signer · created by ${release.createdByName}` : `Created by ${release.createdByName}`}
-                </span>
-              </div>
-              <div role="tablist" aria-label="Release sections" className="flex gap-1 border-b border-slate-200">
+              <header className="space-y-2">
+                <AppLink to={releasesPath()} className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"><ArrowLeft aria-hidden className="w-3.5 h-3.5" />All releases</AppLink>
+                <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-2xl font-bold text-[var(--text)]">{release.version}</h3>
+                      <Badge tone={statusTone(release.status)}>{release.status}</Badge>
+                      <Badge tone="slate">{release.type}</Badge>
+                    </div>
+                    {release.title && <p className="mt-1 text-sm text-[var(--text)]">{release.title}</p>}
+                    <p className="mt-1 text-xs text-[var(--text-dim)]">
+                      {release.createdBy === me?.id ? 'You created this release' : release.isSigner ? `You are a signer · created by ${release.createdByName}` : `Created by ${release.createdByName}`}
+                    </p>
+                  </div>
+                  <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                    <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-dim)]">Target date</dt><dd className="text-[var(--text)]">{release.targetDate}</dd></div>
+                    {release.segment && <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-dim)]">Customer</dt><dd className="text-[var(--text)]">{release.segment}</dd></div>}
+                  </dl>
+                </div>
+              </header>
+              <div role="tablist" aria-label="Release sections" className="flex gap-1 overflow-x-auto border-b border-slate-200">
                 {RELEASE_TABS.map((t) => (
                   <AppLink key={t} role="tab" aria-selected={route.tab === t} to={releasesPath({ view: 'release', releaseId: release.id, tab: t, buildId: null })}
-                    className={`px-3 py-2 text-xs border-b-2 -mb-px ${route.tab === t ? 'border-[var(--blue)] text-[var(--text)] font-semibold' : 'border-transparent text-[var(--text-dim)]'}`}>
+                    className={`px-3 py-2 text-xs whitespace-nowrap border-b-2 -mb-px ${route.tab === t ? 'border-[var(--blue)] text-[var(--text)] font-semibold' : 'border-transparent text-[var(--text-dim)]'}`}>
                     {TAB_LABELS(release)[t]}
                   </AppLink>
                 ))}

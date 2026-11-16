@@ -123,38 +123,83 @@ test.describe('permissions', () => {
   });
 });
 
-test.describe('dashboard drill-down', () => {
-  test.beforeEach(async ({ page }) => {
-    await signInAs(page);
+// DDS-SRS-005: the dashboard counts real documents by their own status. No
+// sample sign-offs; the counts are team-wide, the lists follow visibility.
+test.describe('dashboard (DDS-SRS-005)', () => {
+  const counts = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Document counts' });
+  const card = (page: import('@playwright/test').Page, label: string) => counts(page).getByRole('button', { name: new RegExp(`^${label}`, 'i') });
+
+  test.describe('as an admin', () => {
+    test.beforeEach(async ({ page }) => {
+      await signInAs(page);
+      await seedDocuments(page, [
+        { id: 'a', title: 'Approved Alpha', docNumber: 'A-1', author: ADMIN, status: 'APPROVED' },
+        { id: 'r', title: 'Review Romeo', docNumber: 'R-1', author: ADMIN, status: 'IN_REVIEW' },
+        { id: 'd', title: 'Draft Delta', docNumber: 'D-4', author: ADMIN, status: 'DRAFT' },
+        { id: 'p', title: 'Published Papa', docNumber: 'P-1', author: ADMIN, status: 'PUBLISHED' },
+      ]);
+    });
+
+    test('counts come from the documents themselves, with no sample data', async ({ page }) => {
+      await expect(card(page, 'Total documents')).toContainText('4');
+      await expect(card(page, 'Approved')).toContainText('1');
+      await expect(card(page, 'Under review')).toContainText('1');
+      await expect(page.getByRole('img', { name: /1 draft, 1 in review, 1 approved, 1 published/i })).toBeVisible();
+      await expect(page.getByText(/WH3-1205|ADR-2026-042|Delivery forecast|Live test cases/)).toHaveCount(0);
+    });
+
+    test('Approved card lists only approved documents, and Show all clears the filter', async ({ page }) => {
+      await card(page, 'Approved').click();
+      await expect(page.getByText('Approved Alpha')).toBeVisible();
+      await expect(page.getByText('Draft Delta')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Show all' }).click();
+      await expect(page.getByText('Draft Delta')).toBeVisible();
+    });
+
+    test('Under review card lists only documents in review', async ({ page }) => {
+      await card(page, 'Under review').click();
+      await expect(page.getByText('Review Romeo')).toBeVisible();
+      await expect(page.getByText('Draft Delta')).toHaveCount(0);
+      await expect(page.getByRole('note')).toHaveCount(0);
+    });
+
+    test('a document in Recent activity opens in the editor', async ({ page }) => {
+      await page.getByRole('region', { name: 'Recent activity' }).getByRole('button', { name: /Draft Delta/ }).click();
+      await expect(page.getByText('Document Title', { exact: true })).toBeVisible();
+    });
+
+    test('release events show in Recent activity, newest first, and open the release', async ({ page, stack }) => {
+      const users = (await (await page.request.get(`${stack.apiUrl}/api/users`)).json()).users as { id: string; name: string }[];
+      const created = await page.request.post(`${stack.apiUrl}/api/releases`, {
+        data: { version: 'v9.1.0', type: 'Minor', targetDate: '2026-12-01', signerIds: [users.find((u) => u.name === OTHER)!.id] },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      await page.reload();
+      const recent = page.getByRole('region', { name: 'Recent activity' });
+      const first = recent.getByRole('button').first(); // the release was changed after the documents were saved
+      await expect(first).toContainText('v9.1.0');
+      await expect(first).toContainText('Release created');
+      await expect(first).toContainText(`${ADMIN} created the release`);
+      await expect(recent).toContainText('Draft Delta');
+      await first.click();
+      await expect(page).toHaveURL(/\/releases\/rel-/);
+      await expect(page.getByRole('heading', { name: 'v9.1.0' })).toBeVisible();
+    });
+  });
+
+  test('a regular user sees team-wide counts but only opens what they may', async ({ page }) => {
+    await signInAs(page, 'firmware-lead');
     await seedDocuments(page, [
-      { id: 'a', title: 'Approved Alpha', docNumber: 'WH3-1205', author: ADMIN, status: 'APPROVED' },
-      { id: 'd', title: 'Draft Delta', docNumber: 'D-4', author: ADMIN, status: 'DRAFT' },
+      { id: 'a', title: 'Approved Alpha', docNumber: 'A-1', author: OTHER, status: 'APPROVED' },
+      { id: 'd', title: 'Draft Delta', docNumber: 'D-4', author: OTHER, status: 'DRAFT' },
     ]);
-  });
-  const card = (page: import('@playwright/test').Page, label: string) =>
-    page.getByRole('button', { name: new RegExp(label, 'i') }).filter({ hasText: /^\s*(total docs|approved|in review)/i }).first();
-
-  test('cards count distinct documents and agree with Recent Activity', async ({ page }) => {
-    await expect(card(page, 'approved')).toContainText('1'); // WH3-1205 signed off three times, counted once
-    await expect(card(page, 'in review')).toContainText('1'); // ADR-2026-042 from the sign-off log
-  });
-
-  test('Approved card lists only approved documents, and Show all clears the filter', async ({ page }) => {
-    await card(page, 'approved').click();
-    await expect(page.getByText('Approved Alpha')).toBeVisible();
-    await expect(page.getByText('Draft Delta')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Show all' }).click();
-    await expect(page.getByText('Draft Delta')).toBeVisible();
-  });
-
-  test('In review card explains a document tracked only in the log', async ({ page }) => {
-    await card(page, 'in review').click();
-    await expect(page.getByRole('note')).toContainText('ADR-2026-042');
-  });
-
-  test('a recent-activity row opens the matching document', async ({ page }) => {
-    await page.getByTitle('Open this document').first().click();
-    await expect(page.getByText('Document Title', { exact: true })).toBeVisible();
+    await expect(card(page, 'Total documents')).toContainText('2');
+    await expect(counts(page).getByText('Approved', { exact: true })).toBeVisible();
+    await expect(counts(page)).toContainText('admins only');
+    await expect(card(page, 'Approved')).toHaveCount(0); // a number, not a link to a list they cannot see
+    const recent = page.getByRole('region', { name: 'Recent activity' });
+    await expect(recent).toContainText('Draft Delta');
+    await expect(recent).not.toContainText('Approved Alpha');
   });
 });
 

@@ -2,7 +2,6 @@ export type TemplateType =
   | 'technical-analysis' 
   | 'test-report' 
   | 'adr' 
-  | 'rca' 
   | 'custom';
 
 export type DocClassification = 'CONFIDENTIAL' | 'INTERNAL ONLY' | 'PUBLIC';

@@ -84,7 +84,8 @@ test('real backend: the right password signs in, and logout revokes the session 
   const meWhileIn = await page.request.get(`http://localhost:${API_PORT}/api/auth/me`);
   expect(meWhileIn.ok()).toBe(true);
 
-  await page.getByRole('button', { name: /logout/i }).click();
+  // Signing out is in the sidebar (the dashboard header has no second copy).
+  await page.getByRole('button', { name: /sign ?out/i }).click();
   await expect(page.getByRole('button', { name: /sign in to platform/i })).toBeVisible();
   const meAfterLogout = await page.request.get(`http://localhost:${API_PORT}/api/auth/me`);
   expect(meAfterLogout.status()).toBe(401);

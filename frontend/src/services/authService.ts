@@ -31,7 +31,7 @@ export function loginWithCredentials(email: string, _pass: string): UserSession 
     id: `usr-${Date.now()}`,
     name: email.split('@')[0].replace('.', ' ').replace(/^./, str => str.toUpperCase()),
     email,
-    title: 'Senior Systems Engineer',
+    designation: 'Senior Systems Engineer',
     department: 'Engineering Organization',
     role: 'user',
     avatarBg: 'from-blue-600 to-indigo-600',

@@ -22,7 +22,7 @@ MAX_QUERY = 100
 class PickerUser(WireModel):
     id: str
     name: str
-    title: str | None
+    designation: str | None
     department: str | None
 
 
@@ -32,9 +32,13 @@ class PickerUsersResponse(WireModel):
 
 @get_route(router, "", response_model=PickerUsersResponse)
 async def search_users(services: ServicesDep, q: str = Query("")) -> Response:
-    """Up to 20 people whose name, title or department contains `q`, by name.
+    """Up to 20 people whose name, designation or department contains `q`, by name.
     Only what a picker shows: no email, role or password."""
     found = await services.users.search(q[:MAX_QUERY], LIMIT)
     return JsonResponse(
-        {"users": [{"id": u.id, "name": u.name, "title": u.title, "department": u.department} for u in found]}
+        {
+            "users": [
+                {"id": u.id, "name": u.name, "designation": u.designation, "department": u.department} for u in found
+            ]
+        }
     )

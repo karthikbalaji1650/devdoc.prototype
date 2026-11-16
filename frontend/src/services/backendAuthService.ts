@@ -17,7 +17,7 @@ interface BackendUser {
   id: string;
   name: string;
   email: string;
-  title: string | null;
+  designation: string | null;
   department: string | null;
   role: string;
   avatarBg: string | null;
@@ -29,7 +29,7 @@ function toProfile(user: BackendUser): UserProfile {
     id: user.id,
     name: user.name,
     email: user.email,
-    title: user.title ?? '',
+    designation: user.designation ?? '',
     department: user.department ?? '',
     role: user.role as UserProfile['role'],
     avatarBg: user.avatarBg ?? 'from-blue-600 to-indigo-600',

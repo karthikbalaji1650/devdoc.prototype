@@ -62,7 +62,7 @@ describe('LoginPage — backend configured', () => {
   it('checks the password against the API and signs in on success', async () => {
     vi.mocked(isBackendConfigured).mockReturnValue(true);
     vi.mocked(loginWithBackend).mockResolvedValue({
-      id: 'usr-01', name: 'Manivannan Thangavel', email: 'mani@x.com', title: 'Manager', department: 'Eng',
+      id: 'usr-01', name: 'Manivannan Thangavel', email: 'mani@x.com', designation: 'Manager', department: 'Eng',
       role: 'admin', avatarBg: 'x', initials: 'MT',
     });
     const onLogin = vi.fn();
@@ -101,7 +101,7 @@ describe('LoginPage — single sign-on (DDS-SRS-076)', () => {
 
   it('finishes a sign-in the provider sent back, and clears the address bar', async () => {
     vi.mocked(isBackendConfigured).mockReturnValue(true);
-    vi.mocked(fetchBackendUser).mockResolvedValue({ id: 'u1', name: 'Mani', email: 'm@x', title: '', department: '', role: 'admin', avatarBg: '', initials: 'MA' });
+    vi.mocked(fetchBackendUser).mockResolvedValue({ id: 'u1', name: 'Mani', email: 'm@x', designation: '', department: '', role: 'admin', avatarBg: '', initials: 'MA' });
     window.history.replaceState(null, '', '/?sso=1');
     const onLogin = vi.fn();
     render(<LoginPage onLogin={onLogin} />);
